@@ -375,20 +375,22 @@ function ConfirmationPanel({
         </p>
       </div>
 
-      {/* Live ticket preview (also the capture source). Wide enough that the
-          full landscape ticket stays visible (not cropped) even on narrow
-          mobile columns. text-left resets the inherited text-center so the
-          ticket's presenter label + guest name stay left-aligned. */}
-      <div className="w-full overflow-hidden rounded-xl text-left">
-        <TicketCard
-          ref={cardRef}
-          ticket={ticket}
-          eventName={eventName}
-          venue={venue}
-        />
+      {/* Live ticket preview (also the capture source). 
+          Updated to strictly scale down to fit the viewport on mobile devices
+          without requiring horizontal scrolling. The negative margin handles 
+          the layout footprint of the unscaled card so it doesn't leave a large gap. */}
+      <div className="w-full overflow-hidden rounded-xl text-left flex justify-center">
+        <div className="min-w-max origin-top scale-[0.55] min-[390px]:scale-[0.60] min-[412px]:scale-[0.65] sm:scale-100 transition-transform pb-2 -mb-[35%] min-[390px]:-mb-[30%] min-[412px]:-mb-[25%] sm:mb-0">
+          <TicketCard
+            ref={cardRef}
+            ticket={ticket}
+            eventName={eventName}
+            venue={venue}
+          />
+        </div>
       </div>
 
-      <div className="w-full max-w-sm space-y-3">
+      <div className="w-full max-w-sm space-y-3 mt-2">
         <a
           href={`${typeof window !== "undefined" ? window.location.origin : ""}/ticket/${ticket.id}`}
           target="_blank"
