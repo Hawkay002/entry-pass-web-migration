@@ -56,8 +56,9 @@ const schema = z.object({
     }),
   phone: z
     .string()
-    .min(10, "Enter 10 digits")
-    .regex(/^\d{10}$/, "Must be exactly 10 digits"),
+    .min(6, "Enter a valid phone number")
+    .max(15, "Enter a valid phone number")
+    .regex(/^\d+$/, "Digits only"),
   ticketType: z.enum(["Classic", "Diamond", "SVIP", "Gold"]),
 });
 type FormValues = z.infer<typeof schema>;
