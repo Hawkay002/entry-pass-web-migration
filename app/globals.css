@@ -1,8 +1,18 @@
+/* Google Fonts for landing page — must come before all other rules */
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700;800&family=Manrope:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap');
 @import "tailwindcss";
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
 
 @custom-variant dark (&:is(.dark *));
+
+/* ===== Lenis smooth scroll ===== */
+html.lenis,
+html.lenis body { height: auto; }
+.lenis.lenis-smooth { scroll-behavior: auto !important; }
+.lenis.lenis-smooth [data-lenis-prevent] { overscroll-behavior: contain; }
+.lenis.lenis-stopped { overflow: hidden; }
+.lenis.lenis-scrolling iframe { pointer-events: none; }
 
 /* ============================================================
    Theme tokens — "command center" dark aesthetic.
@@ -53,7 +63,41 @@
   --color-accent-secondary: #3b82f6;
   --color-success-green: #10b981;
   --color-danger-red: #ef4444;
+
+  /* Landing page tokens */
+  --color-void: #0a0a0c;
+  --color-surface: #131316;
+  --color-paper: #eeeeeb;
+  --color-bone: #edebe6;
+  --color-steel-50: #f5f5f3;
+  --color-steel-100: #e7e6e2;
+  --color-steel-200: #d1d0cb;
+  --color-steel-300: #b6b5af;
+  --color-steel-400: #98978f;
+  --color-steel-500: #7a7972;
+  --color-steel-600: #5c5b57;
+  --color-steel-700: #454340;
+  --color-steel-800: #2c2c2b;
+  --color-steel-900: #1a1a1a;
+  --color-signal: #2f5cff;
+  --color-signal-dim: #152058;
+  --color-signal-soft: #7c96ff;
+  --font-display: "Space Grotesk", sans-serif;
+  --font-body: "Manrope", sans-serif;
+  --font-mono-landing: "IBM Plex Mono", monospace;
+  --animate-marquee: marquee 34s linear infinite;
+  --animate-pulse-ring: pulse-ring 2.2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  --animate-fade-up-landing: fade-up 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  --animate-sweep: sweep 3.5s ease-in-out infinite;
+  --animate-glow-pulse: glow-pulse 5s ease-in-out infinite;
 }
+
+/* Landing page keyframes */
+@keyframes marquee { 0% { transform: translateX(0); } 100% { transform: translateX(-50%); } }
+@keyframes pulse-ring { 0% { transform: scale(0.85); opacity: 0.6; } 80%,100% { transform: scale(2.1); opacity: 0; } }
+@keyframes fade-up { 0% { opacity: 0; transform: translateY(18px); } 100% { opacity: 1; transform: translateY(0); } }
+@keyframes sweep { 0% { transform: translateY(-100%); } 100% { transform: translateY(220%); } }
+@keyframes glow-pulse { 0%,100% { opacity: 0.5; } 50% { opacity: 0.85; } }
 
 :root {
   --background: oklch(0.02 0 0);
@@ -217,6 +261,132 @@
   animation: orbit var(--duration) linear infinite;
 }
 
+/* ===== Premium easing curves (Jakub-led polish) ===== */
+@utility ease-fluid {
+  transition-timing-function: cubic-bezier(0.32, 0.72, 0, 1);
+}
+@utility ease-fluid-out {
+  transition-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
+}
+@utility ease-fluid-in {
+  transition-timing-function: cubic-bezier(0.64, 0, 0.78, 0);
+}
+
+/* ===== Atmospheric drift (GPU-safe: transform-only) ===== */
+@keyframes orb-drift-1 {
+  0%,100% { transform: translate3d(0,0,0) scale(1); }
+  50%     { transform: translate3d(60px, -40px, 0) scale(1.08); }
+}
+@keyframes orb-drift-2 {
+  0%,100% { transform: translate3d(0,0,0) scale(1); }
+  50%     { transform: translate3d(-50px, 50px, 0) scale(0.94); }
+}
+@keyframes orb-drift-3 {
+  0%,100% { transform: translate3d(0,0,0) scale(1); }
+  33%     { transform: translate3d(40px, -30px, 0) scale(1.05); }
+  66%     { transform: translate3d(-30px, 40px, 0) scale(0.97); }
+}
+@utility orb-drift-1 { animation: orb-drift-1 22s ease-in-out infinite; }
+@utility orb-drift-2 { animation: orb-drift-2 28s ease-in-out infinite; }
+@utility orb-drift-3 { animation: orb-drift-3 34s ease-in-out infinite; }
+@keyframes shimmer-line {
+  0%   { transform: translate3d(-100%,0,0); opacity: 0; }
+  20%  { opacity: 1; }
+  100% { transform: translate3d(100%,0,0); opacity: 0; }
+}
+
+/* ===== Animated glow border card ===== */
+/* A blurred animated gradient sits behind a dark card and leaks through a
+   thin ring at the card's edge, reading as a glowing animated frame. */
+.card-canvas {
+  position: relative;
+  display: block;
+  border-radius: 1rem;
+  isolation: isolate;
+}
+
+/* The glow: an animated conic gradient, padded out so its rim shows past the
+   card body, softened by blur. */
+.card-canvas .card-backdrop {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  border-radius: inherit;
+  padding: 1.5px; /* the glowing ring width */
+  background: conic-gradient(
+    from var(--glow-angle, 0deg),
+    #3b82f6,
+    #10b981,
+    #8b5cf6,
+    #3b82f6
+  );
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  mask-composite: exclude;
+  filter: blur(10px);
+  opacity: 0.85;
+  animation: glow-spin 6s linear infinite;
+}
+
+@property --glow-angle {
+  syntax: "<angle>";
+  inherits: false;
+  initial-value: 0deg;
+}
+@keyframes glow-spin {
+  to { --glow-angle: 360deg; }
+}
+
+/* The card body: dark, sits above the backdrop. */
+.glow-card {
+  position: relative;
+  z-index: 1;
+  background: rgb(10 10 10 / 0.78);
+  backdrop-filter: blur(18px) saturate(160%);
+  -webkit-backdrop-filter: blur(18px) saturate(160%);
+  border-radius: inherit;
+  box-shadow:
+    inset 0 1px 1px rgb(255 255 255 / 0.06),
+    0 8px 32px rgb(0 0 0 / 0.4);
+}
+
+/* Subtle dotted texture on the edge (decorative; the glow comes from the backdrop). */
+.glow-card .border-element {
+  position: absolute;
+  z-index: 2;
+  pointer-events: none;
+  background-image: radial-gradient(rgb(255 255 255 / 0.18) 1px, transparent 1px);
+  background-size: 4px 4px;
+}
+.glow-card .border-top    { top: 0; left: 0; right: 0; height: 2px; }
+.glow-card .border-bottom { bottom: 0; left: 0; right: 0; height: 2px; }
+.glow-card .border-left   { top: 0; bottom: 0; left: 0; width: 2px; }
+.glow-card .border-right  { top: 0; bottom: 0; right: 0; width: 2px; }
+
+.glow-card .card-content {
+  position: relative;
+  z-index: 3;
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,*::before,*::after { animation-duration:0.01ms !important; animation-iteration-count:1 !important; transition-duration:0.01ms !important; }
+}
+
+/* ===== Force landing motion even under prefers-reduced-motion =====
+   The blanket kill above freezes everything. The landing page is motion-led by
+   design, so these ambient/continuous animations are re-asserted with !important
+   (same pattern already used for .animate-spin above). Entrance reveals stay
+   instant under reduced motion — content remains visible, just without flourish. */
+@media (prefers-reduced-motion: reduce) {
+  .animate-marquee { animation: marquee 34s linear infinite !important; }
+  .orb-drift-1 { animation: orb-drift-1 22s ease-in-out infinite !important; }
+  .orb-drift-2 { animation: orb-drift-2 28s ease-in-out infinite !important; }
+  .orb-drift-3 { animation: orb-drift-3 34s ease-in-out infinite !important; }
+  .card-canvas .card-backdrop { animation: glow-spin 6s linear infinite !important; }
+  .animate-ping { animation: ping 1s cubic-bezier(0,0,0.2,1) infinite !important; }
 }

@@ -2,12 +2,12 @@
 
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { toast } from "sonner";
-import { Loader2, UserRound, Smartphone, Tickets, CheckCircle2, ExternalLink } from "lucide-react";
+import { Loader2, UserRound, Smartphone, Tickets, ExternalLink, CheckCircle2 } from "lucide-react";
 import { FaVenusMars } from "react-icons/fa6";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { AddInvoiceIcon, WhatsappIcon } from "@hugeicons/core-free-icons";
@@ -28,6 +28,8 @@ import { useSettings } from "@/hooks/use-settings";
 import { createTicket } from "@/app/actions/tickets";
 import { sortedCountryCodes, DEFAULT_DIAL_CODE } from "@/lib/country-codes";
 import { SearchableSelect } from "@/components/ui/searchable-select";
+import { TicketCard } from "@/components/tickets/ticket-card";
+import { captureTicketAsJpeg } from "@/lib/capture-ticket";
 import type { Gender, Ticket, TicketType } from "@/lib/types";
 
 // Custom calendar-date-1 inline SVG (age icon).
@@ -288,57 +290,135 @@ export default function TicketsPage() {
 
       <div className="flex flex-col gap-4">
         {preview.id !== "—" ? (
-          <div className="glass-panel flex flex-1 flex-col items-center justify-center gap-6 p-8 text-center">
-            <div className="flex h-16 w-16 items-center justify-center rounded-full bg-success-green/20">
-              <CheckCircle2 className="h-8 w-8 text-success-green" />
-            </div>
-            <div className="space-y-1">
-              <h3 className="text-lg font-semibold">Pass Generated!</h3>
-              <p className="text-sm text-muted-foreground">
-                Ticket for <span className="font-medium text-foreground">{preview.name}</span> has been created.
-              </p>
-            </div>
-            <div className="w-full max-w-sm space-y-3">
-              <a
-                href={`${typeof window !== "undefined" ? window.location.origin : ""}/ticket/${preview.id}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex w-full items-center justify-center gap-2 rounded-xl border border-white/15 bg-white/5 py-3 text-sm font-medium text-white transition-colors hover:bg-white/10"
-              >
-                <ExternalLink className="h-4 w-4" />
-                View Interactive Ticket
-              </a>
-              <Button
-                className="w-full bg-[#25D366] text-white hover:bg-[#1faa54]"
-                disabled={isSharing}
-                onClick={handleShare}
-              >
-                {isSharing ? (
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                ) : (
-                  <HugeiconsIcon icon={WhatsappIcon} size={16} className="mr-2" primaryColor="currentColor" />
-                )}
-                Share via WhatsApp
-              </Button>
-              <Button
-                variant="outline"
-                className="w-full"
-                onClick={() => {
-                  setPreview({ id: "—", name: "", age: 0, gender: "Male", phone: "", ticketType: "Classic" });
-                  reset();
-                  setValue("gender", "Male");
-                  setValue("ticketType", "Classic");
-                }}
-              >
-                Issue Another
-              </Button>
-            </div>
-          </div>
+          <ConfirmationPanel
+            ticket={preview}
+            eventName={settings.name || undefined}
+            venue={settings.place || undefined}
+            isSharing={isSharing}
+            onShare={handleShare}
+            onIssueAnother={() => {
+              setPreview({ id: "—", name: "", age: 0, gender: "Male", phone: "", ticketType: "Classic" });
+              reset();
+              setValue("gender", "Male");
+              setValue("ticketType", "Classic");
+            }}
+          />
         ) : (
           <div className="glass-panel flex flex-1 items-center justify-center p-8 text-center text-sm text-muted-foreground">
             <span>Fill the form and click <span className="font-medium text-foreground">Generate Pass</span> to issue a ticket.</span>
           </div>
         )}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Confirmation panel shown after a ticket is created. Renders the LIVE ticket
+ * (admin sees exactly what the guest will see) and auto-captures a JPEG
+ * snapshot for the OG share preview. Capture is fire-and-forget — a failure
+ * degrades to the SVG fallback OG image and never blocks issuance.
+ */
+function ConfirmationPanel({
+  ticket,
+  eventName,
+  venue,
+  isSharing,
+  onShare,
+  onIssueAnother,
+}: {
+  ticket: Pick<Ticket, "id" | "name" | "age" | "gender" | "phone" | "ticketType">;
+  eventName?: string;
+  venue?: string;
+  isSharing: boolean;
+  onShare: () => void;
+  onIssueAnother: () => void;
+}) {
+  const cardRef = useRef<HTMLDivElement>(null);
+  const [captured, setCaptured] = useState<null | "done" | "failed">(null);
+
+  // Auto-capture the OG snapshot once the live shader ticket has drawn.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const el = cardRef.current;
+      if (!el) return;
+      const jpeg = await captureTicketAsJpeg(el);
+      if (cancelled || !jpeg) {
+        if (!cancelled) setCaptured("failed");
+        return;
+      }
+      // Fire-and-forget upload. Never throw.
+      fetch("/api/og-snapshot", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: ticket.id, image: jpeg }),
+      })
+        .then(() => !cancelled && setCaptured("done"))
+        .catch(() => !cancelled && setCaptured("failed"));
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [ticket.id]);
+
+  return (
+    <div className="glass-panel flex flex-1 flex-col items-center gap-5 p-6 text-center">
+      {/* Success header */}
+      <div className="flex flex-col items-center gap-2">
+        <div className="flex h-12 w-12 items-center justify-center rounded-full bg-success-green/20">
+          <CheckCircle2 className="h-6 w-6 text-success-green" />
+        </div>
+        <h3 className="text-lg font-semibold">Pass Generated</h3>
+        <p className="text-sm text-muted-foreground">
+          Ticket for <span className="font-medium text-foreground">{ticket.name}</span> is ready to share.
+        </p>
+      </div>
+
+      {/* Live ticket preview (also the capture source) */}
+      <div className="w-full max-w-sm overflow-hidden rounded-xl">
+        <TicketCard
+          ref={cardRef}
+          ticket={ticket}
+          eventName={eventName}
+          venue={venue}
+        />
+      </div>
+
+      {/* Share-preview status — subtle, non-blocking */}
+      <p className="h-4 text-xs text-muted-foreground">
+        {captured === "done"
+          ? "Share preview ready ✓"
+          : captured === "failed"
+          ? "Share preview will generate on first view"
+          : "Preparing share preview…"}
+      </p>
+
+      <div className="w-full max-w-sm space-y-3">
+        <a
+          href={`${typeof window !== "undefined" ? window.location.origin : ""}/ticket/${ticket.id}`}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="flex w-full items-center justify-center gap-2 rounded-xl border border-white/15 bg-white/5 py-3 text-sm font-medium text-white transition-colors hover:bg-white/10"
+        >
+          <ExternalLink className="h-4 w-4" />
+          View Interactive Ticket
+        </a>
+        <Button
+          className="w-full bg-[#25D366] text-white hover:bg-[#1faa54]"
+          disabled={isSharing}
+          onClick={onShare}
+        >
+          {isSharing ? (
+            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+          ) : (
+            <HugeiconsIcon icon={WhatsappIcon} size={16} className="mr-2" primaryColor="currentColor" />
+          )}
+          Share via WhatsApp
+        </Button>
+        <Button variant="outline" className="w-full" onClick={onIssueAnother}>
+          Issue Another
+        </Button>
       </div>
     </div>
   );

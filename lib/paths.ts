@@ -14,4 +14,6 @@ export const paths = {
   locksCollection: "global_locks",
   adminSecurityDoc: "admin_settings/security",
   contactsCollection: "help_contacts",
+  /** Pre-rendered OG share previews (base64 JPEG), keyed by ticket id. */
+  ogSnapshotsCollection: "og_snapshots",
 } as const;

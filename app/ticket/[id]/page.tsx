@@ -11,11 +11,15 @@ import { TicketView } from "@/components/tickets/ticket-view";
 export const dynamic = "force-dynamic";
 
 // Dynamic OG metadata for link previews (WhatsApp, social media).
-// OG image is generated dynamically at /ticket/{id}/opengraph-image (WebP, ~50KB).
+// OG image is served at /ticket/{id}/og-image — a JPEG snapshot of the exact
+// live shader ticket when one has been captured at creation time, else an SVG.
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
   const { id } = await params;
   const db = getAdminDb();
-  const snap = await db.collection(paths.ticketsCollection).doc(id).get();
+  const [snap, ogSnap] = await Promise.all([
+    db.collection(paths.ticketsCollection).doc(id).get(),
+    db.collection(paths.ogSnapshotsCollection).doc(id).get(),
+  ]);
 
   if (!snap.exists) {
     return { title: "Entry Pass", description: "View your interactive event ticket." };
@@ -29,33 +33,38 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
   const settingsSnap = await db.doc(paths.settingsDoc).get();
   const eventName = String(settingsSnap.data()?.name ?? "Event");
 
+  // JPEG snapshot of the live shader if one exists, else the SVG fallback.
+  const hasSnapshot = Boolean(
+    ogSnap.exists &&
+      String(ogSnap.data()?.image ?? "").startsWith("data:image/jpeg;base64,")
+  );
+  const imageType = hasSnapshot ? "image/jpeg" : "image/svg+xml";
+
+  const images = [
+    {
+      url: `/ticket/${id}/og-image`,
+      alt: `${name}'s Entry Pass`,
+    },
+  ];
+
   return {
     title: `${name}'s Entry Pass — ${typeLabel}`,
     description: `${eventName} • ${typeLabel} pass for ${name}. Scan your QR code at the entrance.`,
     openGraph: {
       title: `${name}'s Entry Pass — ${typeLabel}`,
       description: `${eventName} • ${typeLabel} pass. Scan your QR code at the entrance for admission.`,
-      images: [
-        {
-          url: `/ticket/${id}/og-image`,
-          width: 800,
-          height: 420,
-          alt: `${name}'s Entry Pass`,
-        },
-      ],
+      images,
       type: "website",
       siteName: "Entry Pass",
     },
     other: {
-      "og:image:width": "800",
-      "og:image:height": "420",
-      "og:image:type": "image/svg+xml",
+      "og:image:type": imageType,
     },
     twitter: {
       card: "summary_large_image",
       title: `${name}'s Entry Pass — ${typeLabel}`,
       description: `${eventName} • ${typeLabel} pass. Scan your QR code at the entrance.`,
-      images: [`/ticket/${id}/og-image`],
+      images,
     },
   };
 }

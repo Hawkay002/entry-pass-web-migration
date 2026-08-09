@@ -1,6 +1,7 @@
-// app/ticket/[id]/opengraph-image.tsx — dynamic OG image per ticket.
-// Renders an SVG server-side, converts to WebP via sharp (~40-60KB instead of 300KB+ PNG).
-// Shows up in WhatsApp/social link previews with guest name, type, and event.
+// app/ticket/[id]/og-image/route.ts — dynamic OG image per ticket.
+// Serves the EXACT live shader ticket snapshot (captured at creation time and
+// stored in og_snapshots) as a JPEG. Falls back to a hand-rolled SVG for
+// tickets created before the snapshot feature (or whose capture failed).
 
 import { getAdminDb } from "@/lib/firebase/admin";
 import { paths } from "@/lib/paths";
@@ -25,6 +26,7 @@ function escapeXml(s: string): string {
   return s.replace(/[<>&"']/g, (c) => ({ "<": "&lt;", ">": "&gt;", "&": "&amp;", '"': "&quot;", "'": "&apos;" }[c]!));
 }
 
+// Fallback only — used when no pre-captured snapshot exists.
 function buildSvg(name: string, typeLabel: string, eventName: string, bg: string, accent: string): string {
   return `<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630">
   <defs>
@@ -70,11 +72,26 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
   const { id } = await params;
   const db = getAdminDb();
 
-  const [ticketSnap, settingsSnap] = await Promise.all([
+  const [snapshotSnap, ticketSnap, settingsSnap] = await Promise.all([
+    db.collection(paths.ogSnapshotsCollection).doc(id).get(),
     db.collection(paths.ticketsCollection).doc(id).get(),
     db.doc(paths.settingsDoc).get(),
   ]);
 
+  // 1) Prefer the pre-captured live shader JPEG.
+  const snapData = snapshotSnap.exists ? snapshotSnap.data() : null;
+  const image = String(snapData?.image ?? "");
+  if (image.startsWith("data:image/jpeg;base64,")) {
+    const bytes = Buffer.from(image.slice("data:image/jpeg;base64,".length), "base64");
+    return new Response(new Uint8Array(bytes), {
+      headers: {
+        "Content-Type": "image/jpeg",
+        "Cache-Control": "public, max-age=86400, s-maxage=86400",
+      },
+    });
+  }
+
+  // 2) Fallback to the hand-rolled SVG (pre-feature tickets or capture failure).
   const data = ticketSnap.exists ? (ticketSnap.data() as Record<string, unknown>) : {};
   const name = String(data.name ?? "Guest");
   const ticketType = String(data.ticketType ?? "Classic");
@@ -83,8 +100,6 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
   const colors = TYPE_COLORS[ticketType] ?? TYPE_COLORS.Classic;
   const typeLabel = TYPE_LABELS[ticketType] ?? "CLASSIC";
 
-  // Return raw SVG — Facebook/WhatsApp/LINE all support SVG OG images.
-  // No sharp dependency (crashes on Vercel serverless).
   const svg = buildSvg(name, typeLabel, eventName, colors.bg, colors.accent);
 
   return new Response(svg, {
