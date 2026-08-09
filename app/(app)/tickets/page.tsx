@@ -376,11 +376,11 @@ function ConfirmationPanel({
       </div>
 
       {/* Live ticket preview (also the capture source). 
-          Updated to strictly scale down to fit the viewport on mobile devices
-          without requiring horizontal scrolling. The negative margin handles 
-          the layout footprint of the unscaled card so it doesn't leave a large gap. */}
-      <div className="w-full overflow-hidden rounded-xl text-left flex justify-center">
-        <div className="min-w-max origin-top scale-[0.55] min-[390px]:scale-[0.60] min-[412px]:scale-[0.65] sm:scale-100 transition-transform pb-2 -mb-[35%] min-[390px]:-mb-[30%] min-[412px]:-mb-[25%] sm:mb-0">
+          Using absolute positioning + left-1/2 -translate-x-1/2 on mobile to perfectly center 
+          and detach the scaled ticket from the normal document flow. 
+          The wrapper provides explicit heights across breakpoints so the scaled ticket doesn't get clipped. */}
+      <div className="w-full flex justify-center h-[180px] min-[375px]:h-[200px] min-[412px]:h-[220px] sm:h-auto relative">
+        <div className="min-w-max origin-top scale-[0.50] min-[375px]:scale-[0.55] min-[412px]:scale-[0.60] sm:scale-100 transition-transform absolute left-1/2 -translate-x-1/2 sm:static sm:translate-x-0">
           <TicketCard
             ref={cardRef}
             ticket={ticket}
@@ -390,7 +390,7 @@ function ConfirmationPanel({
         </div>
       </div>
 
-      <div className="w-full max-w-sm space-y-3 mt-2">
+      <div className="w-full max-w-sm space-y-3 mt-4 sm:mt-2 relative z-10">
         <a
           href={`${typeof window !== "undefined" ? window.location.origin : ""}/ticket/${ticket.id}`}
           target="_blank"
