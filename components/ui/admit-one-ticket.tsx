@@ -992,11 +992,28 @@ function splitName(name, max = 3) {
   if (!clean) return [];
   // Capitalize first letter of each word, rest lowercase.
   const titleCase = clean.replace(/\b\w/g, (c) => c.toUpperCase()).replace(/\B\w/g, (c) => c.toLowerCase());
+  const words = titleCase.split(" ");
+  // Fewer words than lines → one word per line (no balancing needed).
+  if (words.length <= max) return words;
+  // More words than lines → greedy fill toward a per-line character target so
+  // the longest line is minimized and fitScale shrinks the font gracefully
+  // instead of over-shrinking to fit one overloaded line. Reading order preserved.
+  const totalChars = words.reduce((s, w) => s + w.length, 0) + (words.length - 1);
+  const target = Math.ceil(totalChars / max);
   const lines = [];
-  for (const word of titleCase.split(" ")) {
-    if (lines.length < max) lines.push(word);
-    else lines[lines.length - 1] = `${lines[lines.length - 1]} ${word}`;
+  let cur = "";
+  for (const w of words) {
+    if (!cur) { cur = w; continue; }
+    // Join to the current line if it stays near the target, OR we're on the
+    // final line (everything remaining must fit there).
+    if ((cur + " " + w).length <= target || lines.length === max - 1) {
+      cur += " " + w;
+    } else {
+      lines.push(cur);
+      cur = w;
+    }
   }
+  if (cur) lines.push(cur);
   return lines;
 }
 
@@ -1007,7 +1024,16 @@ function fitScale(lines, opts) {
   const longest = Math.max(...lines.map((l) => l.length));
   const charWidth = (0.6 + tracking) * fontSize;
   const block = lines.length * lineHeight;
-  return Math.max(0.05, Math.min(1, charWidth > 0 ? availableWidth / (longest * charWidth) : 1, block > 0 && availableHeight > 0 ? availableHeight / block : 1));
+  // Two independent scale limits:
+  //  - widthScale: the largest scale where the longest line still fits horizontally
+  //  - heightScale: the scale where the block fills the available vertical space
+  // Fill the height (grow up to 1.3x) so the name occupies the area down to the
+  // perforation/footer zone as closely as possible, clamped by width so long
+  // names never overflow. Never shrink below 0.05.
+  const widthScale = charWidth > 0 ? availableWidth / (longest * charWidth) : 1;
+  const heightScale = block > 0 && availableHeight > 0 ? availableHeight / block : 1;
+  const MAX_GROW = 1.3;
+  return Math.max(0.05, Math.min(widthScale, heightScale, MAX_GROW));
 }
 
 var MOTION_QUERY = "(prefers-reduced-motion: reduce)";

@@ -375,11 +375,11 @@ function ConfirmationPanel({
         </p>
       </div>
 
-      {/* Live ticket preview (also the capture source). Scaled down on mobile
-          so the full ticket fits the narrow column; grows on larger screens.
-          text-left resets the inherited text-center so the ticket's presenter
-          label + guest name stay left-aligned (they inherit text-align). */}
-      <div className="w-full max-w-[230px] overflow-hidden rounded-xl text-left sm:max-w-sm">
+      {/* Live ticket preview (also the capture source). Wide enough that the
+          full landscape ticket stays visible (not cropped) even on narrow
+          mobile columns. text-left resets the inherited text-center so the
+          ticket's presenter label + guest name stay left-aligned. */}
+      <div className="w-full overflow-hidden rounded-xl text-left">
         <TicketCard
           ref={cardRef}
           ticket={ticket}
