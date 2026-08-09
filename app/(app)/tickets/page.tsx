@@ -85,7 +85,7 @@ export default function TicketsPage() {
     try {
       const digits = preview.phone.replace(/\D/g, "");
       const ticketUrl = `${window.location.origin}/ticket/${preview.id}`;
-      const message = `Hello ${preview.name}, here is your Entry Pass 🎫\n*Keep this QR code ready at the entrance.*\n\nView your interactive ticket:\n${ticketUrl}\n\nEnter your full phone number with country code (e.g. ${dialCode}${preview.phone}) to unlock your ticket.`;
+      const message = `Hello ${preview.name}, here is your Entry Pass 🎫 (shader disabled for preview images)\n*Keep this QR code ready at the entrance.*\n\nView your interactive ticket:\n${ticketUrl}\n\nEnter your full phone number with country code (e.g. ${dialCode}${preview.phone}) to unlock your ticket.`;
       window.location.href = `https://wa.me/${digits}?text=${encodeURIComponent(message)}`;
     } catch {
       toast.error("Could not open WhatsApp");
@@ -375,8 +375,11 @@ function ConfirmationPanel({
         </p>
       </div>
 
-      {/* Live ticket preview (also the capture source) */}
-      <div className="w-full max-w-sm overflow-hidden rounded-xl">
+      {/* Live ticket preview (also the capture source). Scaled down on mobile
+          so the full ticket fits the narrow column; grows on larger screens.
+          text-left resets the inherited text-center so the ticket's presenter
+          label + guest name stay left-aligned (they inherit text-align). */}
+      <div className="w-full max-w-[230px] overflow-hidden rounded-xl text-left sm:max-w-sm">
         <TicketCard
           ref={cardRef}
           ticket={ticket}
@@ -384,15 +387,6 @@ function ConfirmationPanel({
           venue={venue}
         />
       </div>
-
-      {/* Share-preview status — subtle, non-blocking */}
-      <p className="h-4 text-xs text-muted-foreground">
-        {captured === "done"
-          ? "Share preview ready ✓"
-          : captured === "failed"
-          ? "Share preview will generate on first view"
-          : "Preparing share preview…"}
-      </p>
 
       <div className="w-full max-w-sm space-y-3">
         <a
@@ -404,17 +398,25 @@ function ConfirmationPanel({
           <ExternalLink className="h-4 w-4" />
           View Interactive Ticket
         </a>
+
+        {/* WhatsApp button doubles as the share-preview status: shows a loader
+            + "Preparing share preview…" until the snapshot is captured, then
+            becomes the normal Share via WhatsApp button. */}
         <Button
           className="w-full bg-[#25D366] text-white hover:bg-[#1faa54]"
-          disabled={isSharing}
+          disabled={isSharing || captured === null}
           onClick={onShare}
         >
-          {isSharing ? (
+          {isSharing || captured === null ? (
             <Loader2 className="mr-2 h-4 w-4 animate-spin" />
           ) : (
             <HugeiconsIcon icon={WhatsappIcon} size={16} className="mr-2" primaryColor="currentColor" />
           )}
-          Share via WhatsApp
+          {captured === null
+            ? "Preparing share preview…"
+            : isSharing
+            ? "Opening WhatsApp…"
+            : "Share via WhatsApp"}
         </Button>
         <Button variant="outline" className="w-full" onClick={onIssueAnother}>
           Issue Another
