@@ -85,7 +85,7 @@ export default function TicketsPage() {
     try {
       const digits = preview.phone.replace(/\D/g, "");
       const ticketUrl = `${window.location.origin}/ticket/${preview.id}`;
-      const message = `Hello ${preview.name}, here is your Entry Pass 🎫 (shader disabled for preview images)\n*Keep this QR code ready at the entrance.*\n\nView your interactive ticket:\n${ticketUrl}\n\nEnter your full phone number with country code (e.g. ${dialCode}${preview.phone}) to unlock your ticket.`;
+      const message = `Hello ${preview.name}, here is your Entry Pass 🎫 (shader disabled for preview images)\n*Keep this QR code ready at the entrance.*\n\nView your interactive ticket:\n${ticketUrl}\n\nEnter your full phone number with country code (e.g. ${preview.phone}) to unlock your ticket.`;
       window.location.href = `https://wa.me/${digits}?text=${encodeURIComponent(message)}`;
     } catch {
       toast.error("Could not open WhatsApp");
@@ -379,7 +379,7 @@ function ConfirmationPanel({
           Heights tightened significantly to properly embrace the scaled ticket footprint 
           without leaving dead space below it on mobile devices. */}
       <div className="w-full flex justify-center h-[135px] min-[375px]:h-[150px] min-[412px]:h-[165px] sm:h-auto relative">
-        <div className="min-w-max origin-top scale-[0.50] min-[375px]:scale-[0.55] min-[412px]:scale-[0.60] sm:scale-100 transition-transform absolute left-1/2 -translate-x-1/2 sm:static sm:translate-x-0">
+        <div className="min-w-max origin-top scale-[0.50] min-[375px]:scale-[0.55] min-[412px]:scale-[0.60] sm:scale-100 transition-transform absolute left-1/2 -translate-x-1/2 sm:static sm:translate-x-0 text-left">
           <TicketCard
             ref={cardRef}
             ticket={ticket}
