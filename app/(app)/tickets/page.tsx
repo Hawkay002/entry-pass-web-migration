@@ -376,10 +376,9 @@ function ConfirmationPanel({
       </div>
 
       {/* Live ticket preview (also the capture source). 
-          Using absolute positioning + left-1/2 -translate-x-1/2 on mobile to perfectly center 
-          and detach the scaled ticket from the normal document flow. 
-          The wrapper provides explicit heights across breakpoints so the scaled ticket doesn't get clipped. */}
-      <div className="w-full flex justify-center h-[180px] min-[375px]:h-[200px] min-[412px]:h-[220px] sm:h-auto relative">
+          Heights tightened significantly to properly embrace the scaled ticket footprint 
+          without leaving dead space below it on mobile devices. */}
+      <div className="w-full flex justify-center h-[135px] min-[375px]:h-[150px] min-[412px]:h-[165px] sm:h-auto relative">
         <div className="min-w-max origin-top scale-[0.50] min-[375px]:scale-[0.55] min-[412px]:scale-[0.60] sm:scale-100 transition-transform absolute left-1/2 -translate-x-1/2 sm:static sm:translate-x-0">
           <TicketCard
             ref={cardRef}
@@ -390,7 +389,8 @@ function ConfirmationPanel({
         </div>
       </div>
 
-      <div className="w-full max-w-sm space-y-3 mt-4 sm:mt-2 relative z-10">
+      {/* Removed the extra top margin (mt-4) to bring the buttons fully flush with the container */}
+      <div className="w-full max-w-sm space-y-3 relative z-10">
         <a
           href={`${typeof window !== "undefined" ? window.location.origin : ""}/ticket/${ticket.id}`}
           target="_blank"
