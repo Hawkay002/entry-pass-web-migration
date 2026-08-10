@@ -17,7 +17,7 @@ export function SettingsContent({ isAdmin }: { isAdmin: boolean }) {
 
   return (
     <div className="mx-auto max-w-2xl space-y-8">
-      <SettingsForm />
+      <SettingsForm isAdmin={isAdmin} />
       {isAdmin && <AdminPanels />}
     </div>
   );

@@ -24,7 +24,7 @@ import { TIMEZONES, DEFAULT_TZ, getTzLabel } from "@/lib/timezones";
 import { Switch } from "@/components/ui/switch";
 import { GatePanel } from "@/components/admin/gate-panel";
 
-export function SettingsForm() {
+export function SettingsForm({ isAdmin = false }: { isAdmin?: boolean }) {
   const { settings, loading } = useSettings();
   const [name, setName] = useState("");
   const [place, setPlace] = useState("");
@@ -157,7 +157,8 @@ export function SettingsForm() {
           </div>
         </div>
 
-        {/* Multi-Gate Mode toggle */}
+        {/* Multi-Gate Mode toggle — admin only */}
+        {isAdmin && (
         <div className="flex items-center justify-between gap-4 rounded-xl border border-white/8 bg-black/20 p-4">
           <div className="space-y-0.5">
             <Label htmlFor="multiGate" className="text-sm font-medium">
@@ -173,6 +174,7 @@ export function SettingsForm() {
             onCheckedChange={(v) => { setMultiGate(v); setEdited(true); }}
           />
         </div>
+        )}
 
         <Button onClick={handleSave} disabled={saving || (!edited && !loading)}>
           {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
@@ -214,8 +216,8 @@ export function SettingsForm() {
           {settings.deadline && <DeadlineCountdown deadline={settings.deadline} />}
         </div>
 
-        {/* Gate management — below Active Settings, visible when multiGate is saved ON */}
-        {savedMultiGate && (
+        {/* Gate management — admin only, visible when multiGate is saved ON */}
+        {isAdmin && savedMultiGate && (
           <div className="space-y-2 pt-2">
             <h4 className="text-sm font-semibold text-white">Gate Configuration</h4>
             <GatePanel />

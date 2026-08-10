@@ -62,19 +62,35 @@ export async function saveSettings(
   const user = await getAppUser();
   if (!user) return { ok: false, error: "Not authenticated." };
 
-  await getAdminDb()
-    .doc(paths.settingsDoc)
-    .set(
-      {
-        name: settings.name,
-        place: settings.place,
-        deadline: settings.deadline,
-        timezone: settings.timezone ?? "+05:30",
-        multiGate: Boolean(settings.multiGate),
-        gateCategories: Array.isArray(settings.gateCategories)
-          ? settings.gateCategories
-          : [],
-      },
+  // multiGate + gateCategories are admin-only — staff can save name/place/
+  // deadline but cannot toggle multi-gate mode or change categories.
+  const isMultiGateChanged =
+    settings.multiGate !== undefined || settings.gateCategories !== undefined;
+
+  // Read current settings to know the existing multiGate value.
+  const db = getAdminDb();
+  const currentSnap = await db.doc(paths.settingsDoc).get();
+  const currentMultiGate = Boolean(currentSnap.data()?.multiGate);
+
+  // If a non-admin tries to change multi-gate fields, silently keep the
+  // existing value rather than erroring (they can't see the toggle anyway).
+  const effectiveMultiGate = user.role === "admin" ? Boolean(settings.multiGate) : currentMultiGate;
+  const effectiveCategories =
+    user.role === "admin" && Array.isArray(settings.gateCategories)
+      ? settings.gateCategories
+      : Array.isArray(currentSnap.data()?.gateCategories)
+        ? currentSnap.data()!.gateCategories
+        : [];
+
+  await db.doc(paths.settingsDoc).set(
+    {
+      name: settings.name,
+      place: settings.place,
+      deadline: settings.deadline,
+      timezone: settings.timezone ?? "+05:30",
+      multiGate: effectiveMultiGate,
+      gateCategories: effectiveCategories,
+    },
       { merge: true }
     );
 
