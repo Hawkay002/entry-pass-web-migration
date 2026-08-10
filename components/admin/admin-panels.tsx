@@ -977,7 +977,7 @@ function RemoteDeviceManagement() {
               </div>
 
               {/* Staff table */}
-              <div className="max-h-[35vh] space-y-1.5 overflow-y-auto overflow-x-visible px-2 py-1 scrollbar-thin">
+              <div className="max-h-[70vh] space-y-1.5 overflow-y-auto overflow-x-visible px-2 py-1 scrollbar-thin">
                 {activeRole?.staff
                   .filter((s) => {
                     if (!staffSearch.trim()) return true;
