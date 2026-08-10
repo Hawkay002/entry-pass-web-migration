@@ -478,14 +478,14 @@ function RoleManagementPanel() {
 
       {/* Add staff dialog (single + bulk upload) */}
       <Dialog open={!!addStaffOpen} onOpenChange={(o) => { if (!o) { setAddStaffOpen(null); setBulkParsed([]); } }}>
-        <DialogContent className="max-h-[85vh] overflow-y-auto">
-          <DialogHeader>
+        <DialogContent className="flex max-h-[85vh] flex-col overflow-hidden p-0">
+          <DialogHeader className="px-6 pt-6">
             <DialogTitle>Add Staff Member</DialogTitle>
             <DialogDescription>
               Add individually or bulk upload from CSV, JSON, or XLSX.
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-4">
+          <div className="flex-1 space-y-4 overflow-y-auto scrollbar-thin px-6 py-4">
             {/* Single add */}
             <div className="space-y-2">
               <Label>Name</Label>
@@ -553,7 +553,7 @@ function RoleManagementPanel() {
               </div>
             )}
           </div>
-          <DialogFooter>
+          <DialogFooter className="sticky bottom-0 border-t border-white/8 bg-[rgb(10,10,10)] px-6 py-4">
             <Button variant="ghost" onClick={() => { setAddStaffOpen(null); setBulkParsed([]); }}>Cancel</Button>
             {bulkParsed.length > 0 ? (
               <Button onClick={handleBulkAdd} disabled={bulkAdding}>
