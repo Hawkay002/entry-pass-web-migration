@@ -415,7 +415,7 @@ function ConfirmationPanel({
       {/* Success header */}
       <div className="flex flex-col items-center gap-2">
         <div className="flex h-12 w-12 items-center justify-center rounded-full bg-success-green/20 text-success-green">
-          <BadgeCheck size={28} animation="path" animateOnView animateOnViewOnce />
+          <BadgeCheck size={28} animation="path-appear-loop" animateOnView loop />
         </div>
         <h3 className="text-lg font-semibold">Pass Generated</h3>
         <p className="text-sm text-muted-foreground">
