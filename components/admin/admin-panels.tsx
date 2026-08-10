@@ -478,7 +478,7 @@ function RoleManagementPanel() {
 
       {/* Add staff dialog (single + bulk upload) */}
       <Dialog open={!!addStaffOpen} onOpenChange={(o) => { if (!o) { setAddStaffOpen(null); setBulkParsed([]); } }}>
-        <DialogContent>
+        <DialogContent className="max-h-[85vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Add Staff Member</DialogTitle>
             <DialogDescription>
