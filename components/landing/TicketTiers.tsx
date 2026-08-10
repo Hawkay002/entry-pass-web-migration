@@ -271,27 +271,50 @@ function TiltedTicket({
       .catch(() => setQrDataUrl(""));
   }, [ticketId]);
 
-  // Pointer-driven tilt (transform/opacity only — GPU-safe).
+  // Pointer + touch-driven tilt (transform/opacity only — GPU-safe).
   useEffect(() => {
     const node = tiltRef.current;
     if (!node) return;
     const maxTilt = 11;
 
-    const onMove = (e: PointerEvent) => {
+    const applyTilt = (clientX: number, clientY: number) => {
       const rect = node.getBoundingClientRect();
-      const dx = (e.clientX - rect.left) / rect.width - 0.5;
-      const dy = (e.clientY - rect.top) / rect.height - 0.5;
+      const dx = (clientX - rect.left) / rect.width - 0.5;
+      const dy = (clientY - rect.top) / rect.height - 0.5;
       node.style.transform = `perspective(1200px) rotateX(${-(dy * 2) * maxTilt}deg) rotateY(${dx * 2 * maxTilt}deg) scale(1.02)`;
     };
-    const onLeave = () => {
+    const reset = () => {
       node.style.transform = "perspective(1200px) rotateX(0) rotateY(0) scale(1)";
     };
 
-    node.addEventListener("pointermove", onMove);
-    node.addEventListener("pointerleave", onLeave);
+    // Mouse
+    const onPointerMove = (e: PointerEvent) => {
+      if (e.pointerType === "mouse") applyTilt(e.clientX, e.clientY);
+    };
+    const onPointerLeave = () => reset();
+
+    // Touch — pointermove with touch doesn't fire reliably during scroll;
+    // listen to touchmove explicitly and preventDefault so the tilt captures
+    // the gesture instead of the page scrolling.
+    const onTouchMove = (e: TouchEvent) => {
+      if (e.touches.length > 0) {
+        e.preventDefault();
+        applyTilt(e.touches[0].clientX, e.touches[0].clientY);
+      }
+    };
+    const onTouchEnd = () => reset();
+
+    node.addEventListener("pointermove", onPointerMove);
+    node.addEventListener("pointerleave", onPointerLeave);
+    node.addEventListener("touchmove", onTouchMove, { passive: false });
+    node.addEventListener("touchend", onTouchEnd);
+    node.addEventListener("touchcancel", onTouchEnd);
     return () => {
-      node.removeEventListener("pointermove", onMove);
-      node.removeEventListener("pointerleave", onLeave);
+      node.removeEventListener("pointermove", onPointerMove);
+      node.removeEventListener("pointerleave", onPointerLeave);
+      node.removeEventListener("touchmove", onTouchMove);
+      node.removeEventListener("touchend", onTouchEnd);
+      node.removeEventListener("touchcancel", onTouchEnd);
     };
   }, []);
 
@@ -307,6 +330,7 @@ function TiltedTicket({
         maxWidth: "100%",
         transformStyle: "preserve-3d",
         transition: `transform 600ms ${EASE}`,
+        touchAction: "none",
       }}
     >
       <div style={{ width, position: "relative" }}>
