@@ -249,7 +249,7 @@ export function SettingsForm({ isAdmin = false }: { isAdmin?: boolean }) {
   );
 }
 
-function DeadlineCountdown({ deadline }: { deadline: string }) {
+export function DeadlineCountdown({ deadline }: { deadline: string }) {
   const [remaining, setRemaining] = useState("");
   const [passed, setPassed] = useState(false);
 
