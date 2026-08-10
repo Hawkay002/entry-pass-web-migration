@@ -218,8 +218,8 @@ export function InteractiveTicket({ ticket, settings }: { ticket: TicketData; se
           name={ticket.name}
           presenter={`ENTRY PASS — ${typeLabel.toUpperCase()}`}
           event={hasSettings ? `${settings.name || ""}${settings.place ? `  •  ${settings.place}` : ""}` : ""}
-          venue={ticket.gate ? `Gate ${ticket.gate}` : ""}
-          dates={`${ticket.age} / ${ticket.gender}`}
+          venue={""}
+          dates={ticket.gate ? `${ticket.age} / ${ticket.gender}  \u2022  Gate ${ticket.gate}` : `${ticket.age} / ${ticket.gender}`}
           stubText="ADMIT ONE"
           watermark={typeLabel.toUpperCase()}
           width={ticketWidth}
