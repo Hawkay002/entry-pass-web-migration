@@ -6,7 +6,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
-import { Loader2, Trash2, UserPlus, Lock, LockOpen, Plus, X, Search, Wrench, ScanLine, ExternalLink, Eye, EyeOff, Pencil, Upload } from "lucide-react";
+import { Loader2, Trash2, UserPlus, Lock, LockOpen, Plus, X, Search, Wrench, ScanLine, ExternalLink, Eye, EyeOff, Pencil, Upload, ChevronDown } from "lucide-react";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -275,6 +275,7 @@ function RoleManagementPanel() {
   const [staffEmail, setStaffEmail] = useState("");
   const [addingStaff, setAddingStaff] = useState(false);
   const [deleteRoleConfirm, setDeleteRoleConfirm] = useState<string | null>(null);
+  const [expandedRoles, setExpandedRoles] = useState<Set<string>>(new Set()); // collapsed by default
   // Bulk upload state
   const [bulkParsed, setBulkParsed] = useState<{ name: string; email: string }[]>([]);
   const [bulkAdding, setBulkAdding] = useState(false);
@@ -428,32 +429,42 @@ function RoleManagementPanel() {
       ) : (
         <div className="space-y-3">
           {roles.map((role) => (
-            <div key={role.id} className="rounded-xl border border-white/10 bg-white/5 p-4">
-              <div className="mb-3 flex items-center justify-between">
+            <div key={role.id} className="rounded-xl border border-white/10 bg-white/5">
+              <button
+                onClick={() => setExpandedRoles((prev) => {
+                  const next = new Set(prev);
+                  next.has(role.id) ? next.delete(role.id) : next.add(role.id);
+                  return next;
+                })}
+                className="flex w-full items-center justify-between p-4 text-left"
+              >
                 <h4 className="font-medium">{role.name} ({role.staff.length})</h4>
-                <div className="flex gap-2">
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    onClick={() => {
-                      setAddStaffOpen(role.id);
-                      setStaffName("");
-                      setStaffEmail("");
-                    }}
-                  >
-                    <UserPlus className="mr-1 h-3.5 w-3.5" /> Add Staff
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    className="text-destructive"
-                    onClick={() => setDeleteRoleConfirm(role.id)}
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
-                </div>
-              </div>
-              {role.staff.length > 0 && (
+                <ChevronDown className={cn("h-4 w-4 text-muted-foreground transition-transform", expandedRoles.has(role.id) && "rotate-180")} />
+              </button>
+              {expandedRoles.has(role.id) && (
+                <div className="border-t border-white/8 px-4 pb-4 pt-3">
+                  <div className="mb-3 flex justify-end gap-2">
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => {
+                        setAddStaffOpen(role.id);
+                        setStaffName("");
+                        setStaffEmail("");
+                      }}
+                    >
+                      <UserPlus className="mr-1 h-3.5 w-3.5" /> Add Staff
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="text-destructive"
+                      onClick={() => setDeleteRoleConfirm(role.id)}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
+                  {role.staff.length > 0 && (
                 <div className="space-y-1">
                   {role.staff.map((s) => (
                     <div
@@ -469,6 +480,8 @@ function RoleManagementPanel() {
                       )}
                     </div>
                   ))}
+                </div>
+              )}
                 </div>
               )}
             </div>
@@ -977,7 +990,7 @@ function RemoteDeviceManagement() {
               </div>
 
               {/* Staff table */}
-              <div className="max-h-[70vh] space-y-1.5 overflow-y-auto overflow-x-visible px-2 py-1 scrollbar-thin">
+              <div className="max-h-[75vh] space-y-1.5 overflow-y-auto overflow-x-visible px-2 py-1 scrollbar-thin md:max-h-[55vh]">
                 {activeRole?.staff
                   .filter((s) => {
                     if (!staffSearch.trim()) return true;
