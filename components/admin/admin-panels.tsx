@@ -6,7 +6,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
-import { Loader2, Trash2, UserPlus, Lock, LockOpen, Plus, X, Search, Wrench, ScanLine, ExternalLink, Eye, EyeOff, Pencil, Upload, ChevronDown } from "lucide-react";
+import { Loader2, Trash2, UserPlus, Lock, LockOpen, Plus, X, Search, OctagonAlert, ScanLine, ExternalLink, Eye, EyeOff, Pencil, Upload, ChevronDown } from "lucide-react";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -182,7 +182,7 @@ function MaintenancePanel() {
     <div className="mx-6 border-t border-white/10" />
     <div className="space-y-4 px-6 py-5">
       <div className="mb-1 flex items-center gap-2">
-        <Wrench className="h-5 w-5 text-amber-500" />
+        <OctagonAlert className="h-5 w-5 text-amber-500" />
         <h4 className="text-sm font-semibold">Maintenance Mode</h4>
       </div>
       <p className="mb-4 text-xs text-muted-foreground">
@@ -207,7 +207,7 @@ function MaintenancePanel() {
           className="border-amber-500 text-amber-500 hover:bg-amber-500/10"
           onClick={() => setOpen(true)}
         >
-          <Wrench className="mr-1.5 h-3.5 w-3.5" />
+          <OctagonAlert className="mr-1.5 h-3.5 w-3.5" />
           Start Maintenance
         </Button>
         <Button
@@ -251,7 +251,7 @@ function MaintenancePanel() {
               onClick={startMaintenance}
             >
               {applying && <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />}
-              <Wrench className="mr-1.5 h-3.5 w-3.5" />
+              <OctagonAlert className="mr-1.5 h-3.5 w-3.5" />
               Activate
             </Button>
           </DialogFooter>
