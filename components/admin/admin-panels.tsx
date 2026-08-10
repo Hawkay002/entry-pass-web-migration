@@ -275,12 +275,10 @@ function RoleManagementPanel() {
   const [staffEmail, setStaffEmail] = useState("");
   const [addingStaff, setAddingStaff] = useState(false);
   const [deleteRoleConfirm, setDeleteRoleConfirm] = useState<string | null>(null);
-  const [removeStaffConfirm, setRemoveStaffConfirm] = useState<{ roleId: string; email: string; name: string } | null>(null);
   // Bulk upload state
   const [bulkParsed, setBulkParsed] = useState<{ name: string; email: string }[]>([]);
   const [bulkAdding, setBulkAdding] = useState(false);
-  // Edit staff state
-  const [editStaff, setEditStaff] = useState<{ roleId: string; oldEmail: string; name: string; email: string } | null>(null);
+  // Edit staff state — moved to RemoteDeviceManagement
   const [editingStaff, setEditingStaff] = useState(false);
   const bulkFileRef = useRef<HTMLInputElement>(null);
   // Gate assignment (multi-gate mode)
@@ -288,7 +286,6 @@ function RoleManagementPanel() {
   const { gates } = useGatesMode();
   const multiGate = Boolean(settings.multiGate);
   const [staffGateId, setStaffGateId] = useState<string | null>(null);
-  const [editGateId, setEditGateId] = useState<string | null>(null);
 
   async function handleCreateRole() {
     if (!newRoleName.trim()) return;
@@ -397,18 +394,6 @@ function RoleManagementPanel() {
     }
   }
 
-  async function handleEditStaff() {
-    if (!editStaff) return;
-    setEditingStaff(true);
-    const res = await updateStaffInRole(editStaff.roleId, editStaff.oldEmail, editStaff.name, editStaff.email, multiGate ? editGateId : null);
-    setEditingStaff(false);
-    if (res.ok) {
-      toast.success("Staff member updated");
-      setEditStaff(null);
-    } else {
-      toast.error("Update failed", { description: res.error });
-    }
-  }
 
   return (
     <>
@@ -473,31 +458,15 @@ function RoleManagementPanel() {
                   {role.staff.map((s) => (
                     <div
                       key={s.email}
-                      className="flex items-center justify-between rounded-lg bg-black/30 px-3 py-1.5 text-sm"
+                      className="flex items-center gap-2 rounded-lg bg-black/30 px-3 py-1.5 text-sm"
                     >
-                      <div className="flex items-center gap-2">
-                        <span className="font-medium">{s.name}</span>
-                        <span className="text-muted-foreground">{s.email}</span>
-                        {multiGate && s.gateId && (
-                          <span className="inline-block rounded-full bg-accent-secondary/15 px-2 py-0.5 text-[0.65rem] font-medium text-accent-secondary">
-                            {gates.find((g) => g.id === s.gateId)?.name ?? s.gateId.slice(0, 6)}
-                          </span>
-                        )}
-                      </div>
-                      <div className="flex items-center gap-2.5">
-                        <button
-                          onClick={() => { setEditStaff({ roleId: role.id, oldEmail: s.email, name: s.name, email: s.email }); setEditGateId(s.gateId ?? null); }}
-                          className="text-muted-foreground hover:text-accent-secondary"
-                        >
-                          <Pencil className="h-3.5 w-3.5" />
-                        </button>
-                        <button
-                          onClick={() => setRemoveStaffConfirm({ roleId: role.id, email: s.email, name: s.name })}
-                          className="text-muted-foreground hover:text-destructive"
-                        >
-                          <X className="h-3.5 w-3.5" />
-                        </button>
-                      </div>
+                      <span className="font-medium">{s.name}</span>
+                      <span className="text-muted-foreground">{s.email}</span>
+                      {multiGate && s.gateId && (
+                        <span className="inline-block rounded-full bg-accent-secondary/15 px-2 py-0.5 text-[0.65rem] font-medium text-accent-secondary">
+                          {gates.find((g) => g.id === s.gateId)?.name ?? s.gateId.slice(0, 6)}
+                        </span>
+                      )}
                     </div>
                   ))}
                 </div>
@@ -602,63 +571,6 @@ function RoleManagementPanel() {
       </Dialog>
 
       {/* Edit staff dialog */}
-      <Dialog open={!!editStaff} onOpenChange={(o) => !o && setEditStaff(null)}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Edit Staff Member</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <Label>Name</Label>
-              <Input
-                value={editStaff?.name ?? ""}
-                onChange={(e) => setEditStaff((p) => p ? { ...p, name: e.target.value } : p)}
-                placeholder="Full name"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label>Email (Google account)</Label>
-              <Input
-                value={editStaff?.email ?? ""}
-                onChange={(e) => setEditStaff((p) => p ? { ...p, email: e.target.value } : p)}
-                placeholder="staff@gmail.com"
-                type="email"
-              />
-            </div>
-            {multiGate && (
-              <div className="space-y-2">
-                <Label>Assigned Gate</Label>
-                <Select value={editGateId ?? "none"} onValueChange={(v) => setEditGateId(v === "none" ? null : v)}>
-                  <SelectTrigger>
-                    <span>
-                      {editGateId
-                        ? (gates.find((g) => g.id === editGateId)?.name ?? editGateId)
-                        : "No gate assigned"}
-                    </span>
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">No gate assigned</SelectItem>
-                    {gates.filter((g) => g.active).map((g) => (
-                      <SelectItem key={g.id} value={g.id}>{g.name}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            )}
-          </div>
-          <DialogFooter>
-            <Button variant="ghost" onClick={() => setEditStaff(null)}>Cancel</Button>
-            <Button
-              onClick={handleEditStaff}
-              disabled={editingStaff || !editStaff?.name.trim() || !editStaff?.email.trim()}
-            >
-              {editingStaff && <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />}
-              Save Changes
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
       {/* Delete role confirmation */}
       <Dialog open={!!deleteRoleConfirm} onOpenChange={(o) => !o && setDeleteRoleConfirm(null)}>
         <DialogContent className="border-destructive">
@@ -688,40 +600,6 @@ function RoleManagementPanel() {
         </DialogContent>
       </Dialog>
 
-      {/* Remove staff confirmation */}
-      <Dialog open={!!removeStaffConfirm} onOpenChange={(o) => !o && setRemoveStaffConfirm(null)}>
-        <DialogContent className="border-destructive">
-          <DialogHeader>
-            <DialogTitle className="text-destructive">Remove Staff Member?</DialogTitle>
-            <DialogDescription>
-              Remove <strong>{removeStaffConfirm?.name}</strong> ({removeStaffConfirm?.email}) from this role?
-              {!roles.some((r) => r.id !== removeStaffConfirm?.roleId && r.staff.some((s) => s.email === removeStaffConfirm?.email)) && (
-                <span className="mt-2 block text-destructive">
-                  They will be immediately logged out and lose all access.
-                </span>
-              )}
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="ghost" onClick={() => setRemoveStaffConfirm(null)}>
-              Cancel
-            </Button>
-            <Button
-              variant="destructive"
-              onClick={async () => {
-                if (removeStaffConfirm) {
-                  await handleRemoveStaff(removeStaffConfirm.roleId, removeStaffConfirm.email);
-                  toast.success(`${removeStaffConfirm.name} removed and access revoked`);
-                }
-                setRemoveStaffConfirm(null);
-              }}
-            >
-              <X className="mr-1.5 h-3.5 w-3.5" />
-              Remove & Revoke
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </div>
     </>
   );
@@ -746,6 +624,15 @@ function RemoteDeviceManagement() {
   const [staffSearch, setStaffSearch] = useState("");
   const [lockFilter, setLockFilter] = useState<"all" | "free" | "locked">("all");
   const [lockConfigOpen, setLockConfigOpen] = useState(false);
+  // Edit/delete batch state
+  const [editBatch, setEditBatch] = useState<Array<{ roleId: string; oldEmail: string; name: string; email: string; gateId: string | null }>>([]);
+  const [editBatchOpen, setEditBatchOpen] = useState(false);
+  const [editSaving, setEditSaving] = useState(false);
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const { settings: rdmSettings } = useSettings();
+  const { gates: rdmGates } = useGatesMode();
+  const rdmMultiGate = Boolean(rdmSettings.multiGate);
 
   function openRole(role: StaffRole) {
     setActiveRole(role);
@@ -805,6 +692,61 @@ function RemoteDeviceManagement() {
     if (h > 0) s += `${h} hr `;
     if (m > 0) s += `${m} min`;
     return s.trim() || "Unknown";
+  }
+
+  // Build the edit batch from selected staff across all roles.
+  function openEditBatch() {
+    if (!activeRole || selectedStaff.size === 0) return;
+    const batch: Array<{ roleId: string; oldEmail: string; name: string; email: string; gateId: string | null }> = [];
+    for (const email of selectedStaff) {
+      const member = activeRole.staff.find((s) => s.email === email);
+      if (member) {
+        batch.push({
+          roleId: activeRole.id,
+          oldEmail: email,
+          name: member.name,
+          email: member.email,
+          gateId: member.gateId ?? null,
+        });
+      }
+    }
+    setEditBatch(batch);
+    setEditBatchOpen(true);
+  }
+
+  async function handleSaveEditBatch() {
+    setEditSaving(true);
+    let updated = 0;
+    for (const item of editBatch) {
+      const res = await updateStaffInRole(
+        item.roleId,
+        item.oldEmail,
+        item.name,
+        item.email,
+        rdmMultiGate ? item.gateId : null
+      );
+      if (res.ok) updated++;
+    }
+    setEditSaving(false);
+    if (updated > 0) toast.success(`${updated} staff member(s) updated`);
+    setEditBatchOpen(false);
+    setEditBatch([]);
+  }
+
+  async function handleDeleteBatch() {
+    if (!activeRole || selectedStaff.size === 0) return;
+    setDeleting(true);
+    let removed = 0;
+    for (const email of selectedStaff) {
+      const res = await removeStaffFromRole(activeRole.id, email);
+      if (res.ok) removed++;
+    }
+    setDeleting(false);
+    setDeleteConfirmOpen(false);
+    if (removed > 0) {
+      toast.success(`${removed} staff member(s) removed`);
+      setSelectedStaff(new Set());
+    }
   }
 
   async function confirmLock() {
@@ -968,8 +910,8 @@ function RemoteDeviceManagement() {
                 </div>
               </div>
 
-              {/* Select All / Deselect All */}
-              <div className="mb-1">
+              {/* Select All / Deselect All + Edit/Delete */}
+              <div className="mb-1 flex items-center justify-between">
                 <button
                   onClick={() => {
                     const filtered = activeRole?.staff.filter((s) => {
@@ -1010,6 +952,28 @@ function RemoteDeviceManagement() {
                     return allSelected ? "Deselect All" : "Select All";
                   })()}
                 </button>
+                {selectedStaff.size > 0 && (
+                  <div className="flex items-center gap-1">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-7 gap-1 text-xs"
+                      onClick={() => openEditBatch()}
+                    >
+                      <Pencil className="h-3 w-3" />
+                      Edit
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-7 gap-1 text-xs text-destructive hover:text-destructive"
+                      onClick={() => setDeleteConfirmOpen(true)}
+                    >
+                      <Trash2 className="h-3 w-3" />
+                      Delete
+                    </Button>
+                  </div>
+                )}
               </div>
 
               {/* Staff table */}
@@ -1208,6 +1172,88 @@ function RemoteDeviceManagement() {
             >
               <Lock className="mr-1.5 h-3.5 w-3.5" />
               Sync &amp; Lock
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit batch dialog — lists each selected staff vertically */}
+      <Dialog open={editBatchOpen} onOpenChange={(o) => { setEditBatchOpen(o); if (!o) setEditBatch([]); }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Edit {editBatch.length} Staff Member{editBatch.length !== 1 ? "s" : ""}</DialogTitle>
+          </DialogHeader>
+          <div className="max-h-[55vh] space-y-3 overflow-y-auto scrollbar-thin pr-1">
+            {editBatch.map((item, idx) => (
+              <div key={item.oldEmail} className="space-y-2 rounded-lg border border-white/8 p-3">
+                <p className="text-xs text-muted-foreground">Staff #{idx + 1}</p>
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="space-y-1">
+                    <Label className="text-xs">Name</Label>
+                    <Input
+                      value={item.name}
+                      onChange={(e) => setEditBatch((p) => p.map((x, i) => i === idx ? { ...x, name: e.target.value } : x))}
+                      className="h-8 text-sm"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs">Email</Label>
+                    <Input
+                      value={item.email}
+                      onChange={(e) => setEditBatch((p) => p.map((x, i) => i === idx ? { ...x, email: e.target.value } : x))}
+                      className="h-8 text-sm"
+                    />
+                  </div>
+                </div>
+                {rdmMultiGate && (
+                  <div className="space-y-1">
+                    <Label className="text-xs">Gate</Label>
+                    <Select value={item.gateId ?? "none"} onValueChange={(v) => setEditBatch((p) => p.map((x, i) => i === idx ? { ...x, gateId: v === "none" ? null : v } : x))}>
+                      <SelectTrigger className="h-8 text-sm">
+                        <span>
+                          {item.gateId
+                            ? (rdmGates.find((g) => g.id === item.gateId)?.name ?? item.gateId)
+                            : "No gate assigned"}
+                        </span>
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">No gate assigned</SelectItem>
+                        {rdmGates.filter((g) => g.active).map((g) => (
+                          <SelectItem key={g.id} value={g.id}>{g.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => { setEditBatchOpen(false); setEditBatch([]); }}>Cancel</Button>
+            <Button onClick={handleSaveEditBatch} disabled={editSaving}>
+              {editSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Save All Changes
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete batch confirmation */}
+      <Dialog open={deleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}>
+        <DialogContent className="border-destructive">
+          <DialogHeader>
+            <DialogTitle className="text-destructive">Remove {selectedStaff.size} Staff Member{selectedStaff.size !== 1 ? "s" : ""}?</DialogTitle>
+            <DialogDescription>
+              Remove the selected staff from <strong>{activeRole?.name}</strong>?
+              Any staff not in another role will be immediately logged out and lose all access.
+              This cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setDeleteConfirmOpen(false)}>Cancel</Button>
+            <Button variant="destructive" onClick={handleDeleteBatch} disabled={deleting}>
+              {deleting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Trash2 className="mr-2 h-4 w-4" />}
+              Remove & Revoke
             </Button>
           </DialogFooter>
         </DialogContent>
