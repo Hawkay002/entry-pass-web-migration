@@ -95,10 +95,21 @@ export function SettingsForm({ isAdmin = false }: { isAdmin?: boolean }) {
       }
       if (settings.timezone) setTz(settings.timezone);
       // eslint-disable-next-line react-hooks/set-state-in-effect -- one-time seed
+      setMultiGate(Boolean(settings.multiGate));
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- one-time seed
       setSavedMultiGate(Boolean(settings.multiGate));
       setSeeded(true);
     }
   }, [loading, seeded, settings.name, settings.place, settings.deadline, settings.timezone, settings.multiGate]);
+
+  // Sync savedMultiGate from remote when it changes (multi-device realtime).
+  // Only updates if the user isn't mid-edit (no unsaved changes).
+  useEffect(() => {
+    if (!edited) {
+      setMultiGate(Boolean(settings.multiGate));
+      setSavedMultiGate(Boolean(settings.multiGate));
+    }
+  }, [settings.multiGate, edited]);
 
   function sync(field: "name" | "place" | "deadline", value: string) {
     setEdited(true);
