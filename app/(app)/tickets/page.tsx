@@ -27,6 +27,7 @@ import {
 import { useSettings } from "@/hooks/use-settings";
 import { createTicket } from "@/app/actions/tickets";
 import { sortedCountryCodes, DEFAULT_DIAL_CODE } from "@/lib/country-codes";
+import { matchDialCode } from "@/lib/phone-sanitize";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { TicketCard } from "@/components/tickets/ticket-card";
 import { captureTicketAsJpeg } from "@/lib/capture-ticket";
@@ -79,6 +80,38 @@ export default function TicketsPage() {
   const [ticketTypeVal, setTicketTypeVal] = useState<TicketType>("Classic");
   const [genderVal, setGenderVal] = useState<Gender>("Male");
   const [dialCode, setDialCode] = useState(DEFAULT_DIAL_CODE);
+  const previewRef = useRef<HTMLDivElement>(null);
+
+  // On mobile, scroll the preview into view after a ticket is generated so the
+  // admin sees the confirmation + live ticket without manual scrolling. Desktop
+  // layout is side-by-side, so scrolling there would be jarring — skip it.
+  useEffect(() => {
+    if (preview.id !== "—" && previewRef.current) {
+      const isMobile = window.matchMedia("(max-width: 767px)").matches;
+      if (isMobile) {
+        // slight delay so the ConfirmationPanel has mounted and the shader begins.
+        const t = setTimeout(
+          () => previewRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }),
+          120
+        );
+        return () => clearTimeout(t);
+      }
+    }
+  }, [preview.id]);
+
+  // Auto-paste sanitize: if a pasted/typed value starts with a known dial code,
+  // auto-select that country and leave only the national number in the input.
+  // e.g. paste "+4915210899596" → dial code becomes +49, input shows "15210899596".
+  const sanitizePhone = (raw: string) => {
+    const matched = matchDialCode(raw);
+    if (matched) {
+      setDialCode(matched.country.code);
+      setValue("phone", matched.national, { shouldValidate: true });
+    } else {
+      // No dial-code match → just digits-only, as the schema expects.
+      setValue("phone", raw.replace(/\D/g, ""), { shouldValidate: true });
+    }
+  };
 
   async function handleShare() {
     if (preview.id === "—") return;
@@ -149,7 +182,7 @@ export default function TicketsPage() {
   }
 
   return (
-    <div className="grid gap-6 md:grid-cols-2">
+    <div className="grid items-start gap-6 md:grid-cols-2">
       <Card className="glass-panel">
         <CardHeader>
           <CardTitle className="text-lg font-semibold">New Guest Entry</CardTitle>
@@ -195,6 +228,19 @@ export default function TicketsPage() {
                   type="tel"
                   inputMode="numeric"
                   {...register("phone")}
+                  onPaste={(e) => {
+                    const text = e.clipboardData.getData("text");
+                    if (/[+\d]/.test(text) && text.replace(/\D/g, "").length > 0) {
+                      e.preventDefault();
+                      sanitizePhone(text);
+                    }
+                  }}
+                  onBlur={(e) => {
+                    // Re-sanitize on blur too, so manually typed +XX numbers get split.
+                    if (e.target.value && /[+]/.test(e.target.value)) {
+                      sanitizePhone(e.target.value);
+                    }
+                  }}
                   placeholder="Phone Number"
                   className="flex-1"
                 />
@@ -289,7 +335,7 @@ export default function TicketsPage() {
         </CardContent>
       </Card>
 
-      <div className="flex flex-col gap-4">
+      <div ref={previewRef} className="flex flex-col gap-4">
         {preview.id !== "—" ? (
           <ConfirmationPanel
             ticket={preview}
