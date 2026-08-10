@@ -13,6 +13,8 @@ import { useLockedTabs } from "@/components/layout/locked-tabs-context";
 import { QrScanner, type ScanOutcome } from "@/components/scanner/qr-scanner";
 import { validateTicket, syncOfflineScans, getTicketsForOfflineCache } from "@/app/actions/tickets";
 import { getScannerGate } from "@/app/actions/gates-scanner";
+import { Bell } from "@/components/animate-ui/icons/bell";
+import { BellOff } from "@/components/animate-ui/icons/bell-off";
 import {
   cacheTickets,
   getCachedTickets,
@@ -36,7 +38,11 @@ export default function ScannerPage() {
   );
   const [pending, setPending] = useState(0);
   const [syncing, setSyncing] = useState(false);
-  const [haptics, setHaptics] = useState(true);
+  const [haptics, setHaptics] = useState(() => {
+    if (typeof window === "undefined") return true;
+    const stored = localStorage.getItem("scannerHaptics");
+    return stored === null ? true : stored === "true";
+  });
   const [scannerGate, setScannerGate] = useState<{ id: string; name: string } | null>(null);
 
   // Resolve this scanner's gate on mount (from staff assignment + settings).
@@ -193,15 +199,24 @@ export default function ScannerPage() {
             </span>
           )}
         </div>
-        <label className="flex shrink-0 flex-col items-end gap-0.5 text-right text-xs text-muted-foreground sm:flex-row sm:items-center sm:gap-2">
-          <span className="leading-tight">Haptic<br className="sm:hidden" /> Feedback</span>
-          <input
-            type="checkbox"
-            checked={haptics}
-            onChange={(e) => setHaptics(e.target.checked)}
-            className="h-3.5 w-3.5 accent-accent-secondary"
-          />
-        </label>
+        <button
+          onClick={() => {
+            const next = !haptics;
+            setHaptics(next);
+            if (typeof window !== "undefined") {
+              localStorage.setItem("scannerHaptics", String(next));
+            }
+          }}
+          className="flex shrink-0 items-center justify-center rounded-lg p-1.5 transition-colors hover:bg-white/5"
+          title={haptics ? "Haptic feedback on — click to mute" : "Haptic feedback off — click to enable"}
+          style={{ color: haptics ? "var(--color-accent-secondary)" : "rgb(255 255 255 / 0.5)" }}
+        >
+          {haptics ? (
+            <Bell key="on" size={20} animate />
+          ) : (
+            <BellOff key="off" size={20} animate />
+          )}
+        </button>
       </div>
 
       <div className="text-center">
