@@ -4,10 +4,11 @@
 
 import { useState, useEffect } from "react";
 import { toast } from "sonner";
-import { Loader2, Trash2 } from "lucide-react";
+import { Loader2, Trash2, CalendarIcon, Clock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Calendar } from "@/components/ui/calendar";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -23,6 +24,18 @@ import { saveSettings, clearSettings } from "@/app/actions/admin";
 import { TIMEZONES, DEFAULT_TZ, getTzLabel } from "@/lib/timezones";
 import { Switch } from "@/components/ui/switch";
 import { GatePanel } from "@/components/admin/gate-panel";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import {
+  Select as SelectUI,
+  SelectContent as SelectContentUI,
+  SelectItem as SelectItemUI,
+  SelectTrigger as SelectTriggerUI,
+  SelectValue as SelectValueUI,
+} from "@/components/ui/select";
 
 export function SettingsForm({ isAdmin = false }: { isAdmin?: boolean }) {
   const { settings, loading } = useSettings();
@@ -35,9 +48,10 @@ export function SettingsForm({ isAdmin = false }: { isAdmin?: boolean }) {
   const [clearOpen, setClearOpen] = useState(false);
   const [seeded, setSeeded] = useState(false);
   const [multiGate, setMultiGate] = useState(false);
-  // Track the *saved* multiGate value so we know when the toggle has been
-  // flipped but not yet saved (used to show the Gate panel).
   const [savedMultiGate, setSavedMultiGate] = useState(false);
+  const [calOpen, setCalOpen] = useState(false);
+  const [selectedDate, setSelectedDate] = useState<Date | undefined>(undefined);
+  const [selectedTime, setSelectedTime] = useState("19:00");
 
   async function handleClear() {
     setClearOpen(false);
@@ -47,6 +61,8 @@ export function SettingsForm({ isAdmin = false }: { isAdmin?: boolean }) {
       setName("");
       setPlace("");
       setDeadline("");
+      setSelectedDate(undefined);
+      setSelectedTime("19:00");
       setMultiGate(false);
       setSavedMultiGate(false);
       setEdited(false);
@@ -67,9 +83,17 @@ export function SettingsForm({ isAdmin = false }: { isAdmin?: boolean }) {
         ? settings.deadline.replace(/[+-]\d{2}:\d{2}(:\d{2})?$/, "").replace(/:\d{2}$/, "")
         : "";
       setDeadline(cleanDeadline);
+      // Parse into Date + time for the Calendar + time picker.
+      if (cleanDeadline) {
+        const parsed = new Date(cleanDeadline);
+        if (!isNaN(parsed.getTime())) {
+          setSelectedDate(parsed);
+          const hh = String(parsed.getHours()).padStart(2, "0");
+          const mm = String(parsed.getMinutes()).padStart(2, "0");
+          setSelectedTime(`${hh}:${mm}`);
+        }
+      }
       if (settings.timezone) setTz(settings.timezone);
-      // eslint-disable-next-line react-hooks/set-state-in-effect -- one-time seed
-      setMultiGate(Boolean(settings.multiGate));
       // eslint-disable-next-line react-hooks/set-state-in-effect -- one-time seed
       setSavedMultiGate(Boolean(settings.multiGate));
       setSeeded(true);
@@ -81,6 +105,33 @@ export function SettingsForm({ isAdmin = false }: { isAdmin?: boolean }) {
     if (field === "name") setName(value);
     if (field === "place") setPlace(value);
     if (field === "deadline") setDeadline(value);
+  }
+
+  // Combine the Calendar date + time dropdown into a datetime-local string.
+  function mergeDateTime(date: Date | undefined, time: string): string {
+    if (!date) return "";
+    const [hh, mm] = time.split(":");
+    const d = new Date(date);
+    d.setHours(Number(hh) || 0, Number(mm) || 0, 0, 0);
+    const y = d.getFullYear();
+    const mo = String(d.getMonth() + 1).padStart(2, "0");
+    const da = String(d.getDate()).padStart(2, "0");
+    const h = String(d.getHours()).padStart(2, "0");
+    const mi = String(d.getMinutes()).padStart(2, "0");
+    return `${y}-${mo}-${da}T${h}:${mi}`;
+  }
+
+  function handleDateSelect(date: Date | undefined) {
+    setSelectedDate(date);
+    setDeadline(mergeDateTime(date, selectedTime));
+    setEdited(true);
+    setCalOpen(false);
+  }
+
+  function handleTimeChange(time: string) {
+    setSelectedTime(time);
+    setDeadline(mergeDateTime(selectedDate, time));
+    setEdited(true);
   }
 
   async function handleSave() {
@@ -131,15 +182,50 @@ export function SettingsForm({ isAdmin = false }: { isAdmin?: boolean }) {
           />
         </div>
         <div className="space-y-2">
-          <Label htmlFor="arrivalDeadline">Deadline</Label>
-          <div className="flex gap-2">
-            <Input
-              id="arrivalDeadline"
-              type="datetime-local"
-              value={deadline}
-              onChange={(e) => sync("deadline", e.target.value)}
-              className="[color-scheme:dark] flex-1"
-            />
+          <Label>Deadline</Label>
+          <div className="flex flex-wrap gap-2">
+            {/* Date picker — Calendar in a Popover */}
+            <Popover open={calOpen} onOpenChange={setCalOpen}>
+              <PopoverTrigger
+                render={
+                  <Button
+                    variant="outline"
+                    className="h-8 justify-start text-left font-normal"
+                  >
+                    <CalendarIcon className="mr-1.5 h-3.5 w-3.5" />
+                    {selectedDate
+                      ? selectedDate.toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })
+                      : <span className="text-muted-foreground">Pick a date</span>}
+                  </Button>
+                }
+              />
+              <PopoverContent className="w-auto p-0" align="start">
+                <Calendar
+                  mode="single"
+                  selected={selectedDate}
+                  onSelect={handleDateSelect}
+                />
+              </PopoverContent>
+            </Popover>
+
+            {/* Time picker — 30-min step dropdown */}
+            <SelectUI value={selectedTime} onValueChange={(v) => v && handleTimeChange(v)}>
+              <SelectTriggerUI className="h-8 w-[100px]">
+                <Clock className="mr-1 h-3 w-3" />
+                <SelectValueUI />
+              </SelectTriggerUI>
+              <SelectContentUI>
+                {Array.from({ length: 48 }, (_, i) => {
+                  const h = Math.floor(i / 2);
+                  const m = i % 2 === 0 ? "00" : "30";
+                  const val = `${String(h).padStart(2, "0")}:${m}`;
+                  const label = `${String((h % 12) || 12).padStart(2, "0")}:${m} ${h < 12 ? "AM" : "PM"}`;
+                  return <SelectItemUI key={val} value={val}>{label}</SelectItemUI>;
+                })}
+              </SelectContentUI>
+            </SelectUI>
+
+            {/* Timezone */}
             <SearchableSelect
               value={tz}
               onChange={(v) => { setTz(v); setEdited(true); }}
@@ -152,7 +238,7 @@ export function SettingsForm({ isAdmin = false }: { isAdmin?: boolean }) {
               mobileDropAlign="below"
               belowAlign="right"
               panelWidth="w-80"
-              className="w-[180px] shrink-0"
+              className="w-[160px] shrink-0"
             />
           </div>
         </div>
