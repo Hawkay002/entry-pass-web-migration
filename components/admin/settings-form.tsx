@@ -163,34 +163,37 @@ export function SettingsForm({ isAdmin = false }: { isAdmin?: boolean }) {
         <CardTitle className="text-lg font-semibold">Configuration</CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
-        <div className="space-y-2">
-          <Label htmlFor="eventName">Event Name</Label>
-          <Input
-            id="eventName"
-            value={name}
-            onChange={(e) => sync("name", e.target.value)}
-            placeholder="e.g. Summer Gala 2024"
-          />
+        {/* Event Name + Location — 50/50 */}
+        <div className="grid grid-cols-2 gap-3">
+          <div className="space-y-2">
+            <Label htmlFor="eventName">Event Name</Label>
+            <Input
+              id="eventName"
+              value={name}
+              onChange={(e) => sync("name", e.target.value)}
+              placeholder="e.g. Summer Gala 2024"
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="eventPlace">Location</Label>
+            <Input
+              id="eventPlace"
+              value={place}
+              onChange={(e) => sync("place", e.target.value)}
+              placeholder="e.g. Grand Hall"
+            />
+          </div>
         </div>
-        <div className="space-y-2">
-          <Label htmlFor="eventPlace">Location</Label>
-          <Input
-            id="eventPlace"
-            value={place}
-            onChange={(e) => sync("place", e.target.value)}
-            placeholder="e.g. Grand Hall"
-          />
-        </div>
-        <div className="space-y-2">
-          <Label>Deadline</Label>
-          <div className="flex flex-wrap gap-2">
-            {/* Single date+time picker — Calendar with month/year dropdowns + time input */}
+        {/* Deadline + Timezone — 50/50 */}
+        <div className="grid grid-cols-2 gap-3">
+          <div className="space-y-2">
+            <Label>Deadline</Label>
             <Popover open={calOpen} onOpenChange={setCalOpen}>
               <PopoverTrigger
                 render={
                   <Button
                     variant="outline"
-                    className="h-8 justify-start text-left font-normal"
+                    className="h-8 w-full justify-start text-left font-normal"
                   >
                     <CalendarIcon className="mr-1.5 h-3.5 w-3.5" />
                     {selectedDate
@@ -212,7 +215,6 @@ export function SettingsForm({ isAdmin = false }: { isAdmin?: boolean }) {
                   onSelect={handleDateSelect}
                   captionLayout="dropdown"
                 />
-                {/* Time input — sits below the calendar in the same popover */}
                 <div className="flex items-center gap-2 border-t border-white/8 p-3">
                   <Clock className="h-3.5 w-3.5 text-muted-foreground" />
                   <Label className="text-xs text-muted-foreground">Time</Label>
@@ -234,8 +236,9 @@ export function SettingsForm({ isAdmin = false }: { isAdmin?: boolean }) {
                 </div>
               </PopoverContent>
             </Popover>
-
-            {/* Timezone */}
+          </div>
+          <div className="space-y-2">
+            <Label>Timezone</Label>
             <SearchableSelect
               value={tz}
               onChange={(v) => { setTz(v); setEdited(true); }}
@@ -248,7 +251,6 @@ export function SettingsForm({ isAdmin = false }: { isAdmin?: boolean }) {
               mobileDropAlign="below"
               belowAlign="right"
               panelWidth="w-80"
-              className="w-[160px] shrink-0"
             />
           </div>
         </div>
