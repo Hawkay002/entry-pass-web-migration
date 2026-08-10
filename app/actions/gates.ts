@@ -254,19 +254,20 @@ export async function disableMultiGate(): Promise<ActionResult> {
 export async function pickGateForTicket(ticketType: string): Promise<string | null> {
   const db = getAdminDb();
 
+  // Fetch all active gates — no .orderBy (avoids needing a composite index).
   const gatesSnap = await db
     .collection(paths.gatesCollection)
     .where("active", "==", true)
-    .orderBy("order", "asc")
     .get();
 
-  // Filter to gates that accept this ticket type.
+  // Filter to gates that accept this ticket type, sort by order in JS.
   const eligible = gatesSnap.docs
     .filter((d) => {
       const types: string[] = Array.isArray(d.data()?.ticketTypes) ? d.data()!.ticketTypes : [];
       return types.length === 0 || types.includes(ticketType);
     })
-    .map((d) => ({ id: d.id, order: Number(d.data()?.order ?? 0) }));
+    .map((d) => ({ id: d.id, order: Number(d.data()?.order ?? 0) }))
+    .sort((a, b) => a.order - b.order);
   if (eligible.length === 0) return null;
 
   // Count existing tickets per gate.
