@@ -227,7 +227,20 @@ export async function deleteOneTicket(
   if (user.role !== "admin")
     return { ok: false, error: "Admin role required to delete tickets." };
 
-  await getAdminDb().collection(paths.ticketsCollection).doc(id).delete();
+  const db = getAdminDb();
+  // Read the ticket first so the log entry can name the deleted guest.
+  const snap = await db.collection(paths.ticketsCollection).doc(id).get();
+  const name = snap.exists ? String(snap.data()?.name ?? "unknown") : "unknown";
+
+  await db.collection(paths.ticketsCollection).doc(id).delete();
+
+  await logAction(
+    user,
+    "TICKET_DELETE",
+    `Deleted ${name} (${id.slice(0, 6)})`
+  );
+
+  revalidatePath("/guests");
   return { ok: true };
 }
 

@@ -7,7 +7,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { toast } from "sonner";
-import { Loader2, UserRound, Smartphone, Tickets, ExternalLink, CheckCircle2 } from "lucide-react";
+import { Loader2, UserRound, Smartphone, Tickets, ExternalLink } from "lucide-react";
 import { FaVenusMars } from "react-icons/fa6";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { AddInvoiceIcon, WhatsappIcon } from "@hugeicons/core-free-icons";
@@ -30,6 +30,7 @@ import { sortedCountryCodes, DEFAULT_DIAL_CODE } from "@/lib/country-codes";
 import { matchDialCode } from "@/lib/phone-sanitize";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { TicketCard } from "@/components/tickets/ticket-card";
+import { BadgeCheck } from "@/components/animate-ui/icons/badge-check";
 import { captureTicketAsJpeg } from "@/lib/capture-ticket";
 import type { Gender, Ticket, TicketType } from "@/lib/types";
 
@@ -413,8 +414,8 @@ function ConfirmationPanel({
     <div className="glass-panel flex flex-1 flex-col items-center gap-5 p-6 text-center">
       {/* Success header */}
       <div className="flex flex-col items-center gap-2">
-        <div className="flex h-12 w-12 items-center justify-center rounded-full bg-success-green/20">
-          <CheckCircle2 className="h-6 w-6 text-success-green" />
+        <div className="flex h-12 w-12 items-center justify-center rounded-full bg-success-green/20 text-success-green">
+          <BadgeCheck size={28} animation="path" animateOnView animateOnViewOnce />
         </div>
         <h3 className="text-lg font-semibold">Pass Generated</h3>
         <p className="text-sm text-muted-foreground">
