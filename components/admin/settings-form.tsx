@@ -184,7 +184,7 @@ export function SettingsForm({ isAdmin = false }: { isAdmin?: boolean }) {
         <div className="space-y-2">
           <Label>Deadline</Label>
           <div className="flex flex-wrap gap-2">
-            {/* Date picker — Calendar in a Popover */}
+            {/* Single date+time picker — Calendar with month/year dropdowns + time input */}
             <Popover open={calOpen} onOpenChange={setCalOpen}>
               <PopoverTrigger
                 render={
@@ -194,8 +194,14 @@ export function SettingsForm({ isAdmin = false }: { isAdmin?: boolean }) {
                   >
                     <CalendarIcon className="mr-1.5 h-3.5 w-3.5" />
                     {selectedDate
-                      ? selectedDate.toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })
-                      : <span className="text-muted-foreground">Pick a date</span>}
+                      ? (() => {
+                          const [hh, mm] = selectedTime.split(":");
+                          const h24 = Number(hh);
+                          const h12 = (h24 % 12) || 12;
+                          const ampm = h24 < 12 ? "AM" : "PM";
+                          return `${selectedDate.toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}, ${String(h12).padStart(2,"0")}:${mm} ${ampm}`;
+                        })()
+                      : <span className="text-muted-foreground">Pick date & time</span>}
                   </Button>
                 }
               />
@@ -204,26 +210,30 @@ export function SettingsForm({ isAdmin = false }: { isAdmin?: boolean }) {
                   mode="single"
                   selected={selectedDate}
                   onSelect={handleDateSelect}
+                  captionLayout="dropdown"
                 />
+                {/* Time input — sits below the calendar in the same popover */}
+                <div className="flex items-center gap-2 border-t border-white/8 p-3">
+                  <Clock className="h-3.5 w-3.5 text-muted-foreground" />
+                  <Label className="text-xs text-muted-foreground">Time</Label>
+                  <SelectUI value={selectedTime} onValueChange={(v) => v && handleTimeChange(v)}>
+                    <SelectTriggerUI className="ml-auto h-8 w-[110px]">
+                      <SelectValueUI />
+                    </SelectTriggerUI>
+                    <SelectContentUI>
+                      {Array.from({ length: 48 }, (_, i) => {
+                        const h = Math.floor(i / 2);
+                        const m = i % 2 === 0 ? "00" : "30";
+                        const val = `${String(h).padStart(2, "0")}:${m}`;
+                        const h12 = (h % 12) || 12;
+                        const label = `${String(h12).padStart(2, "0")}:${m} ${h < 12 ? "AM" : "PM"}`;
+                        return <SelectItemUI key={val} value={val}>{label}</SelectItemUI>;
+                      })}
+                    </SelectContentUI>
+                  </SelectUI>
+                </div>
               </PopoverContent>
             </Popover>
-
-            {/* Time picker — 30-min step dropdown */}
-            <SelectUI value={selectedTime} onValueChange={(v) => v && handleTimeChange(v)}>
-              <SelectTriggerUI className="h-8 w-[100px]">
-                <Clock className="mr-1 h-3 w-3" />
-                <SelectValueUI />
-              </SelectTriggerUI>
-              <SelectContentUI>
-                {Array.from({ length: 48 }, (_, i) => {
-                  const h = Math.floor(i / 2);
-                  const m = i % 2 === 0 ? "00" : "30";
-                  const val = `${String(h).padStart(2, "0")}:${m}`;
-                  const label = `${String((h % 12) || 12).padStart(2, "0")}:${m} ${h < 12 ? "AM" : "PM"}`;
-                  return <SelectItemUI key={val} value={val}>{label}</SelectItemUI>;
-                })}
-              </SelectContentUI>
-            </SelectUI>
 
             {/* Timezone */}
             <SearchableSelect
