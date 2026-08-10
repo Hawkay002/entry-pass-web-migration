@@ -187,20 +187,20 @@ export default function ScannerPage() {
         <div className="flex items-center gap-3">
           <h2 className="text-lg font-semibold">Entry Validation</h2>
           {scannerGate && (
-            <span className="inline-flex items-center gap-1.5 rounded-full bg-accent-secondary/15 px-3 py-1 text-xs font-medium text-accent-secondary ring-1 ring-accent-secondary/30">
+            <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-accent-secondary/15 px-3 py-1 text-xs font-medium text-accent-secondary ring-1 ring-accent-secondary/30 whitespace-nowrap">
               <span className="h-1.5 w-1.5 rounded-full bg-accent-secondary" />
               Gate {scannerGate.name}
             </span>
           )}
         </div>
-        <label className="flex items-center gap-2 text-xs text-muted-foreground">
+        <label className="flex shrink-0 flex-col items-end gap-0.5 text-right text-xs text-muted-foreground sm:flex-row sm:items-center sm:gap-2">
+          <span className="leading-tight">Haptic<br className="sm:hidden" /> Feedback</span>
           <input
             type="checkbox"
             checked={haptics}
             onChange={(e) => setHaptics(e.target.checked)}
             className="h-3.5 w-3.5 accent-accent-secondary"
           />
-          Haptic Feedback
         </label>
       </div>
 
