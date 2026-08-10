@@ -29,13 +29,6 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
-import {
-  Select as SelectUI,
-  SelectContent as SelectContentUI,
-  SelectItem as SelectItemUI,
-  SelectTrigger as SelectTriggerUI,
-  SelectValue as SelectValueUI,
-} from "@/components/ui/select";
 
 export function SettingsForm({ isAdmin = false }: { isAdmin?: boolean }) {
   const { settings, loading } = useSettings();
@@ -229,28 +222,52 @@ export function SettingsForm({ isAdmin = false }: { isAdmin?: boolean }) {
                 <div className="flex items-center gap-2 border-t border-white/8 p-3">
                   <Clock className="h-3.5 w-3.5 text-muted-foreground" />
                   <Label className="text-xs text-muted-foreground">Time</Label>
-                  <SelectUI value={selectedTime} onValueChange={(v) => v && handleTimeChange(v)}>
-                    <SelectTriggerUI className="ml-auto h-8 w-[120px]">
-                      <span>
-                        {(() => {
-                          const [hh, mm] = selectedTime.split(":");
-                          const h24 = Number(hh);
-                          const h12 = (h24 % 12) || 12;
-                          return `${String(h12).padStart(2,"0")}:${mm} ${h24 < 12 ? "AM" : "PM"}`;
-                        })()}
-                      </span>
-                    </SelectTriggerUI>
-                    <SelectContentUI>
-                      {Array.from({ length: 48 }, (_, i) => {
-                        const h = Math.floor(i / 2);
-                        const m = i % 2 === 0 ? "00" : "30";
-                        const val = `${String(h).padStart(2, "0")}:${m}`;
-                        const h12 = (h % 12) || 12;
-                        const label = `${String(h12).padStart(2, "0")}:${m} ${h < 12 ? "AM" : "PM"}`;
-                        return <SelectItemUI key={val} value={val}>{label}</SelectItemUI>;
-                      })}
-                    </SelectContentUI>
-                  </SelectUI>
+                  <div className="ml-auto flex items-center gap-1">
+                    <Input
+                      type="text"
+                      inputMode="numeric"
+                      value={(() => {
+                        const h12 = (Number(selectedTime.split(":")[0]) % 12) || 12;
+                        return String(h12);
+                      })()}
+                      onChange={(e) => {
+                        const val = Math.min(12, Math.max(1, Number(e.target.value) || 1));
+                        const mm = selectedTime.split(":")[1] || "00";
+                        const isPM = Number(selectedTime.split(":")[0]) >= 12;
+                        const h24 = val === 12 ? (isPM ? 12 : 0) : (isPM ? val : val);
+                        handleTimeChange(`${String(h24).padStart(2, "0")}:${mm}`);
+                      }}
+                      className="h-8 w-[40px] text-center text-sm"
+                      maxLength={2}
+                    />
+                    <span className="text-muted-foreground">:</span>
+                    <Input
+                      type="text"
+                      inputMode="numeric"
+                      value={selectedTime.split(":")[1] || "00"}
+                      onChange={(e) => {
+                        const val = String(Math.min(59, Math.max(0, Number(e.target.value) || 0))).padStart(2, "0");
+                        const hh = selectedTime.split(":")[0] || "12";
+                        handleTimeChange(`${hh}:${val}`);
+                      }}
+                      className="h-8 w-[40px] text-center text-sm"
+                      maxLength={2}
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="h-8 w-[42px] px-0 text-xs font-semibold"
+                      onClick={() => {
+                        const [hh, mm] = selectedTime.split(":");
+                        const h24 = Number(hh);
+                        const newH24 = h24 < 12 ? h24 + 12 : h24 - 12;
+                        handleTimeChange(`${String(newH24).padStart(2, "0")}:${mm}`);
+                      }}
+                    >
+                      {Number(selectedTime.split(":")[0]) >= 12 ? "PM" : "AM"}
+                    </Button>
+                  </div>
                 </div>
               </PopoverContent>
             </Popover>
