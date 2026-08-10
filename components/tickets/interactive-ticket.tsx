@@ -51,6 +51,13 @@ export function InteractiveTicket({ ticket, settings }: { ticket: TicketData; se
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const tiltRef = useRef<HTMLDivElement>(null);
   const glareRef = useRef<HTMLDivElement>(null);
+  const [showTip, setShowTip] = useState(true);
+
+  // Auto-dismiss the tip overlay after 5 seconds.
+  useEffect(() => {
+    const t = setTimeout(() => setShowTip(false), 5000);
+    return () => clearTimeout(t);
+  }, []);
   const [hovering, setHovering] = useState(false);
   const [ticketWidth, setTicketWidth] = useState(741);
   const [qrDataUrl, setQrDataUrl] = useState("");
@@ -285,9 +292,21 @@ export function InteractiveTicket({ ticket, settings }: { ticket: TicketData; se
         <DownloadButton tiltRef={tiltRef} ticketId={ticket.id} />
       </div>
 
-      <p className="mt-4 text-center text-xs text-white/30">
-        Tip: tilt your phone or move your mouse over the ticket ✨
-      </p>
+      {/* Tip overlay — blurred backdrop, auto-dismisses after 5s */}
+      {showTip && (
+        <div
+          onClick={() => setShowTip(false)}
+          className="fixed inset-0 z-50 flex items-center justify-center backdrop-blur-md transition-opacity duration-700"
+          style={{ background: "rgba(0,0,0,0.4)", opacity: showTip ? 1 : 0 }}
+        >
+          <div className="rounded-2xl border border-white/10 bg-black/60 px-8 py-6 text-center">
+            <p className="text-base font-medium text-white">
+              Touch, Tilt or use Mouse to interact
+            </p>
+            <p className="mt-1 text-xs text-white/40">Tap anywhere to dismiss</p>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
