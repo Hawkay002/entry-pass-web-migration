@@ -448,28 +448,33 @@ function ConfirmationPanel({
           View Interactive Ticket
         </a>
 
-        {/* WhatsApp button doubles as the share-preview status: shows a loader
-            + "Preparing share preview…" until the snapshot is captured, then
-            becomes the normal Share via WhatsApp button. */}
-        <Button
-          className="w-full bg-[#25D366] text-white hover:bg-[#1faa54]"
-          disabled={isSharing || captured === null}
-          onClick={onShare}
-        >
-          {isSharing || captured === null ? (
-            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-          ) : (
-            <HugeiconsIcon icon={WhatsappIcon} size={16} className="mr-2" primaryColor="currentColor" />
-          )}
-          {captured === null
-            ? "Preparing share preview…"
-            : isSharing
-            ? "Opening WhatsApp…"
-            : "Share via WhatsApp"}
-        </Button>
-        <Button variant="outline" className="w-full" onClick={onIssueAnother}>
-          Issue Another
-        </Button>
+        {/* Issue Another (left) + Share via WhatsApp (right) on the same row. */}
+        <div className="flex w-full gap-3">
+          <Button variant="outline" className="flex-1 shrink-0" onClick={onIssueAnother}>
+            Issue Another
+          </Button>
+          {/* WhatsApp button doubles as the share-preview status: shows a loader
+              + "Preparing share preview…" until the snapshot is captured, then
+              becomes the normal Share via WhatsApp button. */}
+          <Button
+            className="flex-1 bg-[#25D366] text-white hover:bg-[#1faa54]"
+            disabled={isSharing || captured === null}
+            onClick={onShare}
+          >
+            {isSharing || captured === null ? (
+              <Loader2 className="mr-2 h-4 w-4 shrink-0 animate-spin" />
+            ) : (
+              <HugeiconsIcon icon={WhatsappIcon} size={16} className="mr-2 shrink-0" primaryColor="currentColor" />
+            )}
+            <span className="truncate">
+              {captured === null
+                ? "Preparing…"
+                : isSharing
+                ? "Opening…"
+                : "Share"}
+            </span>
+          </Button>
+        </div>
       </div>
     </div>
   );

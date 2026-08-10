@@ -26,7 +26,10 @@ export function EasterEgg() {
     let active = false;
 
     function onKey(e: KeyboardEvent) {
-      const key = e.key.length === 1 ? e.key.toLowerCase() : e.key;
+      // e.key can be undefined for some synthetic/auto-repeat key events — guard it.
+      const raw = e.key;
+      if (!raw) return;
+      const key = raw.length === 1 ? raw.toLowerCase() : raw;
       if (key === SEQUENCE[pos]) {
         pos++;
         if (pos === SEQUENCE.length) {
