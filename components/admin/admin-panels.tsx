@@ -446,22 +446,22 @@ function RoleManagementPanel() {
                   <div className="mb-3 flex justify-end gap-2">
                     <Button
                       size="sm"
-                      variant="ghost"
+                      variant="outline"
                       onClick={() => {
                         setAddStaffOpen(role.id);
                         setStaffName("");
                         setStaffEmail("");
                       }}
                     >
-                      <UserPlus className="mr-1 h-3.5 w-3.5" /> Add Staff
+                      <UserPlus className="mr-1.5 h-3.5 w-3.5" /> Add Staff
                     </Button>
                     <Button
                       size="sm"
-                      variant="ghost"
-                      className="text-destructive"
+                      variant="outline"
+                      className="text-destructive hover:bg-destructive/10"
                       onClick={() => setDeleteRoleConfirm(role.id)}
                     >
-                      <Trash2 className="h-4 w-4" />
+                      <Trash2 className="mr-1.5 h-3.5 w-3.5" /> Delete Role
                     </Button>
                   </div>
                   {role.staff.length > 0 && (
