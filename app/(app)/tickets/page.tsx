@@ -83,20 +83,16 @@ export default function TicketsPage() {
   const [dialCode, setDialCode] = useState(DEFAULT_DIAL_CODE);
   const previewRef = useRef<HTMLDivElement>(null);
 
-  // On mobile, scroll the preview into view after a ticket is generated so the
-  // admin sees the confirmation + live ticket without manual scrolling. Desktop
-  // layout is side-by-side, so scrolling there would be jarring — skip it.
+  // Scroll the preview into view after a ticket is generated so the admin sees
+  // the confirmation + live ticket without manual scrolling, on every screen.
   useEffect(() => {
     if (preview.id !== "—" && previewRef.current) {
-      const isMobile = window.matchMedia("(max-width: 767px)").matches;
-      if (isMobile) {
-        // slight delay so the ConfirmationPanel has mounted and the shader begins.
-        const t = setTimeout(
-          () => previewRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }),
-          120
-        );
-        return () => clearTimeout(t);
-      }
+      // slight delay so the ConfirmationPanel has mounted and the shader begins.
+      const t = setTimeout(
+        () => previewRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }),
+        120
+      );
+      return () => clearTimeout(t);
     }
   }, [preview.id]);
 
