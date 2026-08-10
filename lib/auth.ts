@@ -20,6 +20,8 @@ export interface AppUser {
   email: string | null;
   username: string;
   role: Role;
+  /** Gate id this scanner is assigned to (multi-gate mode). null/undefined otherwise. */
+  gateId?: string | null;
 }
 
 export function isAdmin(user: AppUser | null | undefined): boolean {

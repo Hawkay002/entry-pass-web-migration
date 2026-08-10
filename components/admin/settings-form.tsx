@@ -21,6 +21,8 @@ import {
 import { useSettings } from "@/hooks/use-settings";
 import { saveSettings, clearSettings } from "@/app/actions/admin";
 import { TIMEZONES, DEFAULT_TZ, getTzLabel } from "@/lib/timezones";
+import { Switch } from "@/components/ui/switch";
+import { GatePanel } from "@/components/admin/gate-panel";
 
 export function SettingsForm() {
   const { settings, loading } = useSettings();
@@ -32,6 +34,10 @@ export function SettingsForm() {
   const [edited, setEdited] = useState(false);
   const [clearOpen, setClearOpen] = useState(false);
   const [seeded, setSeeded] = useState(false);
+  const [multiGate, setMultiGate] = useState(false);
+  // Track the *saved* multiGate value so we know when the toggle has been
+  // flipped but not yet saved (used to show the Gate panel).
+  const [savedMultiGate, setSavedMultiGate] = useState(false);
 
   async function handleClear() {
     setClearOpen(false);
@@ -41,6 +47,8 @@ export function SettingsForm() {
       setName("");
       setPlace("");
       setDeadline("");
+      setMultiGate(false);
+      setSavedMultiGate(false);
       setEdited(false);
     } else {
       toast.error("Failed to clear settings");
@@ -60,9 +68,13 @@ export function SettingsForm() {
         : "";
       setDeadline(cleanDeadline);
       if (settings.timezone) setTz(settings.timezone);
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- one-time seed
+      setMultiGate(Boolean(settings.multiGate));
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- one-time seed
+      setSavedMultiGate(Boolean(settings.multiGate));
       setSeeded(true);
     }
-  }, [loading, seeded, settings.name, settings.place, settings.deadline, settings.timezone]);
+  }, [loading, seeded, settings.name, settings.place, settings.deadline, settings.timezone, settings.multiGate]);
 
   function sync(field: "name" | "place" | "deadline", value: string) {
     setEdited(true);
@@ -83,10 +95,11 @@ export function SettingsForm() {
       offsetStr = tz;
     }
     const deadlineWithTz = deadline ? deadline + ":00" + offsetStr : deadline;
-    const res = await saveSettings({ name, place, deadline: deadlineWithTz, timezone: tz });
+    const res = await saveSettings({ name, place, deadline: deadlineWithTz, timezone: tz, multiGate });
     setSaving(false);
     if (res.ok) {
       toast.success("Configuration saved");
+      setSavedMultiGate(multiGate);
       setEdited(false);
     } else {
       toast.error("Save failed", { description: res.error });
@@ -143,6 +156,24 @@ export function SettingsForm() {
             />
           </div>
         </div>
+
+        {/* Multi-Gate Mode toggle */}
+        <div className="flex items-center justify-between gap-4 rounded-xl border border-white/8 bg-black/20 p-4">
+          <div className="space-y-0.5">
+            <Label htmlFor="multiGate" className="text-sm font-medium">
+              Multi-Gate Mode
+            </Label>
+            <p className="text-xs text-muted-foreground">
+              Assign tickets to gates by category. Wrong-gate scans are blocked.
+            </p>
+          </div>
+          <Switch
+            id="multiGate"
+            checked={multiGate}
+            onCheckedChange={(v) => { setMultiGate(v); setEdited(true); }}
+          />
+        </div>
+
         <Button onClick={handleSave} disabled={saving || (!edited && !loading)}>
           {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
           Save Configuration
@@ -182,6 +213,14 @@ export function SettingsForm() {
           </p>
           {settings.deadline && <DeadlineCountdown deadline={settings.deadline} />}
         </div>
+
+        {/* Gate management — below Active Settings, visible when multiGate is saved ON */}
+        {savedMultiGate && (
+          <div className="space-y-2 pt-2">
+            <h4 className="text-sm font-semibold text-white">Gate Configuration</h4>
+            <GatePanel />
+          </div>
+        )}
       </CardContent>
 
       <Dialog open={clearOpen} onOpenChange={setClearOpen}>

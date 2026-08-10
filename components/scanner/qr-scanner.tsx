@@ -16,6 +16,7 @@ export type ScanOutcome =
   | { kind: "searching" }
   | { kind: "granted"; name: string; id: string }
   | { kind: "already"; name: string; id: string; status: string; scannedBy?: string; scannedAt?: number | null }
+  | { kind: "wrong-gate"; name: string; id: string; expectedGate?: string | null }
   | { kind: "invalid"; id: string }
   | { kind: "error"; message: string };
 
@@ -300,6 +301,7 @@ function ScanResult({ outcome }: { outcome: ScanOutcome }) {
     searching: "bg-white/10 text-white border-white/20",
     granted: "bg-success-green/20 text-success-green border-success-green/40",
     already: "bg-amber-500/20 text-amber-400 border-amber-500/40",
+    "wrong-gate": "bg-amber-500/20 text-amber-300 border-amber-400/50",
     invalid: "bg-destructive/20 text-destructive border-destructive/40",
     error: "bg-destructive/20 text-destructive border-destructive/40",
   };
@@ -344,6 +346,22 @@ function ScanResult({ outcome }: { outcome: ScanOutcome }) {
             <p className="font-semibold">INVALID TICKET</p>
             <p className="font-mono text-xs opacity-70">{outcome.id}</p>
             <p className="text-xs opacity-70">Not found in database</p>
+          </div>
+        </div>
+      )}
+      {outcome.kind === "wrong-gate" && (
+        <div className="flex items-start gap-2">
+          <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0" />
+          <div>
+            <p className="font-semibold">WRONG GATE</p>
+            <p className="text-sm">{outcome.name}</p>
+            <p className="text-xs opacity-80">
+              This guest should enter at{" "}
+              <span className="font-semibold">
+                {outcome.expectedGate ? `Gate ${outcome.expectedGate}` : "another gate"}
+              </span>
+              . Entry blocked here.
+            </p>
           </div>
         </div>
       )}

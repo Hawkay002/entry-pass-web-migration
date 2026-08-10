@@ -16,6 +16,7 @@ import type {
 } from "@/lib/types";
 import { revalidatePath } from "next/cache";
 import { fetchAllLogs, deleteLogsFromRedis } from "@/lib/redis-log";
+import { disableMultiGate } from "@/app/actions/gates";
 
 // ---------------- Activity Logs (Redis + Firestore) ----------------
 
@@ -69,6 +70,10 @@ export async function saveSettings(
         place: settings.place,
         deadline: settings.deadline,
         timezone: settings.timezone ?? "+05:30",
+        multiGate: Boolean(settings.multiGate),
+        gateCategories: Array.isArray(settings.gateCategories)
+          ? settings.gateCategories
+          : [],
       },
       { merge: true }
     );
@@ -81,13 +86,21 @@ export async function saveSettings(
   return { ok: true };
 }
 
-/** Clear all event settings (name, place, deadline) from the database. */
+/**
+ * Clear all event settings (name, place, deadline) from the database.
+ * Also cascades multi-gate off (deletes gates, clears ticket gate assignments).
+ */
 export async function clearSettings(): Promise<{ ok: true } | { ok: false; error: string }> {
   const user = await getAppUser();
   if (!user) return { ok: false, error: "Not authenticated." };
 
-  await getAdminDb().doc(paths.settingsDoc).set(
-    { name: "", place: "", deadline: "" },
+  const db = getAdminDb();
+
+  // Cascade multi-gate off before clearing (deletes gates + clears tickets).
+  await disableMultiGate();
+
+  await db.doc(paths.settingsDoc).set(
+    { name: "", place: "", deadline: "", multiGate: false },
     { merge: true }
   );
 
@@ -353,6 +366,10 @@ export async function factoryReset(): Promise<
 
   // 4. Delete settings/config.
   await db.doc(paths.settingsDoc).delete();
+
+  // 4b. Delete all gates (multi-gate system).
+  const gatesSnap = await db.collection(paths.gatesCollection).get();
+  await Promise.all(gatesSnap.docs.map((d) => d.ref.delete()));
 
   // 5. Delete all global_locks.
   const locksSnap = await db.collection(paths.locksCollection).get();

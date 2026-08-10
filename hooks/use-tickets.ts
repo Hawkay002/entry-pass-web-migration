@@ -27,6 +27,8 @@ function coerce(raw: Record<string, unknown> | undefined, id: string): Ticket {
       raw?.scannedBy == null ? null : String(raw.scannedBy),
     createdBy: String(raw?.createdBy ?? ""),
     createdAt: Number(raw?.createdAt ?? 0),
+    gate: raw?.gate != null ? String(raw.gate) : null,
+    scannedAtGate: raw?.scannedAtGate != null ? String(raw.scannedAtGate) : null,
   };
 }
 

@@ -16,7 +16,7 @@ const STORE_QUEUE = "queue";
 const KV_TICKETS_KEY = "tickets";
 
 /** Minimal ticket shape cached for offline validation (no PII like phone). */
-export type OfflineTicket = Pick<Ticket, "id" | "name" | "status" | "scanned">;
+export type OfflineTicket = Pick<Ticket, "id" | "name" | "status" | "scanned" | "gate">;
 
 export interface PendingScan {
   id: string;       // ticket id (also the queue key)

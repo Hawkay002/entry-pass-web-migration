@@ -12,6 +12,7 @@ import { LockedTab } from "@/components/layout/locked-tab";
 import { useLockedTabs } from "@/components/layout/locked-tabs-context";
 import { QrScanner, type ScanOutcome } from "@/components/scanner/qr-scanner";
 import { validateTicket, syncOfflineScans, getTicketsForOfflineCache } from "@/app/actions/tickets";
+import { getScannerGate } from "@/app/actions/gates-scanner";
 import {
   cacheTickets,
   getCachedTickets,
@@ -36,6 +37,14 @@ export default function ScannerPage() {
   const [pending, setPending] = useState(0);
   const [syncing, setSyncing] = useState(false);
   const [haptics, setHaptics] = useState(true);
+  const [scannerGate, setScannerGate] = useState<{ id: string; name: string } | null>(null);
+
+  // Resolve this scanner's gate on mount (from staff assignment + settings).
+  useEffect(() => {
+    getScannerGate()
+      .then((g) => setScannerGate(g ?? null))
+      .catch(() => setScannerGate(null));
+  }, []);
 
   // Warm + periodically refresh the IndexedDB ticket cache. One-shot on mount
   // (so the cache is ready immediately), then every 5 minutes. Skipped while
@@ -59,7 +68,7 @@ export default function ScannerPage() {
     if (queued.length === 0) return;
     setSyncing(true);
     try {
-      const res = await syncOfflineScans(queued.map((q) => q.id));
+      const res = await syncOfflineScans(queued.map((q) => q.id), scannerGate?.id ?? null);
       if (res.ok) {
         const granted = Object.values(res.results).filter((r) => r === "granted").length;
         const already = Object.values(res.results).filter((r) => r === "already").length;
@@ -107,7 +116,7 @@ export default function ScannerPage() {
   const handleCode = useCallback(
     async (ticketId: string): Promise<ScanOutcome> => {
       if (online) {
-        const res = await validateTicket(ticketId);
+        const res = await validateTicket(ticketId, scannerGate?.id ?? null);
         if (!res.ok) return { kind: "error", message: res.error };
         if (res.outcome === "granted")
           return { kind: "granted", name: res.ticket?.name ?? "", id: ticketId };
@@ -119,6 +128,13 @@ export default function ScannerPage() {
             status: res.ticket?.status ?? "",
             scannedBy: res.ticket?.scannedBy,
             scannedAt: res.ticket?.scannedAt,
+          };
+        if (res.outcome === "wrong-gate")
+          return {
+            kind: "wrong-gate",
+            name: res.ticket?.name ?? "",
+            id: ticketId,
+            expectedGate: res.ticket?.expectedGate ?? null,
           };
         return { kind: "invalid", id: ticketId };
       }
@@ -132,9 +148,21 @@ export default function ScannerPage() {
           message: "Ticket not found in offline cache. Reconnect to verify.",
         };
       }
+      // Multi-gate enforcement (offline): check the ticket's assigned gate.
+      if (
+        scannerGate?.id &&
+        t.gate &&
+        t.gate !== scannerGate.id
+      ) {
+        return {
+          kind: "wrong-gate",
+          name: t.name,
+          id: ticketId,
+          expectedGate: t.gate,
+        };
+      }
       if (t.status === "coming-soon" && !t.scanned) {
         await enqueueScan({ id: ticketId, name: t.name, timestamp: Date.now() });
-        // Reflect the grant locally so a repeat offline scan returns "already".
         await markCachedScanned(ticketId);
         setPending((p) => p + 1);
         return { kind: "granted", name: t.name, id: ticketId };
@@ -146,7 +174,7 @@ export default function ScannerPage() {
         status: t.status,
       };
     },
-    [online]
+    [online, scannerGate]
   );
 
   if (lockedTabs.includes("scanner")) {
@@ -156,7 +184,15 @@ export default function ScannerPage() {
   return (
     <div className="glass-panel mx-auto max-w-lg p-6">
       <div className="mb-4 flex items-center justify-between gap-2">
-        <h2 className="text-lg font-semibold">Entry Validation</h2>
+        <div className="flex items-center gap-3">
+          <h2 className="text-lg font-semibold">Entry Validation</h2>
+          {scannerGate && (
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-accent-secondary/15 px-3 py-1 text-xs font-medium text-accent-secondary ring-1 ring-accent-secondary/30">
+              <span className="h-1.5 w-1.5 rounded-full bg-accent-secondary" />
+              Gate {scannerGate.name}
+            </span>
+          )}
+        </div>
         <label className="flex items-center gap-2 text-xs text-muted-foreground">
           <input
             type="checkbox"

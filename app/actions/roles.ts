@@ -56,7 +56,8 @@ export async function createRole(
 export async function addStaffToRole(
   roleId: string,
   staffName: string,
-  staffEmail: string
+  staffEmail: string,
+  gateId?: string | null
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   const user = await getAppUser();
   if (!user || user.role !== "admin")
@@ -77,7 +78,7 @@ export async function addStaffToRole(
   if (staff.some((s) => s.email.toLowerCase() === email))
     return { ok: false, error: "Staff member already exists in this role." };
 
-  staff.push({ name, email });
+  staff.push({ name, email, ...(gateId ? { gateId } : {}) });
   await ref.update({ staff });
   await logAction(
     user,
@@ -133,7 +134,8 @@ export async function updateStaffInRole(
   roleId: string,
   oldEmail: string,
   newName: string,
-  newEmail: string
+  newEmail: string,
+  gateId?: string | null
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   const user = await getAppUser();
   if (!user || user.role !== "admin")
@@ -155,7 +157,8 @@ export async function updateStaffInRole(
   );
   if (idx === -1) return { ok: false, error: "Staff member not found." };
 
-  staff[idx] = { name, email };
+  // Spread existing fields so gateId (and any future field) survives the edit.
+  staff[idx] = { ...staff[idx], name, email, ...(gateId !== undefined ? { gateId } : {}) };
   await ref.update({ staff });
   await logAction(
     user,

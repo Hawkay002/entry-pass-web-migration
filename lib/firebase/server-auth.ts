@@ -9,7 +9,7 @@ import { getAdminAuth, getAdminDb } from "@/lib/firebase/admin";
 import { authConfig } from "@/lib/env";
 import { paths } from "@/lib/paths";
 import { ROLE_CLAIM, type AppUser } from "@/lib/auth";
-import type { Role } from "@/lib/types";
+import type { Role, StaffMember } from "@/lib/types";
 
 function decodeRole(claim: unknown): Role {
   if (claim === "admin") return "admin";
@@ -50,15 +50,17 @@ export async function getAppUser(): Promise<AppUser | null> {
       const rolesSnap = await getAdminDb().collection(paths.rolesCollection).get();
       let foundName = "";
       let foundRole: Role = "staff";
+      let foundGateId: string | null = null;
       rolesSnap.docs.forEach((d) => {
         const data = d.data();
-        const staff = (data.staff as { name: string; email: string }[]) ?? [];
+        const staff = (data.staff as StaffMember[]) ?? [];
         const match = staff.find(
           (s) => s.email.toLowerCase() === email.toLowerCase()
         );
         if (match) {
           foundName = match.name;
           foundRole = d.id;
+          foundGateId = match.gateId ?? null;
         }
       });
       // If not found in any role, they've been removed — reject them.
@@ -71,6 +73,7 @@ export async function getAppUser(): Promise<AppUser | null> {
         email: decoded.email ?? null,
         username: foundName,
         role: foundRole,
+        gateId: foundGateId,
       };
     } catch {
       return null;

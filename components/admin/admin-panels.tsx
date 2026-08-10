@@ -38,6 +38,8 @@ import {
 } from "@/app/actions/roles";
 import { applyRemoteLocks, factoryReset, fetchAllLocks, fetchMaintenanceInfo, checkAndEndMaintenance, unlockStaff, saveKioskPin, getKioskStatus } from "@/app/actions/admin";
 import { useRoles } from "@/hooks/use-roles";
+import { useSettings } from "@/hooks/use-settings";
+import { useGatesMode } from "@/hooks/use-gates";
 import type { LockReasonType, StaffMember, StaffRole, TabName } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -281,6 +283,12 @@ function RoleManagementPanel() {
   const [editStaff, setEditStaff] = useState<{ roleId: string; oldEmail: string; name: string; email: string } | null>(null);
   const [editingStaff, setEditingStaff] = useState(false);
   const bulkFileRef = useRef<HTMLInputElement>(null);
+  // Gate assignment (multi-gate mode)
+  const { settings } = useSettings();
+  const { gates } = useGatesMode();
+  const multiGate = Boolean(settings.multiGate);
+  const [staffGateId, setStaffGateId] = useState<string | null>(null);
+  const [editGateId, setEditGateId] = useState<string | null>(null);
 
   async function handleCreateRole() {
     if (!newRoleName.trim()) return;
@@ -298,12 +306,13 @@ function RoleManagementPanel() {
   async function handleAddStaff() {
     if (!addStaffOpen || !staffName.trim() || !staffEmail.trim()) return;
     setAddingStaff(true);
-    const res = await addStaffToRole(addStaffOpen, staffName, staffEmail);
+    const res = await addStaffToRole(addStaffOpen, staffName, staffEmail, multiGate ? staffGateId : null);
     setAddingStaff(false);
     if (res.ok) {
       toast.success("Staff member added");
       setStaffName("");
       setStaffEmail("");
+      setStaffGateId(null);
     } else {
       toast.error("Add failed", { description: res.error });
     }
@@ -391,7 +400,7 @@ function RoleManagementPanel() {
   async function handleEditStaff() {
     if (!editStaff) return;
     setEditingStaff(true);
-    const res = await updateStaffInRole(editStaff.roleId, editStaff.oldEmail, editStaff.name, editStaff.email);
+    const res = await updateStaffInRole(editStaff.roleId, editStaff.oldEmail, editStaff.name, editStaff.email, multiGate ? editGateId : null);
     setEditingStaff(false);
     if (res.ok) {
       toast.success("Staff member updated");
@@ -466,13 +475,18 @@ function RoleManagementPanel() {
                       key={s.email}
                       className="flex items-center justify-between rounded-lg bg-black/30 px-3 py-1.5 text-sm"
                     >
-                      <div>
+                      <div className="flex items-center gap-2">
                         <span className="font-medium">{s.name}</span>
-                        <span className="ml-2 text-muted-foreground">{s.email}</span>
+                        <span className="text-muted-foreground">{s.email}</span>
+                        {multiGate && s.gateId && (
+                          <span className="inline-block rounded-full bg-accent-secondary/15 px-2 py-0.5 text-[0.65rem] font-medium text-accent-secondary">
+                            {gates.find((g) => g.id === s.gateId)?.name ?? s.gateId.slice(0, 6)}
+                          </span>
+                        )}
                       </div>
                       <div className="flex items-center gap-2.5">
                         <button
-                          onClick={() => setEditStaff({ roleId: role.id, oldEmail: s.email, name: s.name, email: s.email })}
+                          onClick={() => { setEditStaff({ roleId: role.id, oldEmail: s.email, name: s.name, email: s.email }); setEditGateId(s.gateId ?? null); }}
                           className="text-muted-foreground hover:text-accent-secondary"
                         >
                           <Pencil className="h-3.5 w-3.5" />
@@ -512,6 +526,26 @@ function RoleManagementPanel() {
               <Label>Email (Google account)</Label>
               <Input value={staffEmail} onChange={(e) => setStaffEmail(e.target.value)} placeholder="staff@gmail.com" type="email" />
             </div>
+            {multiGate && (
+              <div className="space-y-2">
+                <Label>Assigned Gate</Label>
+                <Select value={staffGateId ?? "none"} onValueChange={(v) => setStaffGateId(v === "none" ? null : v)}>
+                  <SelectTrigger>
+                    <span>
+                      {staffGateId
+                        ? (gates.find((g) => g.id === staffGateId)?.name ?? staffGateId)
+                        : "No gate assigned"}
+                    </span>
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">No gate assigned</SelectItem>
+                    {gates.filter((g) => g.active).map((g) => (
+                      <SelectItem key={g.id} value={g.id}>{g.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
 
             {/* Divider */}
             <div className="relative py-1">
@@ -591,6 +625,26 @@ function RoleManagementPanel() {
                 type="email"
               />
             </div>
+            {multiGate && (
+              <div className="space-y-2">
+                <Label>Assigned Gate</Label>
+                <Select value={editGateId ?? "none"} onValueChange={(v) => setEditGateId(v === "none" ? null : v)}>
+                  <SelectTrigger>
+                    <span>
+                      {editGateId
+                        ? (gates.find((g) => g.id === editGateId)?.name ?? editGateId)
+                        : "No gate assigned"}
+                    </span>
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">No gate assigned</SelectItem>
+                    {gates.filter((g) => g.active).map((g) => (
+                      <SelectItem key={g.id} value={g.id}>{g.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
           </div>
           <DialogFooter>
             <Button variant="ghost" onClick={() => setEditStaff(null)}>Cancel</Button>

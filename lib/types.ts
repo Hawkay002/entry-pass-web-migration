@@ -7,10 +7,15 @@ export type Gender = "Male" | "Female" | "Other";
 
 export type Role = "admin" | string; // admin is fixed; others are dynamic from roles collection
 
+/** Gate categories are free-text strings the admin defines (e.g. "Guest Entry", "Staff"). */
+export type GateCategory = string;
+
 /** A staff member within a role. */
 export interface StaffMember {
   name: string;
   email: string;
+  /** Gate this scanner is assigned to (gate id), when multi-gate mode is on. */
+  gateId?: string | null;
 }
 
 /** Path: roles/{roleName} — dynamically managed by admin. */
@@ -35,6 +40,22 @@ export interface Ticket {
   scannedBy: string | null; // staff username
   createdBy: string; // staff username
   createdAt: number; // epoch ms
+  /** Assigned gate id (multi-gate mode). null when multi-gate is off. */
+  gate?: string | null;
+  /** Gate id where the ticket was actually scanned. */
+  scannedAtGate?: string | null;
+}
+
+/** Path: ticket_events_data/shared_event_db/gates/{gateId} */
+export interface Gate {
+  id: string;
+  name: string;
+  category: GateCategory;
+  order: number;
+  active: boolean;
+  createdAt: number;
+  /** Which ticket types this gate accepts (drives auto-assignment). */
+  ticketTypes: TicketType[];
 }
 
 /** Path: ticket_events_data/shared_event_db/settings/config */
@@ -43,6 +64,10 @@ export interface EventSettings {
   place: string;
   deadline: string; // ISO datetime-local string
   timezone?: string; // selected timezone offset (e.g. "+05:30", "auto")
+  /** When true, multi-gate mode is active — gates enforce wrong-gate checks. */
+  multiGate?: boolean;
+  /** Custom category names the admin created (e.g. "Guest Entry", "Staff"). */
+  gateCategories?: string[];
 }
 
 export type LogAction =

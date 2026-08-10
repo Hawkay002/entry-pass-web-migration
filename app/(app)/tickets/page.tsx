@@ -25,6 +25,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useSettings } from "@/hooks/use-settings";
+import { useGatesMode } from "@/hooks/use-gates";
 import { createTicket } from "@/app/actions/tickets";
 import { sortedCountryCodes, DEFAULT_DIAL_CODE } from "@/lib/country-codes";
 import { matchDialCode } from "@/lib/phone-sanitize";
@@ -67,8 +68,9 @@ type FormValues = z.infer<typeof schema>;
 
 export default function TicketsPage() {
   const { settings } = useSettings();
+  const { gateMap } = useGatesMode();
   const [preview, setPreview] = useState<
-    Pick<Ticket, "id" | "name" | "age" | "gender" | "phone" | "ticketType">
+    Pick<Ticket, "id" | "name" | "age" | "gender" | "phone" | "ticketType" | "gate">
   >({
     id: "—",
     name: "",
@@ -76,6 +78,7 @@ export default function TicketsPage() {
     gender: "Male",
     phone: "",
     ticketType: "Classic",
+    gate: null,
   });
   const [isSharing, setIsSharing] = useState(false);
   const [ticketTypeVal, setTicketTypeVal] = useState<TicketType>("Classic");
@@ -164,6 +167,7 @@ export default function TicketsPage() {
         gender: values.gender,
         phone: dialCode + values.phone,
         ticketType: values.ticketType,
+        gate: res.gate ?? null,
       });
       toast.success("Pass generated", { description: values.name });
       reset();
@@ -338,10 +342,11 @@ export default function TicketsPage() {
             ticket={preview}
             eventName={settings.name || undefined}
             venue={settings.place || undefined}
+            gateName={preview.gate ? gateMap.get(preview.gate)?.name : undefined}
             isSharing={isSharing}
             onShare={handleShare}
             onIssueAnother={() => {
-              setPreview({ id: "—", name: "", age: 0, gender: "Male", phone: "", ticketType: "Classic" });
+              setPreview({ id: "—", name: "", age: 0, gender: "Male", phone: "", ticketType: "Classic", gate: null });
               reset();
               setValue("gender", "Male");
               setValue("ticketType", "Classic");
@@ -367,13 +372,15 @@ function ConfirmationPanel({
   ticket,
   eventName,
   venue,
+  gateName,
   isSharing,
   onShare,
   onIssueAnother,
 }: {
-  ticket: Pick<Ticket, "id" | "name" | "age" | "gender" | "phone" | "ticketType">;
+  ticket: Pick<Ticket, "id" | "name" | "age" | "gender" | "phone" | "ticketType" | "gate">;
   eventName?: string;
   venue?: string;
+  gateName?: string;
   isSharing: boolean;
   onShare: () => void;
   onIssueAnother: () => void;
@@ -429,6 +436,7 @@ function ConfirmationPanel({
             ticket={ticket}
             eventName={eventName}
             venue={venue}
+            gateName={gateName}
           />
         </div>
       </div>

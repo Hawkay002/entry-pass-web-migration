@@ -14,6 +14,7 @@ interface TicketData {
   age: number;
   ticketType: string;
   status: string;
+  gate?: string;
 }
 
 interface SettingsData {

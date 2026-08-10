@@ -31,6 +31,7 @@ import {
 } from "@/components/ui/table";
 import { useTickets } from "@/hooks/use-tickets";
 import { useSettings } from "@/hooks/use-settings";
+import { useGatesMode } from "@/hooks/use-gates";
 import {
   filterTickets,
   DEFAULT_FILTERS,
@@ -73,6 +74,8 @@ export default function GuestsPage() {
   const [filterOpen, setFilterOpen] = useState(false);
   const filterRef = useRef<HTMLDivElement>(null);
   const { settings } = useSettings();
+  const { gateMap } = useGatesMode();
+  const multiGate = Boolean(settings.multiGate);
 
   // Auto-absent: only polls when there's a deadline set AND coming-soon tickets.
   // Skips entirely when no deadline or all tickets are already arrived/absent.
@@ -309,6 +312,7 @@ export default function GuestsPage() {
               <TableHead className="text-center">Details</TableHead>
               <TableHead className="text-center">Contact</TableHead>
               <TableHead className="text-center">Ticket ID</TableHead>
+              {multiGate && <TableHead className="text-center">Gate</TableHead>}
               <TableHead className="text-center">Status</TableHead>
               <TableHead className="w-12 text-center">View</TableHead>
               <TableHead className="w-12 text-center">Share</TableHead>
@@ -317,7 +321,7 @@ export default function GuestsPage() {
           <TableBody>
             {loading ? (
               <TableRow>
-                <TableCell colSpan={9} className="py-16 text-center">
+                <TableCell colSpan={multiGate ? 10 : 9} className="py-16 text-center">
                   <div className="flex flex-col items-center gap-2 text-muted-foreground">
                     <Loader2 className="h-6 w-6 animate-spin" />
                     <span className="text-sm">Loading guests...</span>
@@ -326,7 +330,7 @@ export default function GuestsPage() {
               </TableRow>
             ) : filtered.length === 0 && tickets.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={9} className="py-16 text-center">
+                <TableCell colSpan={multiGate ? 10 : 9} className="py-16 text-center">
                   <div className="flex flex-col items-center gap-2">
                     <Users className="h-10 w-10 text-muted-foreground/30" />
                     <p className="text-sm text-muted-foreground">No guests yet.</p>
@@ -336,7 +340,7 @@ export default function GuestsPage() {
               </TableRow>
             ) : filtered.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={9} className="py-16 text-center">
+                <TableCell colSpan={multiGate ? 10 : 9} className="py-16 text-center">
                   <div className="flex flex-col items-center gap-2">
                     <Search className="h-8 w-8 text-muted-foreground/30" />
                     <p className="text-sm text-muted-foreground">No guests match your filters.</p>
@@ -375,6 +379,17 @@ export default function GuestsPage() {
                   <TableCell className="text-center font-mono text-xs text-muted-foreground">
                     {t.id}
                   </TableCell>
+                  {multiGate && (
+                    <TableCell className="text-center">
+                      {t.gate ? (
+                        <span className="inline-block rounded-full bg-accent-secondary/15 px-2 py-0.5 text-xs font-medium text-accent-secondary">
+                          {gateMap.get(t.gate)?.name ?? t.gate.slice(0, 6)}
+                        </span>
+                      ) : (
+                        <span className="text-xs text-muted-foreground">—</span>
+                      )}
+                    </TableCell>
+                  )}
                   <TableCell className="text-center">
                     <span
                       className={cn(

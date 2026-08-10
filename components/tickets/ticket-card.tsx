@@ -28,13 +28,16 @@ const TYPE_STYLES: Record<string, { texture: typeof TICKET_TEXTURE; gradient: ty
 };
 
 export const TicketCard = forwardRef<HTMLDivElement, {
-  ticket: Pick<Ticket, "id" | "name" | "age" | "gender" | "phone" | "ticketType">;
+  ticket: Pick<Ticket, "id" | "name" | "age" | "gender" | "phone" | "ticketType" | "gate">;
   eventName?: string;
   venue?: string;
+  /** Gate name to display on the ticket face (resolved from gate id by caller). */
+  gateName?: string;
 }>(function TicketCard({
   ticket,
   eventName,
   venue,
+  gateName,
 }, ref) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [qrDataUrl, setQrDataUrl] = useState("");
@@ -99,7 +102,7 @@ export const TicketCard = forwardRef<HTMLDivElement, {
           name={ticket.name}
           presenter={`ENTRY PASS — ${typeLabel.toUpperCase()}`}
           event={eventName ? `${eventName}${venue ? `  •  ${venue}` : ""}` : ""}
-          venue={""}
+          venue={gateName ? `Gate ${gateName}` : ""}
           dates={`${ticket.age} / ${ticket.gender}`}
           stubText="ADMIT ONE"
           watermark={typeLabel.toUpperCase()}

@@ -10,6 +10,7 @@ import { getAppUser } from "@/lib/firebase/server-auth";
 import { logAction } from "@/lib/firebase/log";
 import type { Gender, TicketStatus, TicketType } from "@/lib/types";
 import { revalidatePath } from "next/cache";
+import { pickGateForTicket } from "@/app/actions/gates";
 
 /**
  * Fetch the full ticket list for offline-cache warming on the scanner.
@@ -33,6 +34,7 @@ export async function getTicketsForOfflineCache(): Promise<
       name: String(data.name ?? ""),
       status: (status === "arrived" || status === "absent" ? status : "coming-soon") as TicketStatus,
       scanned: Boolean(data.scanned),
+      gate: data.gate != null ? String(data.gate) : null,
     };
   });
   return { ok: true, tickets };
@@ -46,12 +48,21 @@ export async function createTicket(input: {
   phone: string; // raw digits, will be prefixed with the selected dial code
   ticketType: TicketType;
   dialCode?: string; // e.g. "+91" (default "+91")
-}): Promise<{ ok: true; id: string } | { ok: false; error: string }> {
+}): Promise<{ ok: true; id: string; gate?: string | null } | { ok: false; error: string }> {
   const user = await getAppUser();
   if (!user) return { ok: false, error: "Not authenticated." };
 
+  const db = getAdminDb();
   const dial = input.dialCode ?? "+91";
   const now = Date.now();
+
+  // Multi-gate: auto-assign a gate via category match + round-robin (if enabled).
+  let assignedGate: string | null = null;
+  const settingsSnap = await db.doc(paths.settingsDoc).get();
+  if (Boolean(settingsSnap.data()?.multiGate)) {
+    assignedGate = await pickGateForTicket(input.ticketType);
+  }
+
   const ticket = {
     name: input.name.trim(),
     gender: input.gender,
@@ -64,11 +75,11 @@ export async function createTicket(input: {
     scannedBy: null,
     createdBy: user.username,
     createdAt: now,
+    gate: assignedGate,
+    scannedAtGate: null,
   };
 
-  const ref = await getAdminDb()
-    .collection(paths.ticketsCollection)
-    .add(ticket);
+  const ref = await db.collection(paths.ticketsCollection).add(ticket);
 
   await logAction(
     user,
@@ -77,14 +88,15 @@ export async function createTicket(input: {
   );
 
   revalidatePath("/guests");
-  return { ok: true, id: ref.id };
+  return { ok: true, id: ref.id, gate: assignedGate };
 }
 
 /** Mark a ticket as arrived on scan. Returns the outcome for UI feedback. */
 export async function validateTicket(
-  ticketId: string
+  ticketId: string,
+  scannerGateId?: string | null
 ): Promise<
-  | { ok: true; outcome: "granted" | "already" | "invalid"; ticket: { name: string; id: string; status: string; scannedBy?: string; scannedAt?: number | null } | null }
+  | { ok: true; outcome: "granted" | "already" | "invalid" | "wrong-gate"; ticket: { name: string; id: string; status: string; scannedBy?: string; scannedAt?: number | null; expectedGate?: string | null } | null }
   | { ok: false; error: string }
 > {
   const user = await getAppUser();
@@ -103,13 +115,30 @@ export async function validateTicket(
   const name = String(data.name ?? "");
   const status = String(data.status ?? "coming-soon");
   const scanned = Boolean(data.scanned);
+  const ticketGate = data.gate != null ? String(data.gate) : null;
 
   if (status === "coming-soon" && !scanned) {
+    // Multi-gate enforcement: if the ticket has an assigned gate and this
+    // scanner's gate doesn't match, block entry WITHOUT mutating the ticket.
+    if (ticketGate && scannerGateId && ticketGate !== scannerGateId) {
+      await logAction(
+        user,
+        "SCAN_ENTRY",
+        `Wrong gate: ${name} (ID: ${ticketId.slice(0, 6)}) — expected ${ticketGate}, scanned at ${scannerGateId}`
+      );
+      return {
+        ok: true,
+        outcome: "wrong-gate",
+        ticket: { name, id: ticketId, status, expectedGate: ticketGate },
+      };
+    }
+
     await ref.update({
       status: "arrived",
       scanned: true,
       scannedAt: Date.now(),
       scannedBy: user.username,
+      scannedAtGate: scannerGateId ?? null,
     });
     await logAction(
       user,
@@ -142,16 +171,17 @@ export async function validateTicket(
  * Returns a per-id outcome map for client reconciliation.
  */
 export async function syncOfflineScans(
-  ids: string[]
+  ids: string[],
+  scannerGateId?: string | null
 ): Promise<
-  | { ok: true; results: Record<string, "granted" | "already" | "invalid"> }
+  | { ok: true; results: Record<string, "granted" | "already" | "invalid" | "wrong-gate"> }
   | { ok: false; error: string }
 > {
   const user = await getAppUser();
   if (!user) return { ok: false, error: "Not authenticated." };
 
   const db = getAdminDb();
-  const results: Record<string, "granted" | "already" | "invalid"> = {};
+  const results: Record<string, "granted" | "already" | "invalid" | "wrong-gate"> = {};
   let grantedCount = 0;
 
   for (const id of ids) {
@@ -164,12 +194,19 @@ export async function syncOfflineScans(
     const status = String(data.status ?? "coming-soon");
     const scanned = Boolean(data.scanned);
     const name = String(data.name ?? "");
+    const ticketGate = data.gate != null ? String(data.gate) : null;
     if (status === "coming-soon" && !scanned) {
+      // Multi-gate check — skip mutation on mismatch.
+      if (ticketGate && scannerGateId && ticketGate !== scannerGateId) {
+        results[id] = "wrong-gate";
+        continue;
+      }
       await snap.ref.update({
         status: "arrived",
         scanned: true,
         scannedAt: Date.now(),
         scannedBy: user.username,
+        scannedAtGate: scannerGateId ?? null,
       });
       results[id] = "granted";
       grantedCount++;

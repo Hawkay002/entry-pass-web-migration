@@ -76,6 +76,7 @@ interface TicketData {
   age: number;
   ticketType: string;
   status: string;
+  gate?: string;
 }
 
 interface SettingsData {
@@ -98,6 +99,17 @@ export default async function TicketPage({ params }: { params: Promise<{ id: str
   }
 
   const t = ticketSnap.data() as Record<string, unknown>;
+
+  // Resolve the gate name if this ticket has an assigned gate.
+  let gateName: string | undefined;
+  const ticketGateId = t.gate != null ? String(t.gate) : null;
+  if (ticketGateId) {
+    const gateSnap = await db.collection(paths.gatesCollection).doc(ticketGateId).get();
+    if (gateSnap.exists) {
+      gateName = String(gateSnap.data()?.name ?? ticketGateId);
+    }
+  }
+
   const ticket: TicketData = {
     id,
     name: String(t.name ?? ""),
@@ -105,6 +117,7 @@ export default async function TicketPage({ params }: { params: Promise<{ id: str
     age: Number(t.age ?? 0),
     ticketType: String(t.ticketType ?? "Classic"),
     status: String(t.status ?? "coming-soon"),
+    gate: gateName,
   };
 
   const s = settingsSnap.data();

@@ -9,7 +9,7 @@ import { db } from "@/lib/firebase/client";
 import { paths } from "@/lib/paths";
 import type { EventSettings } from "@/lib/types";
 
-const EMPTY: EventSettings = { name: "", place: "", deadline: "", timezone: "+05:30" };
+const EMPTY: EventSettings = { name: "", place: "", deadline: "", timezone: "+05:30", multiGate: false, gateCategories: [] };
 
 export function useSettings() {
   const [settings, setSettings] = useState<EventSettings>(EMPTY);
@@ -26,6 +26,8 @@ export function useSettings() {
             place: d.place ?? "",
             deadline: d.deadline ?? "",
             timezone: (d.timezone as string) ?? "+05:30",
+            multiGate: Boolean(d.multiGate),
+            gateCategories: Array.isArray(d.gateCategories) ? d.gateCategories : [],
           });
         } else {
           setSettings(EMPTY);

@@ -22,6 +22,7 @@ interface TicketData {
   age: number;
   ticketType: string;
   status: string;
+  gate?: string;
 }
 
 interface SettingsData {
@@ -217,7 +218,7 @@ export function InteractiveTicket({ ticket, settings }: { ticket: TicketData; se
           name={ticket.name}
           presenter={`ENTRY PASS — ${typeLabel.toUpperCase()}`}
           event={hasSettings ? `${settings.name || ""}${settings.place ? `  •  ${settings.place}` : ""}` : ""}
-          venue={""}
+          venue={ticket.gate ? `Gate ${ticket.gate}` : ""}
           dates={`${ticket.age} / ${ticket.gender}`}
           stubText="ADMIT ONE"
           watermark={typeLabel.toUpperCase()}

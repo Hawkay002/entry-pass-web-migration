@@ -9,6 +9,7 @@ export const SHARED_DATA_ID = "shared_event_db";
 export const paths = {
   ticketsCollection: `${APP_COLLECTION_ROOT}/${SHARED_DATA_ID}/tickets`,
   settingsDoc: `${APP_COLLECTION_ROOT}/${SHARED_DATA_ID}/settings/config`,
+  gatesCollection: `${APP_COLLECTION_ROOT}/${SHARED_DATA_ID}/gates`,
   logsCollection: "activity_logs",
   rolesCollection: "roles",
   locksCollection: "global_locks",
