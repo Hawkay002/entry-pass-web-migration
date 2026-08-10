@@ -5,7 +5,7 @@
 import { useMemo, useState, useRef, useEffect } from "react";
 import { LockedTab } from "@/components/layout/locked-tab";
 import { useLockedTabs } from "@/components/layout/locked-tabs-context";
-import { Loader2, Search, Trash2, Filter, Eye, Users } from "lucide-react";
+import { Loader2, Search, Trash2, Filter, Eye, Users, Pencil } from "lucide-react";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { WhatsappIcon } from "@hugeicons/core-free-icons";
 import { toast } from "sonner";
@@ -41,7 +41,8 @@ import {
   type TicketTypeFilter,
   type GenderFilter,
 } from "@/lib/guest-list";
-import { deleteOneTicket, autoMarkAbsent } from "@/app/actions/tickets";
+import { deleteOneTicket, autoMarkAbsent, updateGuestName } from "@/app/actions/tickets";
+import { useIsAdmin } from "@/components/layout/app-shell";
 import { TICKET_TYPE_LABELS } from "@/lib/types";
 import type { Ticket, TicketStatus } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -74,6 +75,9 @@ export default function GuestsPage() {
   const [filterOpen, setFilterOpen] = useState(false);
   const filterRef = useRef<HTMLDivElement>(null);
   const { settings } = useSettings();
+  const isAdmin = useIsAdmin();
+  const [editName, setEditName] = useState<{ id: string; name: string } | null>(null);
+  const [savingName, setSavingName] = useState(false);
   const { gateMap } = useGatesMode();
   const multiGate = Boolean(settings.multiGate);
 
@@ -163,6 +167,19 @@ export default function GuestsPage() {
       exitSelectionMode();
     } else {
       toast.error("Delete failed");
+    }
+  }
+
+  async function handleSaveName() {
+    if (!editName || !editName.name.trim()) return;
+    setSavingName(true);
+    const res = await updateGuestName(editName.id, editName.name);
+    setSavingName(false);
+    if (res.ok) {
+      toast.success("Name updated");
+      setEditName(null);
+    } else {
+      toast.error("Failed to update name", { description: res.error });
     }
   }
 
@@ -361,7 +378,20 @@ export default function GuestsPage() {
                   <TableCell className="text-center text-muted-foreground">
                     {i + 1}
                   </TableCell>
-                  <TableCell className="font-medium">{t.name}</TableCell>
+                  <TableCell className="font-medium">
+                    <div className="flex items-center gap-1.5">
+                      {t.name}
+                      {isAdmin && (
+                        <button
+                          onClick={() => setEditName({ id: t.id, name: t.name })}
+                          className="text-muted-foreground/50 transition-colors hover:text-accent-secondary"
+                          title="Edit name"
+                        >
+                          <Pencil className="h-3 w-3" />
+                        </button>
+                      )}
+                    </div>
+                  </TableCell>
                   <TableCell className="text-center">
                     <span
                       className={cn(
@@ -473,6 +503,30 @@ export default function GuestsPage() {
         open={viewOpen}
         onOpenChange={setViewOpen}
       />
+
+      {/* Edit guest name dialog (admin only) */}
+      <Dialog open={!!editName} onOpenChange={(o) => !o && setEditName(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Edit Guest Name</DialogTitle>
+          </DialogHeader>
+          <Input
+            value={editName?.name ?? ""}
+            onChange={(e) => setEditName((p) => (p ? { ...p, name: e.target.value } : p))}
+            onKeyDown={(e) => e.key === "Enter" && handleSaveName()}
+            placeholder="Full name"
+          />
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setEditName(null)}>
+              Cancel
+            </Button>
+            <Button onClick={handleSaveName} disabled={savingName || !editName?.name.trim()}>
+              {savingName && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Save
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

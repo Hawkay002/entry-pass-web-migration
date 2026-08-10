@@ -145,6 +145,7 @@ export async function validateTicket(
       "SCAN_ENTRY",
       `Scanned: ${name} (ID: ${ticketId.slice(0, 6)})`
     );
+    revalidatePath(`/ticket/${ticketId}`);
     return {
       ok: true,
       outcome: "granted",
@@ -281,6 +282,38 @@ export async function deleteOneTicket(
   return { ok: true };
 }
 
+/** Update a guest's name (admin only). Busts the ticket page cache. */
+export async function updateGuestName(
+  ticketId: string,
+  newName: string
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const user = await getAppUser();
+  if (!user) return { ok: false, error: "Not authenticated." };
+  if (user.role !== "admin")
+    return { ok: false, error: "Admin role required." };
+
+  const cleanName = newName.trim();
+  if (!cleanName) return { ok: false, error: "Name cannot be empty." };
+
+  const db = getAdminDb();
+  const ref = db.collection(paths.ticketsCollection).doc(ticketId);
+  const snap = await ref.get();
+  if (!snap.exists) return { ok: false, error: "Ticket not found." };
+
+  const oldName = String(snap.data()?.name ?? "");
+  await ref.update({ name: cleanName });
+
+  await logAction(
+    user,
+    "TICKET_CREATE",
+    `Renamed guest: ${oldName} → ${cleanName} (${ticketId.slice(0, 6)})`
+  );
+
+  revalidatePath("/guests");
+  revalidatePath(`/ticket/${ticketId}`);
+  return { ok: true };
+}
+
 /**
  * Auto-absent: if the deadline has passed, mark all "coming-soon" tickets
  * as "absent". Mirrors the original performSync logic (script.js:1525-1539).
@@ -321,5 +354,7 @@ export async function autoMarkAbsent(): Promise<
   await batch.commit();
 
   revalidatePath("/guests");
+  // Bust the ISR cache for each affected ticket page.
+  snap.docs.forEach((d) => revalidatePath(`/ticket/${d.id}`));
   return { ok: true, count: snap.size, deadline };
 }

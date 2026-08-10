@@ -3,7 +3,7 @@
 
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, createContext, useContext } from "react";
 import { Starfield } from "./starfield";
 import { AppHeader } from "./app-header";
 import { useBackground } from "@/hooks/use-background";
@@ -13,6 +13,12 @@ import { HelpTray } from "@/components/layout/help-tray";
 import { EasterEgg } from "@/components/layout/easter-egg";
 import { LockedTabsProvider } from "@/components/layout/locked-tabs-context";
 import type { LockMetadata, TabName } from "@/lib/types";
+
+/** Exposes whether the current user is admin to child components. */
+const IsAdminContext = createContext(false);
+export function useIsAdmin() {
+  return useContext(IsAdminContext);
+}
 import {
   Dialog,
   DialogContent,
@@ -62,6 +68,7 @@ export function AppShell({
   }, [isLocked]);
 
   return (
+    <IsAdminContext.Provider value={isAdmin}>
     <div className="relative min-h-screen">
       {preset.url ? (
         <div
@@ -116,6 +123,7 @@ export function AppShell({
       <HelpTray isAdmin={isAdmin} />
       <EasterEgg />
     </div>
+    </IsAdminContext.Provider>
   );
 }
 

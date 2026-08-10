@@ -8,7 +8,9 @@ import { getAdminDb } from "@/lib/firebase/admin";
 import { paths } from "@/lib/paths";
 import { TicketView } from "@/components/tickets/ticket-view";
 
-export const dynamic = "force-dynamic";
+// ISR: cache the ticket page for fast repeat visits, revalidate every 5 min,
+// and bust immediately when the ticket data changes (scan, edit, auto-absent).
+export const revalidate = 300;
 
 // Dynamic OG metadata for link previews (WhatsApp, social media).
 // OG image is served at /ticket/{id}/og-image — a JPEG snapshot of the exact
