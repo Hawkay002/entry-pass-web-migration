@@ -9,10 +9,18 @@ import { doc, onSnapshot } from "firebase/firestore";
 import { db } from "@/lib/firebase/client";
 import { paths } from "@/lib/paths";
 import { TICKET_TYPE_LABELS } from "@/lib/types";
-import { Download, Loader2 } from "lucide-react";
+import { Download, Loader2, Flag, Copy, Check } from "lucide-react";
+import { toast } from "sonner";
 import AdmitOneTicket, { TICKET_TEXTURE, TICKET_GRADIENT, TICKET_LAYOUT, TICKET_GEOMETRY, ticketClipPath } from "@/components/ui/admit-one-ticket";
 import { HoloOverlay } from "@/components/tickets/holo-overlay";
 import { RadiantOverlay } from "@/components/tickets/radiant-overlay";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { SearchableSelect } from "@/components/ui/searchable-select";
+import { BadgeCheck } from "@/components/animate-ui/icons/badge-check";
+import { sortedCountryCodes, DEFAULT_DIAL_CODE } from "@/lib/country-codes";
 import QRCode from "qrcode";
 
 interface TicketData {
@@ -307,6 +315,9 @@ export function InteractiveTicket({ ticket, settings }: { ticket: TicketData; se
           </div>
         </div>
       )}
+
+      {/* Report Issue floating button + modal */}
+      <ReportIssueButton ticketId={ticket.id} />
     </div>
   );
 }
@@ -409,5 +420,171 @@ function DownloadButton({ tiltRef, ticketId }: { tiltRef: RefObject<HTMLDivEleme
         <Download className="h-5 w-5" />
       )}
     </button>
+  );
+}
+
+/** Floating Report Issue button + modal. Sends to Telegram via API. */
+function ReportIssueButton({ ticketId }: { ticketId: string }) {
+  const [open, setOpen] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [reportId, setReportId] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
+  const [name, setName] = useState("");
+  const [dialCode, setDialCode] = useState(DEFAULT_DIAL_CODE);
+  const [phone, setPhone] = useState("");
+  const [reason, setReason] = useState("");
+  const [message, setMessage] = useState("");
+
+  function reset() {
+    setName("");
+    setPhone("");
+    setDialCode(DEFAULT_DIAL_CODE);
+    setReason("");
+    setMessage("");
+    setReportId(null);
+    setCopied(false);
+  }
+
+  function handleOpenChange(v: boolean) {
+    if (!v) reset();
+    setOpen(v);
+  }
+
+  async function handleSubmit() {
+    if (!name.trim() || !phone.trim() || !reason.trim() || !message.trim()) return;
+    setSubmitting(true);
+    try {
+      const res = await fetch("/api/report-issue", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name, phone: dialCode + phone, reason, message }),
+      });
+      const data = await res.json();
+      if (data.ok) {
+        setReportId(data.reportId);
+      } else {
+        toast.error(data.error || "Failed to submit report");
+      }
+    } catch {
+      toast.error("Failed to submit report");
+    }
+    setSubmitting(false);
+  }
+
+  async function handleCopy() {
+    if (!reportId) return;
+    try {
+      await navigator.clipboard.writeText(reportId);
+      setCopied(true);
+      toast.success("Report ID copied");
+    } catch {
+      toast.error("Couldn't copy — please write it down");
+    }
+  }
+
+  return (
+    <>
+      {/* Floating button */}
+      <button
+        onClick={() => setOpen((v) => !v)}
+        className="fixed bottom-6 right-6 z-40 flex items-center gap-2 rounded-full border border-white/10 bg-black/60 px-4 py-2.5 text-sm font-medium text-white transition-all hover:bg-black/80 hover:border-white/20"
+      >
+        <Flag className="h-4 w-4" />
+        <span className="hidden sm:inline">Report Issue</span>
+      </button>
+
+      {/* Floating panel — opens above the button, right-aligned, no blur overlay */}
+      {open && (
+        <div className="fixed bottom-20 right-6 z-50 w-[calc(100%-3rem)] max-w-sm rounded-2xl border border-white/10 bg-[rgb(10,10,10)] p-5 shadow-2xl">
+          {reportId ? (
+            /* Confirmation */
+            <div className="flex flex-col items-center gap-4 text-center">
+              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-success-green/20 text-success-green">
+                <BadgeCheck size={26} animation="path" animateOnView animateOnViewOnce />
+              </div>
+              <div>
+                <h3 className="text-base font-semibold">Report Submitted</h3>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Your report has been received. Keep this ID for future reference.
+                </p>
+              </div>
+              <div className="w-full rounded-xl border border-white/10 bg-black/40 p-3">
+                <p className="text-[0.65rem] text-muted-foreground">Report ID</p>
+                <div className="mt-1 flex items-center justify-between gap-2">
+                  <code className="text-sm font-semibold text-white">{reportId}</code>
+                  <Button size="sm" variant="outline" onClick={handleCopy}>
+                    {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
+                    {copied ? "Copied" : "Copy"}
+                  </Button>
+                </div>
+              </div>
+              <Button className="w-full" size="sm" onClick={() => handleOpenChange(false)}>
+                Done
+              </Button>
+            </div>
+          ) : (
+            /* Form */
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <h3 className="text-sm font-semibold">Report an Issue</h3>
+                <button onClick={() => handleOpenChange(false)} className="text-muted-foreground hover:text-white">
+                  <span className="text-lg leading-none">✕</span>
+                </button>
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="rpt-name" className="text-xs">Name</Label>
+                <Input id="rpt-name" value={name} onChange={(e) => setName(e.target.value)} placeholder="Your name" className="h-8 text-sm" />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="rpt-phone" className="text-xs">Phone Number</Label>
+                <div className="flex gap-2">
+                  <SearchableSelect
+                    value={dialCode}
+                    onChange={setDialCode}
+                    options={sortedCountryCodes.map((c) => ({
+                      value: c.code,
+                      label: `${c.code} ${c.country}`,
+                      triggerLabel: c.code,
+                      flag: c.iso,
+                      key: c.iso,
+                    }))}
+                    placeholder="Code"
+                    dropAlign="right"
+                    panelWidth="w-56"
+                    className="w-[100px] shrink-0"
+                  />
+                  <Input
+                    id="rpt-phone"
+                    type="tel"
+                    inputMode="numeric"
+                    value={phone}
+                    onChange={(e) => setPhone(e.target.value)}
+                    placeholder="Phone Number"
+                    className="h-8 flex-1 text-sm"
+                  />
+                </div>
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="rpt-reason" className="text-xs">Reason</Label>
+                <Input id="rpt-reason" value={reason} onChange={(e) => setReason(e.target.value)} placeholder="e.g. Ticket not loading" className="h-8 text-sm" />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="rpt-msg" className="text-xs">Message</Label>
+                <Textarea id="rpt-msg" value={message} onChange={(e) => setMessage(e.target.value)} placeholder="Describe the issue..." rows={3} className="text-sm" />
+              </div>
+              <Button
+                className="w-full"
+                size="sm"
+                onClick={handleSubmit}
+                disabled={submitting || !name.trim() || !phone.trim() || !reason.trim() || !message.trim()}
+              >
+                {submitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                Send Report
+              </Button>
+            </div>
+          )}
+        </div>
+      )}
+    </>
   );
 }
