@@ -163,7 +163,7 @@ export function GatePanel() {
                 className="rounded-xl border border-white/8 bg-black/20 p-3"
               >
                 {/* Category header */}
-                <div className="mb-2 flex items-center justify-between">
+                <div className="flex items-center justify-between">
                   <h4 className="text-sm font-semibold">{cat}</h4>
                   <div className="flex items-center gap-2">
                     <span className="text-xs text-muted-foreground">
@@ -184,55 +184,8 @@ export function GatePanel() {
                   </div>
                 </div>
 
-                {/* Gates inside this category */}
-                {catGates.length > 0 && (
-                  <div className="mb-2 space-y-1">
-                    {catGates.map((gate) => (
-                      <div
-                        key={gate.id}
-                        className="flex items-center gap-2 rounded-lg bg-white/[0.02] px-2.5 py-1.5"
-                      >
-                        <div className="flex flex-1 flex-wrap items-center gap-1.5">
-                          <span className="text-sm">{gate.name}</span>
-                          {gate.ticketTypes.map((tt) => (
-                            <span
-                              key={tt}
-                              className="rounded-full bg-accent-secondary/15 px-1.5 py-0 text-[0.6rem] font-medium text-accent-secondary"
-                            >
-                              {tt === "Diamond" ? "VIP" : tt === "Gold" ? "VVIP" : tt}
-                            </span>
-                          ))}
-                        </div>
-                        <Switch
-                          checked={gate.active}
-                          onCheckedChange={(v) => handleToggleGate(gate.id, v)}
-                        />
-                        <button
-                          onClick={() => setEditGate({ id: gate.id, name: gate.name, category: cat, ticketTypes: gate.ticketTypes })}
-                          className="flex h-6 w-6 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-white/10 hover:text-white"
-                          title="Rename gate"
-                        >
-                          <Pencil className="h-3 w-3" />
-                        </button>
-                        <button
-                          onClick={() => setConfirmTarget({ type: "gate", id: gate.id, name: gate.name })}
-                          disabled={busy === gate.id}
-                          className="flex h-6 w-6 items-center justify-center rounded text-destructive transition-colors hover:bg-destructive/10"
-                          title="Delete gate"
-                        >
-                          {busy === gate.id ? (
-                            <Loader2 className="h-3 w-3 animate-spin" />
-                          ) : (
-                            <Trash2 className="h-3 w-3" />
-                          )}
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                )}
-
-                {/* Add gate to this category */}
-                <div className="space-y-2">
+                {/* Add gate field — right beneath the category name */}
+                <div className="mt-2 space-y-2">
                   <div className="flex items-center gap-2">
                     <Input
                       value={newGate[cat] ?? ""}
@@ -289,6 +242,58 @@ export function GatePanel() {
                   </div>
                   )}
                 </div>
+
+                {/* Separator between add field and existing gates */}
+                {catGates.length > 0 && (
+                  <div className="my-2 border-t border-white/8" />
+                )}
+
+                {/* Gates inside this category */}
+                {catGates.length > 0 && (
+                  <div className="space-y-1">
+                    {catGates.map((gate) => (
+                      <div
+                        key={gate.id}
+                        className="flex items-center gap-2 rounded-lg bg-white/[0.02] px-2.5 py-1.5"
+                      >
+                        <div className="flex flex-1 flex-wrap items-center gap-1.5">
+                          <span className="text-sm">{gate.name}</span>
+                          {gate.ticketTypes.map((tt) => (
+                            <span
+                              key={tt}
+                              className="rounded-full bg-accent-secondary/15 px-1.5 py-0 text-[0.6rem] font-medium text-accent-secondary"
+                            >
+                              {tt === "Diamond" ? "VIP" : tt === "Gold" ? "VVIP" : tt}
+                            </span>
+                          ))}
+                        </div>
+                        <Switch
+                          checked={gate.active}
+                          onCheckedChange={(v) => handleToggleGate(gate.id, v)}
+                        />
+                        <button
+                          onClick={() => setEditGate({ id: gate.id, name: gate.name, category: cat, ticketTypes: gate.ticketTypes })}
+                          className="flex h-6 w-6 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-white/10 hover:text-white"
+                          title="Rename gate"
+                        >
+                          <Pencil className="h-3 w-3" />
+                        </button>
+                        <button
+                          onClick={() => setConfirmTarget({ type: "gate", id: gate.id, name: gate.name })}
+                          disabled={busy === gate.id}
+                          className="flex h-6 w-6 items-center justify-center rounded text-destructive transition-colors hover:bg-destructive/10"
+                          title="Delete gate"
+                        >
+                          {busy === gate.id ? (
+                            <Loader2 className="h-3 w-3 animate-spin" />
+                          ) : (
+                            <Trash2 className="h-3 w-3" />
+                          )}
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             );
           })}
