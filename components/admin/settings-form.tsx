@@ -206,7 +206,7 @@ export function SettingsForm({ isAdmin = false }: { isAdmin?: boolean }) {
                     variant="outline"
                     className="h-8 w-full justify-start text-left font-normal"
                   >
-                    <CalendarIcon className="mr-1.5 h-3.5 w-3.5" />
+                    <CalendarIcon className="mr-1.5 hidden h-3.5 w-3.5 sm:block" />
                     {selectedDate
                       ? (() => {
                           const [hh, mm] = selectedTime.split(":");
@@ -230,8 +230,15 @@ export function SettingsForm({ isAdmin = false }: { isAdmin?: boolean }) {
                   <Clock className="h-3.5 w-3.5 text-muted-foreground" />
                   <Label className="text-xs text-muted-foreground">Time</Label>
                   <SelectUI value={selectedTime} onValueChange={(v) => v && handleTimeChange(v)}>
-                    <SelectTriggerUI className="ml-auto h-8 w-[110px]">
-                      <SelectValueUI />
+                    <SelectTriggerUI className="ml-auto h-8 w-[120px]">
+                      <span>
+                        {(() => {
+                          const [hh, mm] = selectedTime.split(":");
+                          const h24 = Number(hh);
+                          const h12 = (h24 % 12) || 12;
+                          return `${String(h12).padStart(2,"0")}:${mm} ${h24 < 12 ? "AM" : "PM"}`;
+                        })()}
+                      </span>
                     </SelectTriggerUI>
                     <SelectContentUI>
                       {Array.from({ length: 48 }, (_, i) => {
