@@ -1,9 +1,10 @@
 // app/(auth)/login/page.tsx — the only public route.
 // Posts credentials to /api/login, which mints the httpOnly session cookie.
+// Supports admin 2FA: if the server returns "2fa_required", shows an OTP input.
 
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import { signInWithEmailAndPassword, getIdToken, GoogleAuthProvider, signInWithPopup } from "firebase/auth";
@@ -19,10 +20,9 @@ import {
 } from "@/components/ui/card";
 import { Suspense } from "react";
 import { Starfield } from "@/components/layout/starfield";
-import { Loader2, ShieldCheck, Eye, EyeOff } from "lucide-react";
+import { Loader2, ShieldCheck, Eye, EyeOff, KeyRound } from "lucide-react";
 
 export default function LoginPage() {
-  // useSearchParams requires a Suspense boundary in Next 16.
   return (
     <Suspense>
       <LoginForm />
@@ -39,12 +39,41 @@ function LoginForm() {
   const [loading, setLoading] = useState(false);
   const [showPw, setShowPw] = useState(false);
 
-  // Show a toast if redirected here due to an expired/invalid session.
+  // 2FA state.
+  const [pending2FA, setPending2FA] = useState(false);
+  const [pendingToken, setPendingToken] = useState("");
+  const [otpCode, setOtpCode] = useState(["", "", "", "", "", ""]);
+  const otpRefs = useRef<(HTMLInputElement | null)[]>([]);
+
   useEffect(() => {
     if (searchParams.get("reason") === "expired") {
       toast.info("Your session has expired — please sign in again.");
     }
   }, [searchParams]);
+
+  async function handleLoginResult(res: Response, idToken: string) {
+    const data = await res.json().catch(() => ({}));
+
+    if (data.status === "2fa_required") {
+      // Admin needs to enter TOTP code.
+      setPendingToken(idToken);
+      setPending2FA(true);
+      setOtpCode(["", "", "", "", "", ""]);
+      setError("");
+      // Focus first OTP box.
+      setTimeout(() => otpRefs.current[0]?.focus(), 100);
+      return true; // handled
+    }
+
+    if (res.ok) {
+      router.push("/tickets");
+      router.refresh();
+      return true;
+    }
+
+    setError(data.error ?? "Authentication failed.");
+    return false;
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -52,35 +81,23 @@ function LoginForm() {
     setLoading(true);
 
     try {
-      // 1. Sign in with Firebase client SDK (in the browser).
       const cred = await signInWithEmailAndPassword(auth, email, password);
       const idToken = await getIdToken(cred.user);
 
-      // 2. Send the ID token to the server, which mints the session cookie.
       const res = await fetch("/api/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ idToken }),
       });
 
-      if (res.ok) {
-        router.push("/tickets");
-        router.refresh();
-        return;
-      }
-
-      const data = (await res.json().catch(() => ({}))) as {
-        error?: string;
-      };
-      setError(data.error ?? "Authentication failed.");
+      await handleLoginResult(res, idToken);
     } catch (err) {
-      // Firebase Auth errors carry a readable code — show it so we can debug.
       const code = (err as { code?: string }).code ?? "";
       const msg = (err as { message?: string }).message ?? "";
       if (code === "auth/invalid-credential" || code === "auth/wrong-password" || code === "auth/user-not-found") {
         setError("Invalid email or password.");
       } else if (code === "auth/unauthorized-domain") {
-        setError("This domain is not authorized for Firebase sign-in. Add it in Firebase Console → Auth → Settings → Authorized domains.");
+        setError("This domain is not authorized for Firebase sign-in.");
       } else if (code === "auth/too-many-requests") {
         setError("Too many attempts. Try again later.");
       } else {
@@ -105,14 +122,7 @@ function LoginForm() {
         body: JSON.stringify({ idToken }),
       });
 
-      if (res.ok) {
-        router.push("/tickets");
-        router.refresh();
-        return;
-      }
-
-      const data = (await res.json().catch(() => ({}))) as { error?: string };
-      setError(data.error ?? "Google sign-in failed.");
+      await handleLoginResult(res, idToken);
     } catch (err) {
       const code = (err as { code?: string }).code ?? "";
       if (code === "auth/popup-closed-by-user") {
@@ -125,6 +135,116 @@ function LoginForm() {
     }
   }
 
+  // --- 2FA OTP handling ---
+  function handleOtpChange(index: number, value: string) {
+    if (!/^\d?$/.test(value)) return;
+    const next = [...otpCode];
+    next[index] = value;
+    setOtpCode(next);
+    if (value && index < 5) {
+      otpRefs.current[index + 1]?.focus();
+    }
+  }
+
+  function handleOtpKeyDown(index: number, e: React.KeyboardEvent<HTMLInputElement>) {
+    if (e.key === "Backspace" && !otpCode[index] && index > 0) {
+      otpRefs.current[index - 1]?.focus();
+    }
+    if (e.key === "Enter") {
+      submit2FA();
+    }
+  }
+
+  function handleOtpPaste(e: React.ClipboardEvent) {
+    e.preventDefault();
+    const pasted = e.clipboardData.getData("text").replace(/\D/g, "").slice(0, 6);
+    if (pasted.length > 0) {
+      const next = ["", "", "", "", "", ""];
+      for (let i = 0; i < pasted.length; i++) {
+        next[i] = pasted[i];
+      }
+      setOtpCode(next);
+      if (pasted.length === 6) otpRefs.current[5]?.focus();
+    }
+  }
+
+  async function submit2FA() {
+    const code = otpCode.join("");
+    if (code.length !== 6) return;
+    setLoading(true);
+    setError("");
+    try {
+      const res = await fetch("/api/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ idToken: pendingToken, code }),
+      });
+
+      const data = await res.json().catch(() => ({}));
+      if (res.ok) {
+        router.push("/tickets");
+        router.refresh();
+      } else {
+        setError(data.error ?? "Invalid code.");
+      }
+    } catch {
+      setError("Network error. Try again.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  // --- Render ---
+
+  // 2FA OTP screen.
+  if (pending2FA) {
+    return (
+      <div className="relative flex min-h-screen items-center justify-center p-4">
+        <Starfield />
+        <Card className="glass-panel relative z-10 w-full max-w-sm">
+          <CardHeader className="text-center">
+            <div className="mx-auto mb-2 flex h-12 w-12 items-center justify-center rounded-full bg-accent-secondary/20">
+              <KeyRound className="h-6 w-6 text-accent-secondary" />
+            </div>
+            <CardTitle className="text-2xl">Verification Code</CardTitle>
+            <p className="text-sm text-muted-foreground">
+              Enter the 6-digit code from your authenticator app.
+            </p>
+          </CardHeader>
+          <CardContent>
+            <div className="flex justify-center gap-2" onPaste={handleOtpPaste}>
+              {otpCode.map((digit, i) => (
+                <input
+                  key={i}
+                  ref={(el) => { otpRefs.current[i] = el; }}
+                  type="text"
+                  inputMode="numeric"
+                  maxLength={1}
+                  value={digit}
+                  onChange={(e) => handleOtpChange(i, e.target.value)}
+                  onKeyDown={(e) => handleOtpKeyDown(i, e)}
+                  className="h-14 w-12 rounded-lg border border-white/15 bg-white/5 text-center text-xl font-semibold text-white focus:border-accent-secondary focus:outline-none focus:ring-2 focus:ring-accent-secondary/30"
+                />
+              ))}
+            </div>
+            {error && <p className="mt-4 text-center text-sm text-destructive">{error}</p>}
+            <Button className="mt-6 w-full" onClick={submit2FA} disabled={loading || otpCode.join("").length !== 6}>
+              {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Verify
+            </Button>
+            <button
+              className="mt-3 w-full text-center text-xs text-muted-foreground hover:text-white"
+              onClick={() => { setPending2FA(false); setPendingToken(""); setError(""); }}
+            >
+              ← Back to sign in
+            </button>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  // Standard login screen.
   return (
     <div className="relative flex min-h-screen items-center justify-center p-4">
       <Starfield />
