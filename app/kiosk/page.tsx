@@ -21,12 +21,23 @@ import {
 } from "@/lib/kiosk-db";
 
 const SESSION_KEY = "kiosk_pin";
+const SESSION_KIOSK_KEY = "kiosk_id";
 const CACHE_REFRESH_MS = 2 * 60 * 1000;
 
 export default function KioskPage() {
-  // Lazy init from sessionStorage so a refresh keeps the kiosk unlocked
-  // (sessionStorage survives refresh; clears on tab close). Reading once at
-  // init avoids setState-in-effect.
+  // Resolve kioskId from URL (?id=xxx) or sessionStorage.
+  const [kioskId, setKioskId] = useState<string | null>(() => {
+    if (typeof window === "undefined") return null;
+    const params = new URLSearchParams(window.location.search);
+    const fromUrl = params.get("id");
+    if (fromUrl) {
+      sessionStorage.setItem(SESSION_KIOSK_KEY, fromUrl);
+      return fromUrl;
+    }
+    return sessionStorage.getItem(SESSION_KIOSK_KEY);
+  });
+
+  // Lazy init from sessionStorage so a refresh keeps the kiosk unlocked.
   const [storedPin, setStoredPin] = useState<string | null>(() => {
     if (typeof window === "undefined") return null;
     return sessionStorage.getItem(SESSION_KEY);
@@ -42,16 +53,60 @@ export default function KioskPage() {
     setStoredPin(null);
   }, []);
 
-  if (!storedPin) {
-    return <PinGate onUnlock={handleUnlock} />;
+  // No kioskId — show picker.
+  if (!kioskId) {
+    return <KioskPicker onSelect={(id) => { setKioskId(id); sessionStorage.setItem(SESSION_KIOSK_KEY, id); }} />;
   }
 
-  return <KioskScanner pin={storedPin} onLock={handleLock} />;
+  if (!storedPin) {
+    return <PinGate onUnlock={handleUnlock} kioskId={kioskId} />;
+  }
+
+  return <KioskScanner pin={storedPin} kioskId={kioskId} onLock={handleLock} />;
+}
+
+/** Kiosk picker — shown when no ?id= param and nothing in sessionStorage. */
+function KioskPicker({ onSelect }: { onSelect: (id: string) => void }) {
+  const [kiosks, setKiosks] = useState<Array<{ id: string; name: string }>>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    // Fetch available kiosks via a lightweight public endpoint.
+    fetch("/api/kiosk-list")
+      .then((r) => r.json())
+      .then((data) => { if (data.ok) setKiosks(data.kiosks); })
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, []);
+
+  return (
+    <div className="flex min-h-screen flex-col items-center justify-center bg-[#050505] p-4 text-center">
+      <h1 className="mb-2 text-2xl font-semibold text-white">Select Kiosk</h1>
+      <p className="mb-6 text-sm text-muted-foreground">Choose which gate this tablet is at.</p>
+      {loading ? (
+        <LoaderCircle className="h-6 w-6 animate-spin text-muted-foreground" />
+      ) : kiosks.length === 0 ? (
+        <p className="text-sm text-muted-foreground">No kiosks configured. Ask an admin to create one.</p>
+      ) : (
+        <div className="grid w-full max-w-sm gap-2">
+          {kiosks.map((k) => (
+            <button
+              key={k.id}
+              onClick={() => onSelect(k.id)}
+              className="rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-left text-sm font-medium text-white transition-colors hover:bg-white/10"
+            >
+              {k.name}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
 }
 
 // ---------------- PIN Gate ----------------
 
-function PinGate({ onUnlock }: { onUnlock: (pin: string) => void }) {
+function PinGate({ onUnlock, kioskId }: { onUnlock: (pin: string) => void; kioskId: string }) {
   const [entry, setEntry] = useState("");
   const [error, setError] = useState("");
   const [checking, setChecking] = useState(false);
@@ -83,7 +138,7 @@ function PinGate({ onUnlock }: { onUnlock: (pin: string) => void }) {
       const res = await fetch("/api/kiosk-checkin", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ pin: entry, ticketId: "kiosk-pin-check" }),
+        body: JSON.stringify({ pin: entry, ticketId: "kiosk-pin-check", kioskId }),
       });
       if (res.status === 403) {
         // 403 = PIN missing or wrong. A granted/already/invalid outcome means
@@ -202,7 +257,7 @@ function KeypadButton({
 
 // ---------------- Kiosk Scanner ----------------
 
-function KioskScanner({ pin, onLock }: { pin: string; onLock: () => void }) {
+function KioskScanner({ pin, kioskId, onLock }: { pin: string; kioskId: string; onLock: () => void }) {
   const [online, setOnline] = useState(() =>
     typeof navigator !== "undefined" ? navigator.onLine : true
   );
@@ -216,7 +271,7 @@ function KioskScanner({ pin, onLock }: { pin: string; onLock: () => void }) {
       const res = await fetch("/api/kiosk-tickets", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ pin }),
+        body: JSON.stringify({ pin, kioskId }),
       });
       const data = await res.json();
       if (res.ok && data.ok) {
@@ -266,7 +321,7 @@ function KioskScanner({ pin, onLock }: { pin: string; onLock: () => void }) {
           const res = await fetch("/api/kiosk-checkin", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ pin, ticketId: q.id }),
+            body: JSON.stringify({ pin, ticketId: q.id, kioskId }),
           });
           if (res.ok) ok.push(q.id);
           if (res.status === 403) {
@@ -303,7 +358,7 @@ function KioskScanner({ pin, onLock }: { pin: string; onLock: () => void }) {
       const res = await fetch("/api/kiosk-checkin", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ pin, ticketId }),
+        body: JSON.stringify({ pin, ticketId, kioskId }),
       });
       const data = await res.json();
       if (!res.ok || !data.ok) {

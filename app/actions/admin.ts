@@ -13,6 +13,7 @@ import type {
   ActivityLog,
   EventSettings,
   LockReasonType,
+  KioskConfig,
 } from "@/lib/types";
 import { revalidatePath } from "next/cache";
 import { fetchAllLogs, deleteLogsFromRedis } from "@/lib/redis-log";
@@ -129,47 +130,107 @@ export async function clearSettings(): Promise<{ ok: true } | { ok: false; error
  * Stored in the admin-only security doc (NOT the public settings doc) so
  * regular staff cannot read it via the client SDK.
  */
-export async function saveKioskPin(
+// ---------------- Multi-Kiosk ----------------
+
+function normalizePin(pin: string): string {
+  return pin.replace(/\D/g, "").slice(0, 8);
+}
+
+function generateKioskId(): string {
+  return Math.random().toString(36).slice(2, 8);
+}
+
+async function readKiosks(): Promise<KioskConfig[]> {
+  const snap = await getAdminDb().doc(paths.adminSecurityDoc).get();
+  const arr = snap.data()?.kiosks;
+  return Array.isArray(arr) ? (arr as KioskConfig[]) : [];
+}
+
+async function writeKiosks(kiosks: KioskConfig[]): Promise<void> {
+  await getAdminDb()
+    .doc(paths.adminSecurityDoc)
+    .set({ kiosks }, { merge: true });
+}
+
+/** Create a new kiosk. Returns its id. */
+export async function createKiosk(
+  name: string,
   pin: string,
-  kioskGateId?: string | null
+  gateId: string | null
+): Promise<{ ok: true; id: string } | { ok: false; error: string }> {
+  const user = await getAppUser();
+  if (!user) return { ok: false, error: "Not authenticated." };
+  if (user.role !== "admin") return { ok: false, error: "Admin role required." };
+
+  const cleanPin = normalizePin(pin);
+  if (cleanPin.length < 4) return { ok: false, error: "PIN must be 4-8 digits." };
+  const cleanName = name.trim();
+  if (!cleanName) return { ok: false, error: "Name is required." };
+
+  const kiosks = await readKiosks();
+  const id = generateKioskId();
+  kiosks.push({ id, name: cleanName, pin: cleanPin, gateId, createdAt: Date.now() });
+  await writeKiosks(kiosks);
+
+  await logAction(user, "CONFIG_CHANGE", `Kiosk created: ${cleanName}`);
+  return { ok: true, id };
+}
+
+/** Update a kiosk's name, PIN, and/or gate. */
+export async function updateKiosk(
+  id: string,
+  patch: { name?: string; pin?: string; gateId?: string | null }
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   const user = await getAppUser();
   if (!user) return { ok: false, error: "Not authenticated." };
-  if (user.role !== "admin")
-    return { ok: false, error: "Admin role required." };
+  if (user.role !== "admin") return { ok: false, error: "Admin role required." };
 
-  // Normalize: digits only, 4-8 chars. Empty = disabled.
-  const clean = pin.replace(/\D/g, "").slice(0, 8);
-  if (clean.length > 0 && clean.length < 4)
-    return { ok: false, error: "PIN must be 4-8 digits." };
+  const kiosks = await readKiosks();
+  const idx = kiosks.findIndex((k) => k.id === id);
+  if (idx === -1) return { ok: false, error: "Kiosk not found." };
 
-  await getAdminDb()
-    .doc(paths.adminSecurityDoc)
-    .set({ kioskPin: clean, kioskGateId: kioskGateId ?? null }, { merge: true });
+  if (patch.name !== undefined) kiosks[idx].name = patch.name.trim();
+  if (patch.pin !== undefined) {
+    const clean = normalizePin(patch.pin);
+    if (clean.length > 0 && clean.length < 4) return { ok: false, error: "PIN must be 4-8 digits." };
+    if (clean.length >= 4) kiosks[idx].pin = clean;
+  }
+  if (patch.gateId !== undefined) kiosks[idx].gateId = patch.gateId;
 
-  await logAction(
-    user,
-    "CONFIG_CHANGE",
-    clean ? "Kiosk PIN set" : "Kiosk PIN disabled"
-  );
+  await writeKiosks(kiosks);
+  await logAction(user, "CONFIG_CHANGE", `Kiosk updated: ${kiosks[idx].name}`);
   return { ok: true };
 }
 
-/**
- * Returns whether the kiosk PIN is set (admin-only). Does NOT return the
- * actual PIN value — the admin panel only needs to know enabled/disabled.
- */
-export async function getKioskStatus(): Promise<
-  { ok: true; enabled: boolean } | { ok: false; error: string }
+/** Delete a kiosk by id. */
+export async function deleteKiosk(
+  id: string
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const user = await getAppUser();
+  if (!user) return { ok: false, error: "Not authenticated." };
+  if (user.role !== "admin") return { ok: false, error: "Admin role required." };
+
+  const kiosks = await readKiosks();
+  const filtered = kiosks.filter((k) => k.id !== id);
+  await writeKiosks(filtered);
+
+  await logAction(user, "CONFIG_CHANGE", `Kiosk deleted: ${id}`);
+  return { ok: true };
+}
+
+/** Returns the list of kiosks (id, name, gateId — NEVER the PIN). */
+export async function getKiosksList(): Promise<
+  { ok: true; kiosks: Array<{ id: string; name: string; gateId: string | null }> } | { ok: false; error: string }
 > {
   const user = await getAppUser();
   if (!user) return { ok: false, error: "Not authenticated." };
-  if (user.role !== "admin")
-    return { ok: false, error: "Admin role required." };
+  if (user.role !== "admin") return { ok: false, error: "Admin role required." };
 
-  const snap = await getAdminDb().doc(paths.adminSecurityDoc).get();
-  const pin = (snap.data()?.kioskPin as string | undefined) ?? "";
-  return { ok: true, enabled: pin.length >= 4 };
+  const kiosks = await readKiosks();
+  return {
+    ok: true,
+    kiosks: kiosks.map((k) => ({ id: k.id, name: k.name, gateId: k.gateId })),
+  };
 }
 
 // ---------------- Remote Lock ----------------

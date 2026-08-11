@@ -10,7 +10,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { authConfig } from "@/lib/env";
 
-const PUBLIC_PATHS = ["/", "/login", "/kiosk", "/ticket", "/api/login", "/api/logout", "/api/auto-absent", "/api/kiosk-checkin", "/api/kiosk-tickets", "/api/ticket-verify", "/api/wallet-pass"];
+const PUBLIC_PATHS = ["/", "/login", "/kiosk", "/ticket", "/api/login", "/api/logout", "/api/auto-absent", "/api/kiosk-checkin", "/api/kiosk-tickets", "/api/kiosk-list", "/api/ticket-verify", "/api/report-issue", "/api/og-snapshot", "/api/wallet-pass"];
 
 function isPublicPath(pathname: string): boolean {
   return PUBLIC_PATHS.some(

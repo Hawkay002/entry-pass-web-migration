@@ -58,6 +58,15 @@ export interface Gate {
   ticketTypes: TicketType[];
 }
 
+/** Stored inside admin_settings/security.kiosks[] — admin-only (contains PINs). */
+export interface KioskConfig {
+  id: string;
+  name: string;
+  pin: string;
+  gateId: string | null;
+  createdAt: number;
+}
+
 /** Path: ticket_events_data/shared_event_db/settings/config */
 export interface EventSettings {
   name: string;

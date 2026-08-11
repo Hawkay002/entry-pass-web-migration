@@ -6,7 +6,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
-import { Loader2, Trash2, UserPlus, Lock, LockOpen, Plus, X, Search, OctagonAlert, ScanLine, ExternalLink, Eye, EyeOff, Pencil, Upload, ChevronDown } from "lucide-react";
+import { Loader2, Trash2, UserPlus, Lock, LockOpen, Plus, X, Search, OctagonAlert, ScanLine, ExternalLink, Eye, EyeOff, Pencil, Upload, ChevronDown, ArrowUpRight } from "lucide-react";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -36,7 +36,7 @@ import {
   removeStaffFromRole,
   deleteRole,
 } from "@/app/actions/roles";
-import { applyRemoteLocks, factoryReset, fetchAllLocks, fetchMaintenanceInfo, checkAndEndMaintenance, unlockStaff, saveKioskPin, getKioskStatus } from "@/app/actions/admin";
+import { applyRemoteLocks, factoryReset, fetchAllLocks, fetchMaintenanceInfo, checkAndEndMaintenance, unlockStaff, createKiosk, updateKiosk, deleteKiosk, getKiosksList } from "@/app/actions/admin";
 import { useRoles } from "@/hooks/use-roles";
 import { useSettings } from "@/hooks/use-settings";
 import { useGatesMode } from "@/hooks/use-gates";
@@ -1276,196 +1276,283 @@ function RemoteDeviceManagement() {
   );
 }
 
-// ============== Kiosk (Self Check-in) ==============
+// ============== Kiosk (Self Check-in) =================
 
 function KioskPanel() {
-  const [enabled, setEnabled] = useState(false);
-  const [pin, setPin] = useState("");
-  const [showPin, setShowPin] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [loaded, setLoaded] = useState(false);
-  const [kioskGate, setKioskGate] = useState<string | null>(null);
+  const [kiosks, setKiosks] = useState<Array<{ id: string; name: string; gateId: string | null }>>([]);
+  const [loading, setLoading] = useState(true);
+  const [addOpen, setAddOpen] = useState(false);
+  const [editKiosk, setEditKiosk] = useState<{ id: string; name: string; gateId: string | null } | null>(null);
+  const [busy, setBusy] = useState(false);
   const { settings: kioskSettings } = useSettings();
   const { gates: kioskGates } = useGatesMode();
   const kioskMultiGate = Boolean(kioskSettings.multiGate);
 
-  // Load enabled status once on mount.
-  useEffect(() => {
-    let active = true;
-    getKioskStatus()
-      .then((res) => {
-        if (active && res.ok) setEnabled(res.enabled);
-      })
-      .catch(() => {})
-      .finally(() => {
-        if (active) setLoaded(true);
-      });
-    return () => {
-      active = false;
-    };
-  }, []);
+  const [newName, setNewName] = useState("");
+  const [newPin, setNewPin] = useState("");
+  const [newGate, setNewGate] = useState<string | null>(null);
 
-  async function handleSave() {
-    setSaving(true);
-    const res = await saveKioskPin(pin, kioskMultiGate ? kioskGate : null);
-    setSaving(false);
+  const [editName, setEditName] = useState("");
+  const [editPin, setEditPin] = useState("");
+  const [editGate, setEditGate] = useState<string | null>(null);
+
+  function refresh() {
+    getKiosksList()
+      .then((res) => { if (res.ok) setKiosks(res.kiosks); })
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }
+
+  useEffect(() => { refresh(); }, []);
+
+  async function handleAdd() {
+    if (!newName.trim() || newPin.length < 4) return;
+    setBusy(true);
+    const res = await createKiosk(newName, newPin, kioskMultiGate ? newGate : null);
+    setBusy(false);
     if (res.ok) {
-      const isSetting = pin.replace(/\D/g, "").length >= 4;
-      setEnabled(isSetting);
-      setPin("");
-      toast.success(isSetting ? "Kiosk PIN saved" : "Kiosk disabled");
+      toast.success("Kiosk created");
+      setNewName(""); setNewPin(""); setNewGate(null);
+      setAddOpen(false);
+      refresh();
     } else {
-      toast.error("Save failed", { description: res.error });
+      toast.error("Failed", { description: res.error });
     }
   }
 
-  async function handleDisable() {
-    setSaving(true);
-    const res = await saveKioskPin("", null);
-    setSaving(false);
+  async function handleEditSave() {
+    if (!editKiosk || !editName.trim()) return;
+    setBusy(true);
+    const patch: { name?: string; pin?: string; gateId?: string | null } = { name: editName };
+    if (editPin.length >= 4) patch.pin = editPin;
+    if (kioskMultiGate) patch.gateId = editGate;
+    const res = await updateKiosk(editKiosk.id, patch);
+    setBusy(false);
     if (res.ok) {
-      setEnabled(false);
-      setKioskGate(null);
-      toast.success("Kiosk disabled");
+      toast.success("Kiosk updated");
+      setEditKiosk(null);
+      refresh();
     } else {
-      toast.error("Failed to disable", { description: res.error });
+      toast.error("Failed", { description: res.error });
+    }
+  }
+
+  async function handleDelete(id: string, name: string) {
+    setBusy(true);
+    const res = await deleteKiosk(id);
+    setBusy(false);
+    if (res.ok) {
+      toast.success(`Kiosk "${name}" deleted`);
+      refresh();
+    } else {
+      toast.error("Failed");
     }
   }
 
   return (
     <div className="space-y-4 px-6 py-5">
-      <div className="mb-1 flex items-center gap-2">
-        <ScanLine className="h-5 w-5 text-emerald-400" />
-        <h4 className="text-sm font-semibold">Self Check-in Kiosk</h4>
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <ScanLine className="h-5 w-5 text-emerald-400" />
+          <h4 className="text-sm font-semibold">Self Check-in Kiosks</h4>
+        </div>
+        <Button size="sm" variant="outline" onClick={() => setAddOpen(true)}>
+          <Plus className="mr-1.5 h-3.5 w-3.5" /> Add Kiosk
+        </Button>
       </div>
-      <p className="mb-4 text-xs text-muted-foreground">
-        Set a PIN to enable a public kiosk at <code className="rounded bg-white/10 px-1 py-0.5 text-xs">/kiosk</code> where guests
-        scan their own QR code on a mounted tablet. Leave empty to disable.
+      <p className="text-xs text-muted-foreground">
+        Create kiosks for different gates. Each gets its own PIN + URL. Open <code className="rounded bg-white/10 px-1 py-0.5">/kiosk?id=…</code> on each tablet.
       </p>
 
-      {enabled && (
-        <div className="mb-4 flex items-center gap-2 rounded-lg border border-emerald-500/20 bg-emerald-500/10 px-3 py-2">
-          <span className="h-2 w-2 animate-pulse rounded-full bg-emerald-400" />
-          <span className="text-sm text-emerald-400">Kiosk enabled — PIN required to scan</span>
+      {loading ? (
+        <div className="flex justify-center py-4">
+          <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+        </div>
+      ) : kiosks.length === 0 ? (
+        <p className="rounded-xl border border-white/8 bg-black/20 py-6 text-center text-sm text-muted-foreground">
+          No kiosks yet. Create one to enable self check-in.
+        </p>
+      ) : (
+        <div className="space-y-2">
+          {kiosks.map((k) => (
+            <div key={k.id} className="flex items-center justify-between rounded-lg border border-white/8 bg-black/20 px-3 py-2.5">
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-medium text-white">{k.name}</span>
+                {kioskMultiGate && k.gateId && (
+                  <span className="rounded-full bg-accent-secondary/15 px-2 py-0.5 text-[0.65rem] font-medium text-accent-secondary">
+                    {kioskGates.find((g) => g.id === k.gateId)?.name ?? k.gateId.slice(0, 6)}
+                  </span>
+                )}
+              </div>
+              <div className="flex items-center gap-2">
+                <a
+                  href={`/kiosk?id=${k.id}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex h-6 w-6 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-white/10 hover:text-white"
+                  title="Open kiosk"
+                >
+                  <ArrowUpRight className="h-3.5 w-3.5" />
+                </a>
+                <button
+                  onClick={() => { setEditKiosk(k); setEditName(k.name); setEditPin(""); setEditGate(k.gateId); }}
+                  className="flex h-6 w-6 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-white/10 hover:text-white"
+                  title="Edit"
+                >
+                  <Pencil className="h-3 w-3" />
+                </button>
+                <button
+                  onClick={() => handleDelete(k.id, k.name)}
+                  disabled={busy}
+                  className="flex h-6 w-6 items-center justify-center rounded text-destructive transition-colors hover:bg-destructive/10"
+                  title="Delete"
+                >
+                  {busy ? <Loader2 className="h-3 w-3 animate-spin" /> : <X className="h-3 w-3" />}
+                </button>
+              </div>
+            </div>
+          ))}
         </div>
       )}
 
-      <div className="flex flex-wrap gap-2">
-        <div className="relative flex-1 min-w-[160px]">
-          <Input
-            type={showPin ? "text" : "password"}
-            inputMode="numeric"
-            pattern="[0-9]*"
-            placeholder="4-8 digit PIN"
-            value={pin}
-            onChange={(e) => setPin(e.target.value.replace(/\D/g, "").slice(0, 8))}
-            onKeyDown={(e) => e.key === "Enter" && pin.length >= 4 && handleSave()}
-            className="pr-10"
-          />
-          <button
-            type="button"
-            onClick={() => setShowPin((s) => !s)}
-            className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-white"
-            tabIndex={-1}
-          >
-            {showPin ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-          </button>
-        </div>
-        {kioskMultiGate && (
-          <Select value={kioskGate ?? "none"} onValueChange={(v) => setKioskGate(v === "none" ? null : v)}>
-            <SelectTrigger className="w-[150px]">
-              <span>
-                {kioskGate
-                  ? (kioskGates.find((g) => g.id === kioskGate)?.name ?? kioskGate)
-                  : "No gate"}
-              </span>
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="none">No gate (accept all)</SelectItem>
-              {kioskGates.filter((g) => g.active).map((g) => (
-                <SelectItem key={g.id} value={g.id}>{g.name}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        )}
-        <Button onClick={handleSave} disabled={saving || pin.length < 4}>
-          {saving ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : null}
-          {enabled ? "Update PIN" : "Enable Kiosk"}
-        </Button>
-        {enabled && (
-          <Button
-            variant="outline"
-            className="border-destructive text-destructive hover:bg-destructive/10"
-            onClick={handleDisable}
-            disabled={saving}
-          >
-            Disable
-          </Button>
-        )}
-        {enabled && (
-          <a
-            href="/kiosk"
-            target="_blank"
-            rel="noopener noreferrer"
-            className={buttonVariants({ variant: "outline" })}
-          >
-            <ExternalLink className="mr-1.5 h-3.5 w-3.5" /> Open Kiosk
-          </a>
-        )}
-      </div>
+      {/* Add Kiosk Dialog */}
+      <Dialog open={addOpen} onOpenChange={setAddOpen}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>Add Kiosk</DialogTitle></DialogHeader>
+          <div className="space-y-3">
+            <div className="space-y-1.5">
+              <Label className="text-xs">Kiosk Name</Label>
+              <Input value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="e.g. Gate A Kiosk" className="h-8 text-sm" />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">PIN (4-8 digits)</Label>
+              <Input type="password" inputMode="numeric" value={newPin} onChange={(e) => setNewPin(e.target.value.replace(/\D/g, "").slice(0, 8))} placeholder="••••" className="h-8 text-sm" />
+            </div>
+            {kioskMultiGate && (
+              <div className="space-y-1.5">
+                <Label className="text-xs">Gate</Label>
+                <Select value={newGate ?? "none"} onValueChange={(v) => setNewGate(v === "none" ? null : v)}>
+                  <SelectTrigger className="h-8 text-sm">
+                    <span>{newGate ? (kioskGates.find((g) => g.id === newGate)?.name ?? newGate) : "No gate (accept all)"}</span>
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">No gate (accept all)</SelectItem>
+                    {kioskGates.filter((g) => g.active).map((g) => (
+                      <SelectItem key={g.id} value={g.id}>{g.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setAddOpen(false)}>Cancel</Button>
+            <Button onClick={handleAdd} disabled={busy || !newName.trim() || newPin.length < 4}>
+              {busy && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Create
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
-      {!loaded && (
-        <p className="mt-3 text-xs text-muted-foreground">Loading status…</p>
-      )}
+      {/* Edit Kiosk Dialog */}
+      <Dialog open={!!editKiosk} onOpenChange={(o) => !o && setEditKiosk(null)}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>Edit Kiosk</DialogTitle></DialogHeader>
+          <div className="space-y-3">
+            <div className="space-y-1.5">
+              <Label className="text-xs">Kiosk Name</Label>
+              <Input value={editName} onChange={(e) => setEditName(e.target.value)} className="h-8 text-sm" />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">New PIN (leave blank to keep current)</Label>
+              <Input type="password" inputMode="numeric" value={editPin} onChange={(e) => setEditPin(e.target.value.replace(/\D/g, "").slice(0, 8))} placeholder="Unchanged" className="h-8 text-sm" />
+            </div>
+            {kioskMultiGate && (
+              <div className="space-y-1.5">
+                <Label className="text-xs">Gate</Label>
+                <Select value={editGate ?? "none"} onValueChange={(v) => setEditGate(v === "none" ? null : v)}>
+                  <SelectTrigger className="h-8 text-sm">
+                    <span>{editGate ? (kioskGates.find((g) => g.id === editGate)?.name ?? editGate) : "No gate (accept all)"}</span>
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">No gate (accept all)</SelectItem>
+                    {kioskGates.filter((g) => g.active).map((g) => (
+                      <SelectItem key={g.id} value={g.id}>{g.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setEditKiosk(null)}>Cancel</Button>
+            <Button onClick={handleEditSave} disabled={busy || !editName.trim()}>
+              {busy && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Save
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
 
-// ============== Factory Reset ==============
+// ============== Factory Reset =================
 
 function FactoryResetPanel() {
-  const [open, setOpen] = useState(false);
+  const [confirmText, setConfirmText] = useState("");
+  const [confirmOpen, setConfirmOpen] = useState(false);
   const [resetting, setResetting] = useState(false);
 
   async function handleReset() {
     setResetting(true);
     const res = await factoryReset();
     setResetting(false);
-    if (res.ok) {
-      toast.success("System reset complete");
-      setOpen(false);
-      setTimeout(() => window.location.reload(), 1500);
-    } else {
-      toast.error("Reset failed", { description: res.error });
-    }
+    setConfirmOpen(false);
+    setConfirmText("");
+    if (res.ok) toast.success("Database reset complete");
+    else toast.error("Reset failed", { description: res.error });
   }
 
   return (
-    <div className="p-6 pt-2 text-center">
-      <Button
-        variant="outline"
-        onClick={() => setOpen(true)}
-        className="border-destructive text-destructive hover:bg-destructive/10"
-      >
-        <Trash2 className="mr-1.5 h-3.5 w-3.5" /> Factory Reset Database
+    <div className="space-y-4 px-6 py-5">
+      <div className="flex items-center gap-2">
+        <Trash2 className="h-5 w-5 text-destructive" />
+        <h4 className="text-sm font-semibold text-destructive">Factory Reset</h4>
+      </div>
+      <p className="text-xs text-muted-foreground">
+        Permanently delete all tickets, settings, roles, gates, kiosks, logs, and locks.
+        An immutable audit record is preserved. This cannot be undone.
+      </p>
+      <Button variant="destructive" onClick={() => setConfirmOpen(true)} disabled={resetting}>
+        <Trash2 className="mr-1.5 h-3.5 w-3.5" />
+        Reset Database
       </Button>
 
-      <Dialog open={open} onOpenChange={setOpen}>
+      <Dialog open={confirmOpen} onOpenChange={setConfirmOpen}>
         <DialogContent className="border-destructive">
           <DialogHeader>
-            <DialogTitle className="text-destructive">⚠ Danger Zone</DialogTitle>
+            <DialogTitle className="text-destructive">Factory Reset?</DialogTitle>
             <DialogDescription>
-              This will <strong>permanently erase</strong> all tickets, settings,
-              and lock configurations. An immutable audit record will be preserved.
+              Type <strong>RESET</strong> to confirm. All data will be permanently deleted.
             </DialogDescription>
           </DialogHeader>
+          <Input
+            value={confirmText}
+            onChange={(e) => setConfirmText(e.target.value)}
+            placeholder="Type RESET to confirm"
+            className="border-destructive/30"
+          />
           <DialogFooter>
-            <Button variant="ghost" onClick={() => setOpen(false)} disabled={resetting}>
-              Cancel
-            </Button>
-            <Button variant="destructive" onClick={handleReset} disabled={resetting}>
-              {resetting && <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />}
-              Nuke Database
+            <Button variant="ghost" onClick={() => { setConfirmOpen(false); setConfirmText(""); }}>Cancel</Button>
+            <Button
+              variant="destructive"
+              onClick={handleReset}
+              disabled={resetting || confirmText !== "RESET"}
+            >
+              {resetting ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <Trash2 className="mr-1.5 h-3.5 w-3.5" />}
+              Reset Everything
             </Button>
           </DialogFooter>
         </DialogContent>

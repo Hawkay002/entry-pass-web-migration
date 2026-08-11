@@ -1,20 +1,17 @@
-// app/api/kiosk-checkin/route.ts — public self check-in endpoint for the
-// kiosk tablet. Gated by a PIN set by the admin (stored in the admin-only
-// security doc, never sent to the client SDK). Mirrors validateTicket's
-// idempotent logic but attributes scans to "KIOSK" and logs SELF_CHECKIN.
+// app/api/kiosk-checkin/route.ts — public self check-in endpoint.
+// Validates a kiosk PIN + ticket id, marks the ticket arrived.
+// Rate-limited: 5 failed PIN attempts per IP per 5 minutes.
+// Supports multiple kiosks — each identified by kioskId, with its own PIN + gate.
 
 import { NextResponse } from "next/server";
 import { getAdminDb } from "@/lib/firebase/admin";
 import { paths } from "@/lib/paths";
-import { logKioskAction } from "@/lib/redis-log";
 import { getClientIp, recordFailure, clearRateLimit } from "@/lib/rate-limit";
+import { logKioskAction } from "@/lib/redis-log";
+import type { KioskConfig } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 
-// Brute-force throttling: 5 wrong-PIN attempts per IP per 5 minutes. A correct
-// PIN always passes (and resets the counter), so a spammer cannot DOS-lock a
-// legitimate kiosk that knows the PIN. At 5/5min, cracking a 4-digit PIN
-// (10k combos) takes ~7 days minimum; an 8-digit PIN is effectively uncrackable.
 const FAIL_LIMIT = 5;
 const FAIL_WINDOW_SEC = 5 * 60;
 
@@ -22,8 +19,14 @@ type CheckinResponse =
   | { ok: true; outcome: "granted" | "already" | "invalid" | "wrong-gate"; ticket: { name: string; id: string; status: string; expectedGate?: string | null } | null }
   | { ok: false; error: string };
 
+async function findKiosk(db: ReturnType<typeof getAdminDb>, kioskId: string): Promise<KioskConfig | null> {
+  const snap = await db.doc(paths.adminSecurityDoc).get();
+  const kiosks = Array.isArray(snap.data()?.kiosks) ? (snap.data()!.kiosks as KioskConfig[]) : [];
+  return kiosks.find((k) => k.id === kioskId) ?? null;
+}
+
 export async function POST(request: Request): Promise<Response> {
-  let body: { pin?: unknown; ticketId?: unknown };
+  let body: { pin?: unknown; ticketId?: unknown; kioskId?: unknown };
   try {
     body = await request.json();
   } catch {
@@ -35,45 +38,41 @@ export async function POST(request: Request): Promise<Response> {
 
   const pin = typeof body.pin === "string" ? body.pin.replace(/\D/g, "") : "";
   const ticketId = typeof body.ticketId === "string" ? body.ticketId.trim() : "";
+  const kioskId = typeof body.kioskId === "string" ? body.kioskId.trim() : "";
 
-  if (!pin || !ticketId) {
+  if (!pin || !ticketId || !kioskId) {
     return NextResponse.json<CheckinResponse>(
-      { ok: false, error: "PIN and ticketId are required." },
+      { ok: false, error: "PIN, ticketId, and kioskId are required." },
       { status: 400 }
     );
   }
 
   try {
     const db = getAdminDb();
+
+    // Rate-limit by IP + kioskId.
     const ip = getClientIp(request);
-    const failKey = `kiosk_fail:${ip}`;
+    const failKey = `kiosk_fail:${kioskId}:${ip}`;
 
-    // Verify the PIN against the admin-only security doc.
-    const secSnap = await db.doc(paths.adminSecurityDoc).get();
-    const configuredPin = (secSnap.data()?.kioskPin as string | undefined) ?? "";
-    const pinCorrect = configuredPin.length >= 4 && pin === configuredPin;
-
-    if (!pinCorrect) {
-      // Wrong PIN — record the failure and throttle repeated guessing.
+    // Find the kiosk config.
+    const kiosk = await findKiosk(db, kioskId);
+    if (!kiosk || kiosk.pin.length < 4 || pin !== kiosk.pin) {
       const state = await recordFailure(failKey, FAIL_LIMIT, FAIL_WINDOW_SEC);
       if (state.blocked) {
         return NextResponse.json<CheckinResponse>(
-          { ok: false, error: "Too many failed attempts. Please try again later." },
+          { ok: false, error: "Too many attempts. Please try again later." },
           { status: 429, headers: { "Retry-After": String(state.retryAfter) } }
         );
       }
-      // Same response for missing/mismatch to avoid PIN enumeration.
       return NextResponse.json<CheckinResponse>(
-        { ok: false, error: "Kiosk is not available. Contact the event organizer." },
+        { ok: false, error: "Incorrect PIN or kiosk not found." },
         { status: 403 }
       );
     }
 
-    // Correct PIN — reset the failure counter so a legitimate kiosk is never
-    // DOS-locked by someone else spamming wrong PINs from the same IP.
     await clearRateLimit(failKey);
 
-    // Look up the ticket (Admin SDK bypasses firestore.rules).
+    // Look up the ticket.
     const ref = db.collection(paths.ticketsCollection).doc(ticketId);
     const snap = await ref.get();
 
@@ -92,19 +91,13 @@ export async function POST(request: Request): Promise<Response> {
     const scanned = Boolean(data.scanned);
     const ticketGate = data.gate != null ? String(data.gate) : null;
 
-    // Multi-gate enforcement: read the kiosk's assigned gate.
-    const securitySnap = await db.doc(paths.adminSecurityDoc).get();
-    const kioskGateId = securitySnap.exists
-      ? String(securitySnap.data()?.kioskGateId ?? "")
-      : "";
-
     // Idempotent: only grant if still coming-soon & unscanned.
     if (status === "coming-soon" && !scanned) {
-      // Gate check — block wrong-gate scans without mutating the ticket.
-      if (ticketGate && kioskGateId && ticketGate !== kioskGateId) {
+      // Multi-gate enforcement.
+      if (ticketGate && kiosk.gateId && ticketGate !== kiosk.gateId) {
         await logKioskAction(
           "SELF_CHECKIN",
-          `Wrong gate: ${name} (ID: ${ticketId.slice(0, 6)}) — expected ${ticketGate}, kiosk at ${kioskGateId}`
+          `Wrong gate: ${name} (ID: ${ticketId.slice(0, 6)}) — expected ${ticketGate}, kiosk ${kiosk.name} at ${kiosk.gateId}`
         );
         return NextResponse.json<CheckinResponse>({
           ok: true,
@@ -117,12 +110,12 @@ export async function POST(request: Request): Promise<Response> {
         status: "arrived",
         scanned: true,
         scannedAt: Date.now(),
-        scannedBy: "KIOSK",
-        scannedAtGate: kioskGateId || null,
+        scannedBy: `KIOSK:${kiosk.name}`,
+        scannedAtGate: kiosk.gateId ?? null,
       });
       await logKioskAction(
         "SELF_CHECKIN",
-        `Self check-in: ${name} (ID: ${ticketId.slice(0, 6)})`
+        `Self check-in (${kiosk.name}): ${name} (ID: ${ticketId.slice(0, 6)})`
       );
       return NextResponse.json<CheckinResponse>({
         ok: true,
@@ -131,7 +124,7 @@ export async function POST(request: Request): Promise<Response> {
       });
     }
 
-    // Already scanned or otherwise not grantable — report without mutating.
+    // Already scanned or otherwise not grantable.
     return NextResponse.json<CheckinResponse>({
       ok: true,
       outcome: "already",

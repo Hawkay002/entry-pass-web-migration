@@ -1,12 +1,12 @@
 // app/api/kiosk-tickets/route.ts — public, PIN-gated fetch of the minimal
-// ticket list for the kiosk's offline cache. Returns ONLY id + status + scanned
-// (NO names, phones, or other PII) so a public tablet can validate QR codes
-// offline without exposing guest data. Same PIN gate + rate limit as check-in.
+// ticket list for a kiosk's offline cache. Returns ONLY id + status + scanned
+// (NO names, phones, or other PII). Validates against a specific kiosk's PIN.
 
 import { NextResponse } from "next/server";
 import { getAdminDb } from "@/lib/firebase/admin";
 import { paths } from "@/lib/paths";
 import { getClientIp, recordFailure, clearRateLimit } from "@/lib/rate-limit";
+import type { KioskConfig } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 
@@ -17,8 +17,14 @@ type TicketsResponse =
   | { ok: true; tickets: { id: string; status: string; scanned: boolean }[] }
   | { ok: false; error: string };
 
+async function findKiosk(db: ReturnType<typeof getAdminDb>, kioskId: string): Promise<KioskConfig | null> {
+  const snap = await db.doc(paths.adminSecurityDoc).get();
+  const kiosks = Array.isArray(snap.data()?.kiosks) ? (snap.data()!.kiosks as KioskConfig[]) : [];
+  return kiosks.find((k) => k.id === kioskId) ?? null;
+}
+
 export async function POST(request: Request): Promise<Response> {
-  let body: { pin?: unknown };
+  let body: { pin?: unknown; kioskId?: unknown };
   try {
     body = await request.json();
   } catch {
@@ -29,9 +35,11 @@ export async function POST(request: Request): Promise<Response> {
   }
 
   const pin = typeof body.pin === "string" ? body.pin.replace(/\D/g, "") : "";
-  if (!pin) {
+  const kioskId = typeof body.kioskId === "string" ? body.kioskId.trim() : "";
+
+  if (!pin || !kioskId) {
     return NextResponse.json<TicketsResponse>(
-      { ok: false, error: "PIN is required." },
+      { ok: false, error: "PIN and kioskId are required." },
       { status: 400 }
     );
   }
@@ -39,14 +47,11 @@ export async function POST(request: Request): Promise<Response> {
   try {
     const db = getAdminDb();
     const ip = getClientIp(request);
-    const failKey = `kiosk_fail:${ip}`;
+    const failKey = `kiosk_fail:${kioskId}:${ip}`;
 
-    // Verify the PIN against the admin-only security doc.
-    const secSnap = await db.doc(paths.adminSecurityDoc).get();
-    const configuredPin = (secSnap.data()?.kioskPin as string | undefined) ?? "";
-    const pinCorrect = configuredPin.length >= 4 && pin === configuredPin;
-
-    if (!pinCorrect) {
+    // Find the kiosk + validate PIN.
+    const kiosk = await findKiosk(db, kioskId);
+    if (!kiosk || kiosk.pin.length < 4 || pin !== kiosk.pin) {
       const state = await recordFailure(failKey, FAIL_LIMIT, FAIL_WINDOW_SEC);
       if (state.blocked) {
         return NextResponse.json<TicketsResponse>(
