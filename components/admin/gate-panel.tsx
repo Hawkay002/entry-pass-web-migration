@@ -7,7 +7,7 @@
 
 import { useState } from "react";
 import { toast } from "sonner";
-import { Loader2, Plus, Trash2, Pencil } from "lucide-react";
+import { Loader2, Plus, Trash2, Pencil, ChevronDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
@@ -46,6 +46,7 @@ export function GatePanel() {
   const [newGateTypes, setNewGateTypes] = useState<Record<string, string[]>>({});
   const [addingGate, setAddingGate] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
+  const [expandedCats, setExpandedCats] = useState<Set<string>>(new Set());
   // Delete confirmation modal
   const [confirmTarget, setConfirmTarget] = useState<ConfirmTarget>(null);
   // Inline gate editing
@@ -160,17 +161,26 @@ export function GatePanel() {
             return (
               <div
                 key={cat}
-                className="rounded-xl border border-white/8 bg-black/20 p-3"
+                className="rounded-xl border border-white/8 bg-black/20"
               >
-                {/* Category header */}
-                <div className="flex items-center justify-between">
-                  <h4 className="text-sm font-semibold">{cat}</h4>
+                {/* Category header — clickable to toggle */}
+                <button
+                  onClick={() => setExpandedCats((prev) => {
+                    const next = new Set(prev);
+                    next.has(cat) ? next.delete(cat) : next.add(cat);
+                    return next;
+                  })}
+                  className="flex w-full items-center justify-between p-3 text-left"
+                >
                   <div className="flex items-center gap-2">
+                    <h4 className="text-sm font-semibold">{cat}</h4>
                     <span className="text-xs text-muted-foreground">
                       {catGates.length} gate{catGates.length !== 1 ? "s" : ""}
                     </span>
+                  </div>
+                  <div className="flex items-center gap-2">
                     <button
-                      onClick={() => setConfirmTarget({ type: "category", name: cat })}
+                      onClick={(e) => { e.stopPropagation(); setConfirmTarget({ type: "category", name: cat }); }}
                       disabled={busy === `cat-${cat}`}
                       className="flex h-6 w-6 items-center justify-center rounded text-destructive transition-colors hover:bg-destructive/10"
                       title="Delete category + its gates"
@@ -181,11 +191,14 @@ export function GatePanel() {
                         <Trash2 className="h-3 w-3" />
                       )}
                     </button>
+                    <ChevronDown className={cn("h-4 w-4 text-muted-foreground transition-transform", expandedCats.has(cat) && "rotate-180")} />
                   </div>
-                </div>
+                </button>
 
+                {expandedCats.has(cat) && (
+                <div className="border-t border-white/8 px-3 pb-3 pt-2">
                 {/* Add gate field — right beneath the category name */}
-                <div className="mt-2 space-y-2">
+                <div className="space-y-2">
                   <div className="flex items-center gap-2">
                     <Input
                       value={newGate[cat] ?? ""}
@@ -293,6 +306,8 @@ export function GatePanel() {
                       </div>
                     ))}
                   </div>
+                )}
+                </div>
                 )}
               </div>
             );
