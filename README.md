@@ -159,12 +159,15 @@ Built with Next.js 16, React 19, Tailwind v4, Firebase Admin SDK, and Upstash Re
      |              |   |              |   |   Redis    |
      | - tickets    |   | - users      |   |            |
      | - settings   |   | - claims     |   | - activity |
-     | - roles      |   | - sessions   |   |   logs     |
-     | - locks      |   | - revocation |   | (1000 max) |
-     | - contacts   |   |              |   |     +      |
-     | - audit_trail|   |              |   | overflow→  |
-     | - act_logs   |   |              |   |  Firestore |
-     +--------------+   +--------------+   +------------+
+     | - gates      |   | - sessions   |   |   logs     |
+     | - roles      |   | - revocation |   | (1000 max) |
+     | - locks      |   |              |   |     +      |
+     | - contacts   |   |              |   | overflow→  |
+     | - audit_trail|   |              |   |  Firestore |
+     | - act_logs   |   |              |   |            |
+     | - og_snapshots|  |              |   | - rate     |
+     +--------------+   +--------------+   |   limiting |
+                                           +------------+
 ```
 
 **Security model:** All role checks happen server-side via custom claims + session cookie verification. No client-side email checks. No plaintext passwords. Staff removed from roles are instantly logged out via token revocation + realtime listener.
@@ -275,7 +278,7 @@ Collections are created automatically on first write, but you can pre-initialize
 node scripts/init-collections.cjs
 ```
 
-This creates all 10 collections with a single placeholder doc each (then deletes them). See **Firebase Setup → Firestore Collections** below for the full list.
+This creates all 12 collections with a single placeholder doc each (then deletes them). See **Firebase Setup → Firestore Collections** below for the full list.
 
 ### Step 5c: Enable the Self Check-in Kiosk (optional)
 
@@ -485,6 +488,7 @@ entry-pass-web/
 |-- public/                 # Static assets (icons, PWA manifest + SW, backgrounds, fonts, wallet images, audio)
 |-- scripts/                # Dev utilities (jose fix, claim setup, domain mgmt, init-collections, generate-staff)
 |-- firestore.rules         # Security rules (incl. gates + og_snapshots)
+|-- firebase.json           # Firebase CLI config (for rules deployment)
 |-- proxy.ts                # Edge middleware (cookie gate)
 |-- next.config.ts          # Next.js config
 |-- vercel.json             # Vercel deployment config
@@ -592,15 +596,15 @@ interface GlobalLockDoc {
 
 | Action | File | Description |
 |---|---|---|
-| `createTicket` | `actions/tickets.ts` | Create a new ticket with QR (accepts dial code) |
-| `validateTicket` | `actions/tickets.ts` | Scan validation (granted/already/invalid + scannedBy attribution) |
-| `deleteOneTicket` | `actions/tickets.ts` | Delete a single ticket |
+| `createTicket` | `actions/tickets.ts` | Create a new ticket with QR + auto-gate assignment (round-robin) |
+| `validateTicket` | `actions/tickets.ts` | Scan validation (granted/already/invalid/wrong-gate + scannedBy + gate enforcement) |
+| `deleteOneTicket` | `actions/tickets.ts` | Delete a single ticket (logs with guest name) |
 | `updateGuestName` | `actions/tickets.ts` | Edit a guest's name (admin-only, busts ISR cache) |
-| `autoMarkAbsent` | `actions/tickets.ts` | Deadline-based absent marking (timezone-aware) |
-| `syncOfflineScans` | `actions/tickets.ts` | Sync queued offline scans on reconnect (idempotent) |
-| `getTicketsForOfflineCache` | `actions/tickets.ts` | Minimal-fields ticket list for scanner offline cache |
-| `saveSettings` | `actions/admin.ts` | Save event configuration (name, venue, deadline, timezone) |
-| `clearSettings` | `actions/admin.ts` | Clear event settings |
+| `autoMarkAbsent` | `actions/tickets.ts` | Deadline-based absent marking (timezone-aware, busts ISR) |
+| `syncOfflineScans` | `actions/tickets.ts` | Sync queued offline scans on reconnect (idempotent, gate-aware) |
+| `getTicketsForOfflineCache` | `actions/tickets.ts` | Minimal-fields ticket list for scanner offline cache (incl. gate) |
+| `saveSettings` | `actions/admin.ts` | Save event configuration (name, venue, deadline, timezone, multiGate, gateCategories) |
+| `clearSettings` | `actions/admin.ts` | Clear settings + cascade (disables multi-gate, deletes gates) |
 | `saveKioskPin` | `actions/admin.ts` | Set/clear the kiosk PIN (admin-only doc) |
 | `getKioskStatus` | `actions/admin.ts` | Whether the kiosk PIN is enabled (no value exposed) |
 | `factoryReset` | `actions/admin.ts` | Wipe database (preserves audit trail + deletes gates + OG snapshots) |
@@ -613,9 +617,9 @@ interface GlobalLockDoc {
 | `deleteGateCategory` | `actions/gates.ts` | Delete category + all its gates |
 | `disableMultiGate` | `actions/gates.ts` | Cascade: delete gates, clear ticket/staff gate fields |
 | `createRole` | `actions/roles.ts` | Create a new staff role |
-| `addStaffToRole` | `actions/roles.ts` | Add staff member to a role |
+| `addStaffToRole` | `actions/roles.ts` | Add staff member to a role (incl. gateId) |
 | `bulkAddStaffToRole` | `actions/roles.ts` | Bulk add staff (CSV/JSON/XLSX) with dedup |
-| `updateStaffInRole` | `actions/roles.ts` | Edit staff name/email |
+| `updateStaffInRole` | `actions/roles.ts` | Edit staff name/email/gate (spread-merge preserves gateId) |
 | `removeStaffFromRole` | `actions/roles.ts` | Remove staff + revoke tokens |
 | `deleteRole` | `actions/roles.ts` | Delete a role entirely |
 | `importTickets` | `actions/import.ts` | Bulk import with phone dedupe |
