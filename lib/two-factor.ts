@@ -26,7 +26,7 @@ export function verifyTOTP(token: string, secret: string): boolean {
 
 /** Generate the otpauth:// URI for QR code scanning. */
 export function generateQRUrl(secret: string, email: string): string {
-  return generateURI({ secret, label: encodeURIComponent("EntryPass Admin:" + email), issuer: "EntryPass" });
+  return generateURI({ secret, label: email, issuer: "EntryPass" });
 }
 
 /** Generate a QR code data URL from an otpauth URI (for inline display). */

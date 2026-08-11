@@ -21,6 +21,7 @@ import {
 import { Suspense } from "react";
 import { Starfield } from "@/components/layout/starfield";
 import { Loader2, ShieldCheck, Eye, EyeOff, KeyRound } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 export default function LoginPage() {
   return (
@@ -135,23 +136,31 @@ function LoginForm() {
     }
   }
 
-  // --- 2FA OTP handling ---
-  function handleOtpChange(index: number, value: string) {
-    if (!/^\d?$/.test(value)) return;
-    const next = [...otpCode];
-    next[index] = value;
+  // --- 2FA OTP handling (smart input — type anywhere, auto-fills boxes) ---
+  function handleOtpInput(e: React.ChangeEvent<HTMLInputElement>) {
+    const digits = e.target.value.replace(/\D/g, "").slice(0, 6);
+    const next = ["", "", "", "", "", ""];
+    for (let i = 0; i < digits.length; i++) next[i] = digits[i];
     setOtpCode(next);
-    if (value && index < 5) {
-      otpRefs.current[index + 1]?.focus();
-    }
+    setError("");
+    // Auto-submit when 6 digits entered.
+    if (digits.length === 6) submit2FA(digits);
   }
 
-  function handleOtpKeyDown(index: number, e: React.KeyboardEvent<HTMLInputElement>) {
-    if (e.key === "Backspace" && !otpCode[index] && index > 0) {
-      otpRefs.current[index - 1]?.focus();
+  function handleOtpKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
+    if (e.key === "Backspace") {
+      // If current value is empty, clear the last filled digit.
+      const joined = otpCode.join("");
+      if (joined.length > 0) {
+        e.preventDefault();
+        const next = ["", "", "", "", "", ""];
+        for (let i = 0; i < joined.length - 1; i++) next[i] = joined[i];
+        setOtpCode(next);
+      }
     }
     if (e.key === "Enter") {
-      submit2FA();
+      const joined = otpCode.join("");
+      if (joined.length === 6) submit2FA();
     }
   }
 
@@ -160,15 +169,13 @@ function LoginForm() {
     const pasted = e.clipboardData.getData("text").replace(/\D/g, "").slice(0, 6);
     if (pasted.length > 0) {
       const next = ["", "", "", "", "", ""];
-      for (let i = 0; i < pasted.length; i++) {
-        next[i] = pasted[i];
-      }
+      for (let i = 0; i < pasted.length; i++) next[i] = pasted[i];
       setOtpCode(next);
-      if (pasted.length === 6) otpRefs.current[5]?.focus();
+      if (pasted.length === 6) submit2FA(pasted);
     }
   }
 
-  async function submit2FA() {
+  async function submit2FA(prefilledCode?: string) {
     const code = otpCode.join("");
     if (code.length !== 6) return;
     setLoading(true);
@@ -177,7 +184,7 @@ function LoginForm() {
       const res = await fetch("/api/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ idToken: pendingToken, code }),
+        body: JSON.stringify({ idToken: pendingToken, code: prefilledCode ?? code }),
       });
 
       const data = await res.json().catch(() => ({}));
@@ -212,23 +219,42 @@ function LoginForm() {
             </p>
           </CardHeader>
           <CardContent>
-            <div className="flex justify-center gap-2" onPaste={handleOtpPaste}>
+            {/* Smart OTP: single hidden input captures all typing/paste, visual boxes show digits */}
+            <div
+              className="relative flex justify-center gap-2"
+              onPaste={handleOtpPaste}
+              onClick={() => otpRefs.current[0]?.focus()}
+            >
               {otpCode.map((digit, i) => (
-                <input
+                <div
                   key={i}
-                  ref={(el) => { otpRefs.current[i] = el; }}
-                  type="text"
-                  inputMode="numeric"
-                  maxLength={1}
-                  value={digit}
-                  onChange={(e) => handleOtpChange(i, e.target.value)}
-                  onKeyDown={(e) => handleOtpKeyDown(i, e)}
-                  className="h-14 w-12 rounded-lg border border-white/15 bg-white/5 text-center text-xl font-semibold text-white focus:border-accent-secondary focus:outline-none focus:ring-2 focus:ring-accent-secondary/30"
-                />
+                  className={cn(
+                    "flex h-14 w-12 items-center justify-center rounded-lg border text-center text-xl font-semibold transition-colors",
+                    otpCode.join("").length === i
+                      ? "border-accent-secondary bg-accent-secondary/5 ring-2 ring-accent-secondary/30"
+                      : digit
+                      ? "border-accent-secondary/40 bg-accent-secondary/10 text-white"
+                      : "border-white/15 bg-white/5"
+                  )}
+                >
+                  {digit}
+                </div>
               ))}
+              {/* Invisible input that captures all keyboard input */}
+              <input
+                ref={(el) => { otpRefs.current[0] = el; }}
+                type="text"
+                inputMode="numeric"
+                value={otpCode.join("")}
+                onChange={handleOtpInput}
+                onKeyDown={handleOtpKeyDown}
+                onPaste={handleOtpPaste}
+                className="absolute inset-0 w-full cursor-text opacity-0"
+                autoFocus
+              />
             </div>
             {error && <p className="mt-4 text-center text-sm text-destructive">{error}</p>}
-            <Button className="mt-6 w-full" onClick={submit2FA} disabled={loading || otpCode.join("").length !== 6}>
+            <Button className="mt-6 w-full" onClick={() => submit2FA()} disabled={loading || otpCode.join("").length !== 6}>
               {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               Verify
             </Button>

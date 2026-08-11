@@ -6,7 +6,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
-import { Loader2, Trash2, UserPlus, Lock, LockOpen, Plus, X, Search, OctagonAlert, ScanLine, ExternalLink, Eye, EyeOff, Pencil, Upload, ChevronDown, ArrowUpRight, ShieldCheck } from "lucide-react";
+import { Loader2, Trash2, UserPlus, Lock, LockOpen, Plus, X, Search, OctagonAlert, ScanLine, ExternalLink, Eye, EyeOff, Pencil, Upload, ChevronDown, ArrowUpRight, ShieldCheck, Download } from "lucide-react";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -288,6 +288,21 @@ function TwoFactorPanel() {
                 ))}
               </div>
               <DialogFooter>
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    const text = `EntryPass — 2FA Recovery Codes\n\n${recoveryCodes.map((c, i) => `${i + 1}. ${c}`).join("\n")}\n\nEach code can be used once. Store securely.`;
+                    const blob = new Blob([text], { type: "text/plain" });
+                    const a = document.createElement("a");
+                    a.href = URL.createObjectURL(blob);
+                    a.download = "entrypass-recovery-codes.txt";
+                    a.click();
+                    URL.revokeObjectURL(a.href);
+                  }}
+                >
+                  <Download className="mr-2 h-4 w-4" />
+                  Download .txt
+                </Button>
                 <Button onClick={() => { setSetupOpen(false); setShowRecovery(false); }}>
                   I&apos;ve saved them
                 </Button>
