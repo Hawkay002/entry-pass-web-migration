@@ -163,14 +163,17 @@ export function GatePanel() {
                 key={cat}
                 className="rounded-xl border border-white/8 bg-black/20"
               >
-                {/* Category header — clickable to toggle */}
-                <button
+                {/* Category header — clickable to toggle (div, not button, to avoid nested buttons) */}
+                <div
+                  role="button"
+                  tabIndex={0}
                   onClick={() => setExpandedCats((prev) => {
                     const next = new Set(prev);
                     next.has(cat) ? next.delete(cat) : next.add(cat);
                     return next;
                   })}
-                  className="flex w-full items-center justify-between p-3 text-left"
+                  onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setExpandedCats((prev) => { const next = new Set(prev); next.has(cat) ? next.delete(cat) : next.add(cat); return next; }); } }}
+                  className="flex w-full cursor-pointer items-center justify-between p-3 text-left"
                 >
                   <div className="flex items-center gap-2">
                     <h4 className="text-sm font-semibold">{cat}</h4>
@@ -193,7 +196,7 @@ export function GatePanel() {
                     </button>
                     <ChevronDown className={cn("h-4 w-4 text-muted-foreground transition-transform", expandedCats.has(cat) && "rotate-180")} />
                   </div>
-                </button>
+                </div>
 
                 {expandedCats.has(cat) && (
                 <div className="border-t border-white/8 px-3 pb-3 pt-2">
