@@ -44,6 +44,8 @@ function LoginForm() {
   const [pending2FA, setPending2FA] = useState(false);
   const [pendingToken, setPendingToken] = useState("");
   const [otpCode, setOtpCode] = useState(["", "", "", "", "", ""]);
+  const [recoveryMode, setRecoveryMode] = useState(false);
+  const [recoveryCodeInput, setRecoveryCodeInput] = useState("");
   const otpRefs = useRef<(HTMLInputElement | null)[]>([]);
 
   useEffect(() => {
@@ -210,9 +212,33 @@ function LoginForm() {
     }
   }
 
+  async function submitRecovery() {
+    if (!recoveryCodeInput.trim()) return;
+    setLoading(true);
+    setError("");
+    try {
+      const res = await fetch("/api/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ idToken: pendingToken, recoveryCode: recoveryCodeInput.trim() }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok) {
+        router.push("/tickets");
+        router.refresh();
+      } else {
+        setError(data.error ?? "Invalid recovery code.");
+      }
+    } catch {
+      setError("Network error. Try again.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
   // --- Render ---
 
-  // 2FA OTP screen.
+  // 2FA screen (OTP or recovery code).
   if (pending2FA) {
     return (
       <div className="relative flex min-h-screen items-center justify-center p-4">
@@ -222,54 +248,89 @@ function LoginForm() {
             <div className="mx-auto mb-2 flex h-12 w-12 items-center justify-center rounded-full bg-accent-secondary/20">
               <KeyRound className="h-6 w-6 text-accent-secondary" />
             </div>
-            <CardTitle className="text-2xl">Verification Code</CardTitle>
+            <CardTitle className="text-2xl">{recoveryMode ? "Recovery Code" : "Verification Code"}</CardTitle>
             <p className="text-sm text-muted-foreground">
-              Enter the 6-digit code from your authenticator app.
+              {recoveryMode
+                ? "Enter one of your saved recovery codes."
+                : "Enter the 6-digit code from your authenticator app."}
             </p>
           </CardHeader>
           <CardContent>
-            {/* Smart OTP: single hidden input captures all typing/paste, visual boxes show digits */}
-            <div
-              className="relative flex justify-center gap-2"
-              onPaste={handleOtpPaste}
-              onClick={() => otpRefs.current[0]?.focus()}
-            >
-              {otpCode.map((digit, i) => (
+            {!recoveryMode ? (
+              <>
+                {/* Smart OTP boxes */}
                 <div
-                  key={i}
-                  className={cn(
-                    "flex h-14 w-12 items-center justify-center rounded-lg border text-center text-xl font-semibold transition-colors",
-                    otpCode.join("").length === i
-                      ? "border-accent-secondary bg-accent-secondary/5 ring-2 ring-accent-secondary/30"
-                      : digit
-                      ? "border-accent-secondary/40 bg-accent-secondary/10 text-white"
-                      : "border-white/15 bg-white/5"
-                  )}
+                  className="relative flex justify-center gap-2"
+                  onPaste={handleOtpPaste}
+                  onClick={() => otpRefs.current[0]?.focus()}
                 >
-                  {digit}
+                  {otpCode.map((digit, i) => (
+                    <div
+                      key={i}
+                      className={cn(
+                        "flex h-14 w-12 items-center justify-center rounded-lg border text-center text-xl font-semibold transition-colors",
+                        otpCode.join("").length === i
+                          ? "border-accent-secondary bg-accent-secondary/5 ring-2 ring-accent-secondary/30"
+                          : digit
+                          ? "border-accent-secondary/40 bg-accent-secondary/10 text-white"
+                          : "border-white/15 bg-white/5"
+                      )}
+                    >
+                      {digit}
+                    </div>
+                  ))}
+                  <input
+                    ref={(el) => { otpRefs.current[0] = el; }}
+                    type="text"
+                    inputMode="numeric"
+                    value={otpCode.join("")}
+                    onChange={handleOtpInput}
+                    onKeyDown={handleOtpKeyDown}
+                    onPaste={handleOtpPaste}
+                    className="absolute inset-0 w-full cursor-text opacity-0"
+                    autoFocus
+                  />
                 </div>
-              ))}
-              {/* Invisible input that captures all keyboard input */}
-              <input
-                ref={(el) => { otpRefs.current[0] = el; }}
-                type="text"
-                inputMode="numeric"
-                value={otpCode.join("")}
-                onChange={handleOtpInput}
-                onKeyDown={handleOtpKeyDown}
-                onPaste={handleOtpPaste}
-                className="absolute inset-0 w-full cursor-text opacity-0"
-                autoFocus
-              />
-            </div>
-            {error && <p className="mt-4 text-center text-sm text-destructive">{error}</p>}
-            <Button className="mt-6 w-full" onClick={() => submit2FA()} disabled={loading || otpCode.join("").length !== 6}>
-              {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Verify
-            </Button>
+                {error && <p className="mt-4 text-center text-sm text-destructive">{error}</p>}
+                <Button className="mt-6 w-full" onClick={() => submit2FA()} disabled={loading || otpCode.join("").length !== 6}>
+                  {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                  Verify
+                </Button>
+                <button
+                  className="mt-3 w-full text-center text-xs text-muted-foreground hover:text-white"
+                  onClick={() => { setRecoveryMode(true); setError(""); setOtpCode(["", "", "", "", "", ""]); }}
+                >
+                  Lost your device? Use a recovery code
+                </button>
+              </>
+            ) : (
+              <>
+                {/* Recovery code input */}
+                <Input
+                  type="text"
+                  value={recoveryCodeInput}
+                  onChange={(e) => setRecoveryCodeInput(e.target.value.toUpperCase())}
+                  onKeyDown={(e) => e.key === "Enter" && submitRecovery()}
+                  placeholder="XXXX-XXXX"
+                  className="text-center text-lg tracking-widest"
+                  autoFocus
+                />
+                {error && <p className="mt-4 text-center text-sm text-destructive">{error}</p>}
+                <Button className="mt-6 w-full" onClick={submitRecovery} disabled={loading || !recoveryCodeInput.trim()}>
+                  {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                  Verify Recovery Code
+                </Button>
+                <button
+                  className="mt-3 w-full text-center text-xs text-muted-foreground hover:text-white"
+                  onClick={() => { setRecoveryMode(false); setError(""); setRecoveryCodeInput(""); }}
+                >
+                  ← Back to verification code
+                </button>
+              </>
+            )}
             <button
               className="mt-3 w-full text-center text-xs text-muted-foreground hover:text-white"
-              onClick={() => { setPending2FA(false); setPendingToken(""); setError(""); }}
+              onClick={() => { setPending2FA(false); setPendingToken(""); setError(""); setRecoveryMode(false); }}
             >
               ← Back to sign in
             </button>
