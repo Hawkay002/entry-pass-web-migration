@@ -60,6 +60,8 @@ export function InteractiveTicket({ ticket, settings }: { ticket: TicketData; se
   const tiltRef = useRef<HTMLDivElement>(null);
   const glareRef = useRef<HTMLDivElement>(null);
   const [showTip, setShowTip] = useState(true);
+  // Tracks whether touch/pointer is actively controlling the tilt — gyro pauses during touch.
+  const touchActiveRef = useRef(false);
 
   // Auto-dismiss the tip overlay after 5 seconds.
   useEffect(() => {
@@ -85,6 +87,8 @@ export function InteractiveTicket({ ticket, settings }: { ticket: TicketData; se
     function handleOrientation(e: DeviceOrientationEvent) {
       const el = tiltRef.current;
       if (!el) return;
+      // Pause gyro when touch is actively controlling the tilt.
+      if (touchActiveRef.current) return;
       // gamma = left/right tilt (-90 to 90), beta = front/back tilt (-180 to 180).
       const gamma = e.gamma ?? 0; // left/right
       const beta = e.beta ?? 0;   // front/back
@@ -153,6 +157,8 @@ export function InteractiveTicket({ ticket, settings }: { ticket: TicketData; se
   const onMove = useCallback((e: React.PointerEvent<HTMLDivElement> | React.TouchEvent<HTMLDivElement>) => {
     const el = tiltRef.current;
     if (!el) return;
+    // Mark touch as active so gyro pauses.
+    touchActiveRef.current = true;
     const rect = el.getBoundingClientRect();
     // Handle both pointer and touch events.
     const clientX = "touches" in e ? e.touches[0]?.clientX ?? 0 : e.clientX;
@@ -181,6 +187,8 @@ export function InteractiveTicket({ ticket, settings }: { ticket: TicketData; se
 
   const onLeave = useCallback(() => {
     setHovering(false);
+    // Release touch lock so gyro can resume.
+    touchActiveRef.current = false;
     if (tiltRef.current) tiltRef.current.style.transform = "perspective(1200px) rotateX(0deg) rotateY(0deg) scale(1)";
     if (glareRef.current) glareRef.current.style.background = "transparent";
     setHoloVars((v) => ({ ...v, opacity: 0, bx: 50, by: 50 }));
