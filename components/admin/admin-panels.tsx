@@ -357,14 +357,49 @@ function TwoFactorPanel() {
             <DialogTitle className="text-destructive">Disable 2FA?</DialogTitle>
             <DialogDescription>Enter your current 6-digit code to confirm.</DialogDescription>
           </DialogHeader>
-          <Input
-            type="text"
-            inputMode="numeric"
-            value={disableCode}
-            onChange={(e) => setDisableCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
-            placeholder="000000"
-            className="text-center text-lg tracking-widest"
-          />
+          {/* Smart OTP boxes */}
+          <div className="relative flex justify-center gap-2">
+            {Array.from({ length: 6 }).map((_, i) => (
+              <div
+                key={i}
+                className={cn(
+                  "flex h-12 w-10 items-center justify-center rounded-lg border text-center text-lg font-semibold transition-colors",
+                  disableCode.length === i
+                    ? "border-destructive bg-destructive/5 ring-2 ring-destructive/30"
+                    : i < disableCode.length
+                    ? "border-destructive/40 bg-destructive/10 text-white"
+                    : "border-white/15 bg-white/5"
+                )}
+              >
+                {disableCode[i] ?? ""}
+              </div>
+            ))}
+            <input
+              type="text"
+              inputMode="numeric"
+              value={disableCode}
+              onChange={(e) => setDisableCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
+              onKeyDown={(e) => {
+                if (e.key === "Backspace" && disableCode.length > 0) {
+                  e.preventDefault();
+                  setDisableCode(disableCode.slice(0, -1));
+                }
+                if (e.key === "Enter" && disableCode.length === 6) {
+                  confirmDisable();
+                }
+              }}
+              onPaste={(e) => {
+                e.preventDefault();
+                const pasted = e.clipboardData.getData("text").replace(/\D/g, "").slice(0, 6);
+                if (pasted) {
+                  setDisableCode(pasted);
+                  if (pasted.length === 6) confirmDisable();
+                }
+              }}
+              className="absolute inset-0 w-full cursor-text opacity-0"
+              autoFocus
+            />
+          </div>
           <DialogFooter>
             <Button variant="ghost" onClick={() => setDisableOpen(false)}>Cancel</Button>
             <Button variant="destructive" onClick={confirmDisable} disabled={busy || disableCode.length !== 6}>
