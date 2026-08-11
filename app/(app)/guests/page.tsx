@@ -451,7 +451,7 @@ export default function GuestsPage() {
                       onClick={() => {
                         const digits = t.phone.replace(/\D/g, "");
                         const ticketUrl = `${window.location.origin}/ticket/${t.id}`;
-                        const message = `Hello ${t.name}, here is your Entry Pass 🎫\n*Keep this QR code ready at the entrance.*\n\nView your interactive ticket:\n${ticketUrl}\n_This link will expire after the event ends._\n\nEnter your full phone number with country code (e.g. ${t.phone}) to unlock your ticket.`;
+                        const message = `Hello ${t.name}, here is your Entry Pass 🎫 (shader disabled for preview images)\n*Keep this QR code ready at the entrance.*\n\nView your interactive ticket:\n${ticketUrl}\n_This link will expire after the event ends._\n\nEnter your full phone number with country code (e.g. ${t.phone}) to unlock your ticket.`;
                         window.location.href = `https://wa.me/${digits}?text=${encodeURIComponent(message)}`;
                       }}
                     >
