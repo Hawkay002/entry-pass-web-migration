@@ -22,6 +22,7 @@ export interface GuestListFilters {
   ticketType: TicketTypeFilter;
   gender: GenderFilter;
   sort: SortKey;
+  gate: string; // "all" or a gate id
 }
 
 export const DEFAULT_FILTERS: GuestListFilters = {
@@ -30,6 +31,7 @@ export const DEFAULT_FILTERS: GuestListFilters = {
   ticketType: "all",
   gender: "all",
   sort: "newest",
+  gate: "all",
 };
 
 export function filterTickets(
@@ -51,6 +53,10 @@ export function filterTickets(
       (t.ticketType || "Classic") !== filters.ticketType
     )
       return false;
+    if (filters.gate !== "all") {
+      if (filters.gate === "none" && t.gate) return false;
+      if (filters.gate !== "none" && t.gate !== filters.gate) return false;
+    }
     return true;
   });
 

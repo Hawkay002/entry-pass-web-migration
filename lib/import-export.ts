@@ -41,6 +41,7 @@ interface ExportRow {
   Phone: string;
   Status: string;
   "Ticket ID": string;
+  Gate: string;
   "Entry Time": string;
 }
 
@@ -54,6 +55,7 @@ function toExportRow(t: Ticket, index: number): ExportRow {
     Phone: t.phone,
     Status: t.status,
     "Ticket ID": t.id,
+    Gate: t.gate ?? "",
     "Entry Time": t.scannedAt
       ? new Date(t.scannedAt).toLocaleString()
       : "",
@@ -75,13 +77,13 @@ export function downloadBlob(blob: Blob, filename: string) {
 // ---- CSV ----
 export function exportCSV(tickets: Ticket[], filename: string) {
   const header =
-    "S.No.,Guest Name,Ticket Type,Age,Gender,Phone,Status,Ticket ID,Entry Time";
+    "S.No.,Guest Name,Ticket Type,Age,Gender,Phone,Status,Ticket ID,Gate,Entry Time";
   const rows = tickets.map((t, i) => {
     const cleanName = t.name.replace(/,/g, "");
     const entry = t.scannedAt
       ? new Date(t.scannedAt).toLocaleString().replace(/,/g, " ")
       : "";
-    return `${i + 1},${cleanName},${displayTicketType(t.ticketType)},${t.age},${t.gender},${t.phone},${t.status},${t.id},${entry}`;
+    return `${i + 1},${cleanName},${displayTicketType(t.ticketType)},${t.age},${t.gender},${t.phone},${t.status},${t.id},${t.gate ?? ""},${entry}`;
   });
   const csv = [header, ...rows].join("\n");
   const blob = new Blob(["\ufeff", csv], { type: "text/csv;charset=utf-8;" });
@@ -110,6 +112,7 @@ export function exportTXT(tickets: Ticket[], filename: string) {
     out += `   Details: ${t.age} / ${t.gender}\n`;
     out += `   Phone:   ${t.phone}\n`;
     out += `   Status:  ${t.status.toUpperCase()}\n`;
+    if (t.gate) out += `   Gate:    ${t.gate}\n`;
     if (t.scannedAt)
       out += `   Entry:   ${new Date(t.scannedAt).toLocaleTimeString()}\n`;
     out += `   ID:      ${t.id}\n`;
@@ -127,9 +130,9 @@ export function exportDOC(tickets: Ticket[], filename: string) {
       t.ticketType
     )}</td><td>${t.age} / ${t.gender}</td><td>${t.phone}</td><td>${
       t.status
-    }</td></tr>`;
+    }</td><td>${t.gate ?? ""}</td></tr>`;
   });
-  const html = `<html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'><head><meta charset='utf-8'><title>Guest List</title></head><body><h2>Guest List Export</h2><table border="1" style="border-collapse:collapse;width:100%"><tr><th>S.No.</th><th>Name</th><th>Type</th><th>Age/Gender</th><th>Phone</th><th>Status</th></tr>${rows}</table></body></html>`;
+  const html = `<html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'><head><meta charset='utf-8'><title>Guest List</title></head><body><h2>Guest List Export</h2><table border="1" style="border-collapse:collapse;width:100%"><tr><th>S.No.</th><th>Name</th><th>Type</th><th>Age/Gender</th><th>Phone</th><th>Status</th><th>Gate</th></tr>${rows}</table></body></html>`;
   const blob = new Blob(["\ufeff", html], { type: "application/msword" });
   downloadBlob(blob, `${filename}.doc`);
 }

@@ -1,5 +1,6 @@
-// app/actions/gates-scanner.ts — resolves the current scanner's assigned gate.
-// Called by the scanner page on mount to know which gate this device enforces.
+// app/actions/gates-scanner.ts — resolves the current scanner's gate status.
+// Called by the scanner page on mount to know whether to enforce gates,
+// and which gate this device enforces.
 
 "use server";
 
@@ -7,26 +8,33 @@ import { getAdminDb } from "@/lib/firebase/admin";
 import { paths } from "@/lib/paths";
 import { getAppUser } from "@/lib/firebase/server-auth";
 
-export async function getScannerGate(): Promise<{
-  id: string;
-  name: string;
-} | null> {
-  const user = await getAppUser();
-  if (!user) return null;
+export interface ScannerGateState {
+  multiGate: boolean;
+  gate: { id: string; name: string } | null;
+}
 
-  // Multi-gate must be on, AND the staff must have an assigned gateId.
+export async function getScannerGate(): Promise<ScannerGateState> {
+  const user = await getAppUser();
+  if (!user) return { multiGate: false, gate: null };
+
   const db = getAdminDb();
   const settingsSnap = await db.doc(paths.settingsDoc).get();
-  if (!Boolean(settingsSnap.data()?.multiGate)) return null;
+  const isMultiGate = Boolean(settingsSnap.data()?.multiGate);
 
+  if (!isMultiGate) return { multiGate: false, gate: null };
+
+  // Multi-gate is ON — does the staff have an assigned gate?
   const gateId = user.gateId;
-  if (!gateId) return null;
+  if (!gateId) return { multiGate: true, gate: null };
 
   const gateSnap = await db.collection(paths.gatesCollection).doc(gateId).get();
-  if (!gateSnap.exists) return null;
+  if (!gateSnap.exists) return { multiGate: true, gate: null };
 
   return {
-    id: gateId,
-    name: String(gateSnap.data()?.name ?? gateId),
+    multiGate: true,
+    gate: {
+      id: gateId,
+      name: String(gateSnap.data()?.name ?? gateId),
+    },
   };
 }

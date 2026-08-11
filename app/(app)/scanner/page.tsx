@@ -7,7 +7,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
-import { WifiOff, CloudUpload } from "lucide-react";
+import { WifiOff, CloudUpload, AlertTriangle } from "lucide-react";
 import { LockedTab } from "@/components/layout/locked-tab";
 import { useLockedTabs } from "@/components/layout/locked-tabs-context";
 import { QrScanner, type ScanOutcome } from "@/components/scanner/qr-scanner";
@@ -44,12 +44,13 @@ export default function ScannerPage() {
     return stored === null ? true : stored === "true";
   });
   const [scannerGate, setScannerGate] = useState<{ id: string; name: string } | null>(null);
+  const [multiGateOn, setMultiGateOn] = useState(false);
 
   // Resolve this scanner's gate on mount (from staff assignment + settings).
   useEffect(() => {
     getScannerGate()
-      .then((g) => setScannerGate(g ?? null))
-      .catch(() => setScannerGate(null));
+      .then((g) => { setScannerGate(g.gate); setMultiGateOn(g.multiGate); })
+      .catch(() => { setScannerGate(null); setMultiGateOn(false); });
   }, []);
 
   // Warm + periodically refresh the IndexedDB ticket cache. One-shot on mount
@@ -220,6 +221,13 @@ export default function ScannerPage() {
       </div>
 
       <div className="text-center">
+      {/* No gate assigned warning */}
+      {multiGateOn && !scannerGate && (
+        <div className="mb-4 flex items-center justify-center gap-2 rounded-xl border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-400">
+          <AlertTriangle className="h-4 w-4" />
+          No gate assigned — this scanner accepts ALL tickets. Contact an admin to assign a gate.
+        </div>
+      )}
       {/* Offline / sync status banner */}
       {!online && (
         <div className="mb-4 flex items-center justify-center gap-2 rounded-xl border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-400">

@@ -78,7 +78,7 @@ export default function GuestsPage() {
   const isAdmin = useIsAdmin();
   const [editName, setEditName] = useState<{ id: string; name: string } | null>(null);
   const [savingName, setSavingName] = useState(false);
-  const { gateMap } = useGatesMode();
+  const { gates, gateMap } = useGatesMode();
   const multiGate = Boolean(settings.multiGate);
 
   // Auto-absent: only polls when there's a deadline set AND coming-soon tickets.
@@ -299,6 +299,25 @@ export default function GuestsPage() {
                   onClick={() => setFilters((f) => ({ ...f, sort: v as SortKey }))}
                 />
               ))}
+              {multiGate && (
+                <>
+                  <FilterDivider />
+                  <FilterSection label="Gate" />
+                  <FilterItem
+                    label="All Gates"
+                    active={filters.gate === "all"}
+                    onClick={() => setFilters((f) => ({ ...f, gate: "all" }))}
+                  />
+                  {gates.map((g) => (
+                    <FilterItem
+                      key={g.id}
+                      label={g.name}
+                      active={filters.gate === g.id}
+                      onClick={() => setFilters((f) => ({ ...f, gate: g.id }))}
+                    />
+                  ))}
+                </>
+              )}
             </div>
           )}
         </div>
