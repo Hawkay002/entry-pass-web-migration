@@ -155,7 +155,7 @@ function PinGate({ onUnlock, kioskId }: { onUnlock: (pin: string) => void; kiosk
       setEntry((e) => e.slice(0, -1));
       return;
     }
-    setEntry((e) => (e.length >= 8 ? e : e + d));
+    setEntry((e) => (e.length >= 6 ? e : e + d));
   }
 
   async function submit() {
@@ -228,8 +228,8 @@ function PinGate({ onUnlock, kioskId }: { onUnlock: (pin: string) => void; kiosk
 
         {/* PIN display + show/hide toggle */}
         <div className="mb-6 flex items-center gap-3">
-          <div className="flex flex-wrap items-center justify-center gap-2">
-            {Array.from({ length: Math.max(4, entry.length) }).map((_, i) => (
+          <div className="flex items-center justify-center gap-2">
+            {Array.from({ length: 6 }).map((_, i) => (
               <span
                 key={i}
                 className={cn(
@@ -237,7 +237,7 @@ function PinGate({ onUnlock, kioskId }: { onUnlock: (pin: string) => void; kiosk
                   i < entry.length ? "border-emerald-400/40 bg-emerald-400/10 text-emerald-400" : "border-white/15 bg-white/5"
                 )}
               >
-                {showPin && i < entry.length ? entry[i] : ""}
+                {i < entry.length ? (showPin ? entry[i] : "●") : ""}
               </span>
             ))}
           </div>
