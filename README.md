@@ -73,7 +73,6 @@ Built with Next.js 16, React 19, Tailwind v4, Firebase Admin SDK, and Upstash Re
 - **Phone-Verified Access** — Guests enter their full phone number with country code to unlock their ticket (rate-limited: 5 attempts/IP/5min)
 - **WebGL Shader Ticket** — AdmitOneTicket component with per-type holographic shader textures, perforation notch, ADMIT ONE stub, and ticket type watermark
 - **Tilt + Glare** — 3D perspective tilt following pointer/touch/gyroscope (20° max, iOS permission support). **Gyro pauses during touch** to prevent clash — touch takes priority while finger is down, gyro resumes on release. Specular glare overlay clipped to ticket shape. **Tip overlay** on load ("Touch, Tilt or use Mouse to interact") with blurred backdrop, auto-dismisses after 5s
-- **Holographic Overlays** — V Full Art rainbow shimmer for VIP/SVIP (ported from pokemon-cards-css)
 - **Live Status** — Realtime status badge via Firestore onSnapshot (Coming Soon / Arrived / Absent)
 - **QR Code** — Rendered as data URL, overlaid on ticket, scaled proportionally
 - **Gate Number** — When multi-gate is on, the assigned gate shows on the ticket face footer (`age / gender • Gate X`)
