@@ -82,7 +82,7 @@ const LOCKABLE_TABS: { value: TabName; label: string }[] = [
 
 export function AdminPanels() {
   return (
-    <div className="border-t border-white/5 pt-8">
+    <div className="space-y-6">
       <div className="glass-panel overflow-hidden">
         <div className="px-6 pt-6 pb-2">
           <h3 className="text-lg font-semibold">Admin Panel</h3>
@@ -1532,14 +1532,14 @@ function FactoryResetPanel() {
   }
 
   return (
-    <div className="space-y-4 px-6 py-5">
+    <div className="glass-panel space-y-4 border-destructive/20 px-6 py-5">
       <div className="flex items-center gap-2">
         <Trash2 className="h-5 w-5 text-destructive" />
-        <h4 className="text-sm font-semibold text-destructive">Factory Reset</h4>
+        <h3 className="text-base font-semibold text-destructive">Danger Zone</h3>
       </div>
-      <p className="text-xs text-muted-foreground">
-        Permanently delete all tickets, settings, roles, gates, kiosks, logs, and locks.
-        An immutable audit record is preserved. This cannot be undone.
+      <p className="text-sm text-muted-foreground">
+        Factory reset permanently deletes all tickets, settings, roles, gates, kiosks,
+        logs, and locks. An immutable audit record is preserved. This cannot be undone.
       </p>
       <Button variant="destructive" onClick={() => setConfirmOpen(true)} disabled={resetting}>
         <Trash2 className="mr-1.5 h-3.5 w-3.5" />
