@@ -130,7 +130,8 @@ export async function clearSettings(): Promise<{ ok: true } | { ok: false; error
  * regular staff cannot read it via the client SDK.
  */
 export async function saveKioskPin(
-  pin: string
+  pin: string,
+  kioskGateId?: string | null
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   const user = await getAppUser();
   if (!user) return { ok: false, error: "Not authenticated." };
@@ -144,7 +145,7 @@ export async function saveKioskPin(
 
   await getAdminDb()
     .doc(paths.adminSecurityDoc)
-    .set({ kioskPin: clean }, { merge: true });
+    .set({ kioskPin: clean, kioskGateId: kioskGateId ?? null }, { merge: true });
 
   await logAction(
     user,

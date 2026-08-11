@@ -47,7 +47,7 @@ import { TICKET_TYPE_LABELS } from "@/lib/types";
 import type { Ticket, TicketStatus } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { ImportExportButtons } from "@/components/guests/import-export";
-import { TicketViewModal } from "@/components/tickets/ticket-view-modal";
+
 
 const STATUS_STYLES: Record<TicketStatus, string> = {
   "coming-soon": "bg-amber-500/20 text-amber-400",
@@ -70,8 +70,8 @@ export default function GuestsPage() {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
-  const [viewTicket, setViewTicket] = useState<Ticket | null>(null);
-  const [viewOpen, setViewOpen] = useState(false);
+  const [viewTicket] = useState<Ticket | null>(null);
+  const [viewOpen] = useState(false);
   const [filterOpen, setFilterOpen] = useState(false);
   const filterRef = useRef<HTMLDivElement>(null);
   const { settings } = useSettings();
@@ -514,14 +514,6 @@ export default function GuestsPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-
-      <TicketViewModal
-        ticket={viewTicket}
-        eventName={settings.name || undefined}
-        venue={settings.place || undefined}
-        open={viewOpen}
-        onOpenChange={setViewOpen}
-      />
 
       {/* Edit guest name dialog (admin only) */}
       <Dialog open={!!editName} onOpenChange={(o) => !o && setEditName(null)}>

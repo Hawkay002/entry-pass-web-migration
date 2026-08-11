@@ -1284,6 +1284,10 @@ function KioskPanel() {
   const [showPin, setShowPin] = useState(false);
   const [saving, setSaving] = useState(false);
   const [loaded, setLoaded] = useState(false);
+  const [kioskGate, setKioskGate] = useState<string | null>(null);
+  const { settings: kioskSettings } = useSettings();
+  const { gates: kioskGates } = useGatesMode();
+  const kioskMultiGate = Boolean(kioskSettings.multiGate);
 
   // Load enabled status once on mount.
   useEffect(() => {
@@ -1303,7 +1307,7 @@ function KioskPanel() {
 
   async function handleSave() {
     setSaving(true);
-    const res = await saveKioskPin(pin);
+    const res = await saveKioskPin(pin, kioskMultiGate ? kioskGate : null);
     setSaving(false);
     if (res.ok) {
       const isSetting = pin.replace(/\D/g, "").length >= 4;
@@ -1317,10 +1321,11 @@ function KioskPanel() {
 
   async function handleDisable() {
     setSaving(true);
-    const res = await saveKioskPin("");
+    const res = await saveKioskPin("", null);
     setSaving(false);
     if (res.ok) {
       setEnabled(false);
+      setKioskGate(null);
       toast.success("Kiosk disabled");
     } else {
       toast.error("Failed to disable", { description: res.error });
@@ -1366,6 +1371,23 @@ function KioskPanel() {
             {showPin ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
           </button>
         </div>
+        {kioskMultiGate && (
+          <Select value={kioskGate ?? "none"} onValueChange={(v) => setKioskGate(v === "none" ? null : v)}>
+            <SelectTrigger className="w-[150px]">
+              <span>
+                {kioskGate
+                  ? (kioskGates.find((g) => g.id === kioskGate)?.name ?? kioskGate)
+                  : "No gate"}
+              </span>
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="none">No gate (accept all)</SelectItem>
+              {kioskGates.filter((g) => g.active).map((g) => (
+                <SelectItem key={g.id} value={g.id}>{g.name}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )}
         <Button onClick={handleSave} disabled={saving || pin.length < 4}>
           {saving ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : null}
           {enabled ? "Update PIN" : "Enable Kiosk"}

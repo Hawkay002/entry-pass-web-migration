@@ -327,6 +327,14 @@ function KioskScanner({ pin, onLock }: { pin: string; onLock: () => void }) {
           status: data.ticket?.status ?? "",
         };
       }
+      if (data.outcome === "wrong-gate") {
+        return {
+          kind: "wrong-gate",
+          name: data.ticket?.name ?? "",
+          id: ticketId,
+          expectedGate: data.ticket?.expectedGate ?? null,
+        };
+      }
       return { kind: "invalid", id: ticketId };
     } catch {
       // Network failed — fall through to offline validation below.

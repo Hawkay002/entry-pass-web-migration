@@ -19,7 +19,7 @@ const FAIL_LIMIT = 5;
 const FAIL_WINDOW_SEC = 5 * 60;
 
 type CheckinResponse =
-  | { ok: true; outcome: "granted" | "already" | "invalid"; ticket: { name: string; id: string; status: string } | null }
+  | { ok: true; outcome: "granted" | "already" | "invalid" | "wrong-gate"; ticket: { name: string; id: string; status: string; expectedGate?: string | null } | null }
   | { ok: false; error: string };
 
 export async function POST(request: Request): Promise<Response> {
@@ -90,14 +90,35 @@ export async function POST(request: Request): Promise<Response> {
     const name = String(data.name ?? "");
     const status = String(data.status ?? "coming-soon");
     const scanned = Boolean(data.scanned);
+    const ticketGate = data.gate != null ? String(data.gate) : null;
+
+    // Multi-gate enforcement: read the kiosk's assigned gate.
+    const securitySnap = await db.doc(paths.adminSecurityDoc).get();
+    const kioskGateId = securitySnap.exists
+      ? String(securitySnap.data()?.kioskGateId ?? "")
+      : "";
 
     // Idempotent: only grant if still coming-soon & unscanned.
     if (status === "coming-soon" && !scanned) {
+      // Gate check — block wrong-gate scans without mutating the ticket.
+      if (ticketGate && kioskGateId && ticketGate !== kioskGateId) {
+        await logKioskAction(
+          "SELF_CHECKIN",
+          `Wrong gate: ${name} (ID: ${ticketId.slice(0, 6)}) — expected ${ticketGate}, kiosk at ${kioskGateId}`
+        );
+        return NextResponse.json<CheckinResponse>({
+          ok: true,
+          outcome: "wrong-gate",
+          ticket: { name, id: ticketId, status, expectedGate: ticketGate },
+        });
+      }
+
       await ref.update({
         status: "arrived",
         scanned: true,
         scannedAt: Date.now(),
         scannedBy: "KIOSK",
+        scannedAtGate: kioskGateId || null,
       });
       await logKioskAction(
         "SELF_CHECKIN",
