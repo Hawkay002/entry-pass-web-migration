@@ -30,16 +30,18 @@ Built with Next.js 16, React 19, Tailwind v4, Firebase Admin SDK, and Upstash Re
 ## Features
 
 ### Core Ticket Loop
-- **Issue Tickets** — Form with country code dropdown (203 countries with flags, India default). **Paste-sanitizing phone field** — paste `+4915210899596` → auto-selects Germany (+49), shows `15210899596`. Accepts international number lengths (6–15 digits, E.164). Live ticket confirmation with animated BadgeCheck, auto-scrolls to preview on mobile + desktop. WhatsApp share button doubles as capture-status indicator
-- **Guest List** — 7 sort options, 4 filters (type/status/gender + search), bulk delete, import/export. **Gate column** appears when multi-gate mode is on (blue gate badges per ticket). View eye opens interactive ticket page. Share column sends WhatsApp with ticket link
-- **Scanner** — Camera QR decode at 480px for maximum speed, **four-way validation** (granted / already scanned / invalid / **wrong gate**). Shows **who scanned** + **when** on duplicate scans. **Camera flip** button (front/back). **Animated bell toggle** for haptic feedback (synced to localStorage). **Gate badge** in header showing the scanner's assigned gate. Offline mode with IndexedDB cache + auto-sync on reconnect. Wrong-gate scans are blocked without mutating the ticket
-- **4 Ticket Types** — Classic, VIP, SVIP, VVIP — each with unique shader colors, fonts (The Seasons for names + Gotham Nights for body), and VVIP engraved text effect. Ticket names auto-balance across up to 3 lines and fill the space to the perforation
+- **Issue Tickets** — Form with country code dropdown (203 countries with flags, India default). **Paste-sanitizing phone field** — paste `+4915210899596` → auto-selects Germany (+49), shows `15210899596`. Accepts international number lengths (6–15 digits, E.164). Live ticket confirmation with animated BadgeCheck (draw-on-path loop), auto-scrolls to preview on mobile + desktop. WhatsApp share button doubles as capture-status indicator. WhatsApp share message includes link-expiry notice
+- **Guest List** — 7 sort options, 4 filters (type/status/gender + search), bulk delete, import/export. **Gate column** appears when multi-gate mode is on (blue gate badges per ticket). **Admin-only edit guest name** (pencil icon per row). View eye opens interactive ticket page. Share column sends WhatsApp with ticket link + expiry notice
+- **Scanner** — Camera QR decode at 480px for maximum speed, **four-way validation** (granted / already scanned / invalid / **wrong gate**). Shows **who scanned** + **when** on duplicate scans. **Camera flip** button (front/back). **Animated bell toggle** for haptic feedback (synced to localStorage, rings/shakes on toggle). **Gate badge** in header showing the scanner's assigned gate. Offline mode with IndexedDB cache + auto-sync on reconnect. Wrong-gate scans are blocked without mutating the ticket
+- **4 Ticket Types** — Classic, VIP, SVIP, VVIP — each with unique shader colors, fonts (The Seasons for names + Gotham Nights for body), and VVIP engraved text effect. Ticket names auto-balance across up to 3 lines and fill the space to the perforation. Gate number shown on ticket face footer (`age / gender • Gate X`)
 
 ### Admin & Security
-- **Dynamic Roles** — Admin creates roles and adds staff (single or **bulk upload** via CSV/JSON/XLSX). Edit staff name/email/**gate assignment** later. Google Sign-In maps emails automatically
-- **Multi-Gate System** — Toggle multi-gate mode in Configuration. Create gate categories (Guest Entry, Staff, Security, Management — free text). Add gates inside categories with ticket-type acceptance (Classic/VIP/SVIP/VVIP). **Round-robin auto-assignment** balances tickets across gates. Staff assigned to specific gates. Wrong-gate scans blocked with "WRONG GATE" error. Gate column in guest list. Ticket face shows assigned gate. Full cascade delete on disable/clear/factory-reset
+- **Dynamic Roles** — Admin creates roles and adds staff (single or **bulk upload** via CSV/JSON/XLSX). **Collapsible role cards** (collapsed by default). Edit/delete staff moved to **Remote Device Management** — select staff, then batch edit (vertical list in modal) or batch delete. Google Sign-In maps emails automatically
+- **Multi-Gate System** — Toggle multi-gate mode in Configuration (**admin-only** UI + server enforcement). Create gate categories (Guest Entry, Staff, Security, Management — free text). **Collapsible categories** (collapsed by default). Add gates inside categories with ticket-type acceptance (Classic/VIP/SVIP/VVIP). **Round-robin auto-assignment** balances tickets across gates. Staff assigned to specific gates. Wrong-gate scans blocked with "WRONG GATE" error. Gate column in guest list. Ticket face shows assigned gate. Full cascade delete on disable/clear/factory-reset. **Multi-device realtime sync** for the toggle
+- **Configuration** — **Calendar + time picker** for deadline (shadcn Calendar with month/year dropdown selectors, 12-hour AM/PM time input). **Premium Active Settings card** (gradient, hero event name, icon chips for venue/deadline, timezone + multi-gate badges). Staff see a **read-only** version of this card (no form, no gate config). **Admin-only** edit form
+- **Remote Device Management** — Select staff from role → batch **edit** (name/email/gate) or **delete**. Staff selection modal shows 10 rows on mobile, 8 on desktop before scrolling. Lock/unlock tabs with reason (basic/review/maintenance)
 - **Remote Lock** — Lock or unlock specific tabs per staff member with live status badges. Selective unlock
-- **Maintenance Mode** — Lock all staff instantly with duration timer. Auto-unlock when time expires
+- **Maintenance Mode** — Lock all staff instantly with duration timer (OctagonAlert icon). Auto-unlock when time expires
 - **Staff Auto-Logout** — Removing a staff member instantly revokes their session and kicks them out
 - **Auto-Absent** — Deadline-based status automation with **timezone-aware** offsets (38 zones, UTC-12 to UTC+14). Zero page reload
 - **Activity Logs** — 12 colored action types. **Unlimited** — Redis stores first 1000, overflow routes to Firestore. CSV/XLSX/PDF export of selected logs. All logins logged (incl. Google display name). Single ticket deletions now logged with guest name
@@ -70,7 +72,7 @@ Built with Next.js 16, React 19, Tailwind v4, Firebase Admin SDK, and Upstash Re
 ### Interactive Guest Ticket (`/ticket/[id]`)
 - **Phone-Verified Access** — Guests enter their full phone number with country code to unlock their ticket (rate-limited: 5 attempts/IP/5min)
 - **WebGL Shader Ticket** — AdmitOneTicket component with per-type holographic shader textures, perforation notch, ADMIT ONE stub, and ticket type watermark
-- **Tilt + Glare** — 3D perspective tilt following pointer/touch/gyroscope (20° max, iOS permission support). Specular glare overlay clipped to ticket shape. **Tip overlay** on load ("Touch, Tilt or use Mouse to interact") with blurred backdrop, auto-dismisses after 5s
+- **Tilt + Glare** — 3D perspective tilt following pointer/touch/gyroscope (20° max, iOS permission support). **Gyro pauses during touch** to prevent clash — touch takes priority while finger is down, gyro resumes on release. Specular glare overlay clipped to ticket shape. **Tip overlay** on load ("Touch, Tilt or use Mouse to interact") with blurred backdrop, auto-dismisses after 5s
 - **Holographic Overlays** — V Full Art rainbow shimmer for VIP/SVIP (ported from pokemon-cards-css)
 - **Live Status** — Realtime status badge via Firestore onSnapshot (Coming Soon / Arrived / Absent)
 - **QR Code** — Rendered as data URL, overlaid on ticket, scaled proportionally
@@ -78,7 +80,8 @@ Built with Next.js 16, React 19, Tailwind v4, Firebase Admin SDK, and Upstash Re
 - **Download** — Captures ticket at 4x resolution, rotates 90° to portrait, downloads as PNG
 - **Save to Google Wallet** — Official Google Wallet button. Generates signed JWT pass with per-type hero images, logo, guest name, gender, age, and event info. Per-type branded hero images (Classic/VIP/SVIP/VVIP)
 - **OG Link Preview** — **Exact live shader ticket snapshot** captured at creation time (in the admin's browser via html-to-image) and stored in Firestore (`og_snapshots`). Served as JPEG for WhatsApp/social link previews. Falls back to SVG for tickets created before the feature
-- **WhatsApp Share** — Message includes interactive ticket URL + phone unlock instructions + "(shader disabled for preview images)"
+- **WhatsApp Share** — Message includes interactive ticket URL + phone unlock instructions + "(shader disabled for preview images)" + link-expiry notice
+- **Report Issue** — Floating button (bottom-right) opens a form panel (name, phone with country code dropdown, reason, message). Submits via **Telegram Bot API** to admin's chat. Rate-limited (5/IP/5min). Confirmation screen with animated BadgeCheck + Report ID + copy button. Uses `TELEGRAM_BOT_TOKEN` + `CHAT_ID` env vars
 
 ### Offline & Kiosk
 - **PWA / Offline Scanner** — Installable app (manifest + service worker, network-first caching). Staff scanner caches a minimal ticket snapshot in IndexedDB (refreshed every 5 min, not an always-on listener) and works with no WiFi; queued scans sync automatically on reconnect. Critical for venues with poor connectivity.
@@ -107,6 +110,8 @@ Built with Next.js 16, React 19, Tailwind v4, Firebase Admin SDK, and Upstash Re
 | **Motion** | [Framer Motion](https://www.framer.com/motion) + [motion](https://motion.dev) | 12.43 |
 | **Animated Icons** | [@animate-ui](https://animate-ui.com) (BadgeCheck, Bell, BellOff) | — |
 | **Smooth Scroll** | [Lenis](https://github.com/darkroomengineering/lenis) | 1.3.26 |
+| **Calendar** | [react-day-picker](https://github.com/gpbl/react-day-picker) (shadcn) | 10.0 |
+| **Date Utils** | [date-fns](https://date-fns.org) | 4.4 |
 | **Toasts** | [Sonner](https://sonner.emilkowal.ski) | 2.0.7 |
 | **Flags** | [flag-icons](https://github.com/lipis/flag-icons) | 7.5 |
 | **Wallet** | [Google Wallet API](https://developers.google.com/wallet) | JWT RS256 |
@@ -316,6 +321,8 @@ pnpm dev
 | `COOKIE_SIGNATURE_KEY_CURRENT` | Yes | Random 32+ char string for cookie signing |
 | `KV_REST_API_URL` | Yes | Upstash Redis REST URL |
 | `KV_REST_API_TOKEN` | Yes | Upstash Redis REST token |
+| `TELEGRAM_BOT_TOKEN` | No | Telegram bot token for issue reports (optional — feature degrades gracefully) |
+| `CHAT_ID` | No | Telegram chat ID to receive issue reports |
 
 ---
 
@@ -541,6 +548,7 @@ interface GlobalLockDoc {
 | `/api/kiosk-tickets` | POST | Public, PIN-gated fetch of the PII-free ticket list (`{id, status, scanned}` only) for the kiosk's offline cache. Same rate limit. |
 | `/api/ticket-verify` | POST | Public phone verification for guest ticket access (full number + country code, rate-limited 5/IP/5min) |
 | `/api/og-snapshot` | POST | Stores a pre-rendered OG share preview JPEG for a ticket (captured at creation time). Rate-limited 10/IP/5min. |
+| `/api/report-issue` | POST | Receives issue reports from the interactive ticket page, forwards to Telegram Bot API. Rate-limited 5/IP/5min. |
 | `/api/wallet-pass` | POST | Generates signed Google Wallet JWT with inline class+object, per-type hero images |
 
 **Login flow:**
@@ -557,6 +565,7 @@ interface GlobalLockDoc {
 | `createTicket` | `actions/tickets.ts` | Create a new ticket with QR (accepts dial code) |
 | `validateTicket` | `actions/tickets.ts` | Scan validation (granted/already/invalid + scannedBy attribution) |
 | `deleteOneTicket` | `actions/tickets.ts` | Delete a single ticket |
+| `updateGuestName` | `actions/tickets.ts` | Edit a guest's name (admin-only, busts ISR cache) |
 | `autoMarkAbsent` | `actions/tickets.ts` | Deadline-based absent marking (timezone-aware) |
 | `syncOfflineScans` | `actions/tickets.ts` | Sync queued offline scans on reconnect (idempotent) |
 | `getTicketsForOfflineCache` | `actions/tickets.ts` | Minimal-fields ticket list for scanner offline cache |
