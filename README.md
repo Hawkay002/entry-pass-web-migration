@@ -520,6 +520,18 @@ interface StaffRole {
 }
 ```
 
+### Event Settings
+```typescript
+interface EventSettings {
+  name: string;
+  place: string;
+  deadline: string;         // ISO datetime-local string
+  timezone?: string;        // e.g. "+05:30", "auto"
+  multiGate?: boolean;      // multi-gate mode toggle
+  gateCategories?: string[]; // custom category names
+}
+```
+
 ### Remote Lock
 ```typescript
 interface GlobalLockDoc {
