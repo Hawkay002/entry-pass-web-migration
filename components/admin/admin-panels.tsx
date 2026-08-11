@@ -247,23 +247,61 @@ function TwoFactorPanel() {
                   <summary className="cursor-pointer">Can't scan? Show manual key</summary>
                   <code className="mt-1 block break-all rounded bg-white/5 p-2">{secret}</code>
                 </details>
-                <div className="flex justify-center gap-2">
+                {/* Smart OTP: single invisible input, visual boxes */}
+                <div
+                  className="relative flex justify-center gap-2"
+                  onPaste={(e) => {
+                    e.preventDefault();
+                    const pasted = e.clipboardData.getData("text").replace(/\D/g, "").slice(0, 6);
+                    if (pasted) {
+                      setVerifyCode(pasted);
+                      if (pasted.length === 6) confirmSetup();
+                    }
+                  }}
+                >
                   {Array.from({ length: 6 }).map((_, i) => (
-                    <input
+                    <div
                       key={i}
-                      type="text"
-                      inputMode="numeric"
-                      maxLength={1}
-                      value={verifyCode[i] ?? ""}
-                      onChange={(e) => {
-                        if (!/^\d?$/.test(e.target.value)) return;
-                        const next = verifyCode.split("");
-                        next[i] = e.target.value;
-                        setVerifyCode(next.join(""));
-                      }}
-                      className="h-12 w-10 rounded-lg border border-white/15 bg-white/5 text-center text-lg text-white focus:border-accent-secondary focus:outline-none"
-                    />
+                      className={cn(
+                        "flex h-12 w-10 items-center justify-center rounded-lg border text-center text-lg font-semibold transition-colors",
+                        verifyCode.length === i
+                          ? "border-accent-secondary bg-accent-secondary/5 ring-2 ring-accent-secondary/30"
+                          : i < verifyCode.length
+                          ? "border-accent-secondary/40 bg-accent-secondary/10 text-white"
+                          : "border-white/15 bg-white/5"
+                      )}
+                    >
+                      {verifyCode[i] ?? ""}
+                    </div>
                   ))}
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    value={verifyCode}
+                    onChange={(e) => {
+                      const digits = e.target.value.replace(/\D/g, "").slice(0, 6);
+                      setVerifyCode(digits);
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === "Backspace" && verifyCode.length > 0) {
+                        e.preventDefault();
+                        setVerifyCode(verifyCode.slice(0, -1));
+                      }
+                      if (e.key === "Enter" && verifyCode.length === 6) {
+                        confirmSetup();
+                      }
+                    }}
+                    onPaste={(e) => {
+                      e.preventDefault();
+                      const pasted = e.clipboardData.getData("text").replace(/\D/g, "").slice(0, 6);
+                      if (pasted) {
+                        setVerifyCode(pasted);
+                        if (pasted.length === 6) confirmSetup();
+                      }
+                    }}
+                    className="absolute inset-0 w-full cursor-text opacity-0"
+                    autoFocus
+                  />
                 </div>
               </div>
               <DialogFooter>
