@@ -58,11 +58,19 @@ export default function KioskPage() {
     return <KioskPicker onSelect={(id) => { setKioskId(id); sessionStorage.setItem(SESSION_KIOSK_KEY, id); }} />;
   }
 
+  // If the kiosk is deleted while active, show 404.
+  const [kioskDeleted, setKioskDeleted] = useState(false);
+
+  if (kioskDeleted) return <KioskNotFound />;
+
   if (!storedPin) {
     return <PinGate onUnlock={handleUnlock} kioskId={kioskId} />;
   }
 
-  return <KioskScanner pin={storedPin} kioskId={kioskId} onLock={handleLock} />;
+  return <KioskScanner pin={storedPin} kioskId={kioskId}
+    onLock={() => { sessionStorage.removeItem(SESSION_KEY); setStoredPin(null); }}
+    onKioskDeleted={() => { setKioskDeleted(true); }}
+  />;
 }
 
 /** Kiosk 404 — shown when ?id= doesn't match any kiosk. */
@@ -306,7 +314,7 @@ function KeypadButton({
 
 // ---------------- Kiosk Scanner ----------------
 
-function KioskScanner({ pin, kioskId, onLock }: { pin: string; kioskId: string; onLock: () => void }) {
+function KioskScanner({ pin, kioskId, onLock, onKioskDeleted }: { pin: string; kioskId: string; onLock: () => void; onKioskDeleted: () => void }) {
   const [online, setOnline] = useState(() =>
     typeof navigator !== "undefined" ? navigator.onLine : true
   );
@@ -322,6 +330,15 @@ function KioskScanner({ pin, kioskId, onLock }: { pin: string; kioskId: string; 
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ pin, kioskId }),
       });
+      if (res.status === 403) {
+        const data = await res.json().catch(() => ({}));
+        if (data.error?.includes("not available") || data.error?.includes("not found")) {
+          onKioskDeleted();
+          return;
+        }
+        onLock();
+        return;
+      }
       const data = await res.json();
       if (res.ok && data.ok) {
         await cacheKioskTickets(data.tickets);
@@ -329,7 +346,7 @@ function KioskScanner({ pin, kioskId, onLock }: { pin: string; kioskId: string; 
     } catch {
       // Network down — keep using whatever's cached.
     }
-  }, [pin]);
+  }, [pin, onLock, onKioskDeleted]);
 
   useEffect(() => {
     refreshCache();

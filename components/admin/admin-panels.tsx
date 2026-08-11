@@ -36,10 +36,11 @@ import {
   removeStaffFromRole,
   deleteRole,
 } from "@/app/actions/roles";
-import { applyRemoteLocks, factoryReset, fetchAllLocks, fetchMaintenanceInfo, checkAndEndMaintenance, unlockStaff, createKiosk, updateKiosk, deleteKiosk, getKiosksList } from "@/app/actions/admin";
+import { applyRemoteLocks, factoryReset, fetchAllLocks, fetchMaintenanceInfo, checkAndEndMaintenance, unlockStaff, createKiosk, updateKiosk, deleteKiosk } from "@/app/actions/admin";
 import { useRoles } from "@/hooks/use-roles";
 import { useSettings } from "@/hooks/use-settings";
 import { useGatesMode } from "@/hooks/use-gates";
+import { useKiosks, type KioskListItem } from "@/hooks/use-kiosks";
 import type { LockReasonType, StaffMember, StaffRole, TabName } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -1279,10 +1280,9 @@ function RemoteDeviceManagement() {
 // ============== Kiosk (Self Check-in) =================
 
 function KioskPanel() {
-  const [kiosks, setKiosks] = useState<Array<{ id: string; name: string; gateId: string | null }>>([]);
-  const [loading, setLoading] = useState(true);
+  const { kiosks, loading } = useKiosks();
   const [addOpen, setAddOpen] = useState(false);
-  const [editKiosk, setEditKiosk] = useState<{ id: string; name: string; gateId: string | null } | null>(null);
+  const [editKiosk, setEditKiosk] = useState<KioskListItem | null>(null);
   const [busy, setBusy] = useState(false);
   const [deleteKioskConfirm, setDeleteKioskConfirm] = useState<{ id: string; name: string } | null>(null);
   const { settings: kioskSettings } = useSettings();
@@ -1297,15 +1297,6 @@ function KioskPanel() {
   const [editPin, setEditPin] = useState("");
   const [editGate, setEditGate] = useState<string | null>(null);
 
-  function refresh() {
-    getKiosksList()
-      .then((res) => { if (res.ok) setKiosks(res.kiosks); })
-      .catch(() => {})
-      .finally(() => setLoading(false));
-  }
-
-  useEffect(() => { refresh(); }, []);
-
   async function handleAdd() {
     if (!newName.trim() || newPin.length < 4) return;
     setBusy(true);
@@ -1315,7 +1306,6 @@ function KioskPanel() {
       toast.success("Kiosk created");
       setNewName(""); setNewPin(""); setNewGate(null);
       setAddOpen(false);
-      refresh();
     } else {
       toast.error("Failed", { description: res.error });
     }
@@ -1332,7 +1322,6 @@ function KioskPanel() {
     if (res.ok) {
       toast.success("Kiosk updated");
       setEditKiosk(null);
-      refresh();
     } else {
       toast.error("Failed", { description: res.error });
     }
@@ -1344,7 +1333,6 @@ function KioskPanel() {
     setBusy(false);
     if (res.ok) {
       toast.success(`Kiosk "${name}" deleted`);
-      refresh();
     } else {
       toast.error("Failed");
     }
