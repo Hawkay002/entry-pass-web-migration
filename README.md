@@ -36,16 +36,18 @@ Built with Next.js 16, React 19, Tailwind v4, Firebase Admin SDK, and Upstash Re
 - **4 Ticket Types** — Classic, VIP, SVIP, VVIP — each with unique shader colors, fonts (The Seasons for names + Gotham Nights for body), and VVIP engraved text effect. Ticket names auto-balance across up to 3 lines and fill the space to the perforation. Gate number shown on ticket face footer (`age / gender • Gate X`)
 
 ### Admin & Security
+- **Admin 2FA (TOTP)** — Two-factor authentication via Google Authenticator. Admin scans a QR code in Configuration, then enters a 6-digit code on every login. Smart OTP input (type anywhere, auto-fill boxes, paste support, auto-submit). 8 one-time recovery codes generated on enable (downloadable as .txt). Staff accounts skip 2FA entirely. Session cookie only minted after 2FA passes. Recovery codes hashed with SHA-256
 - **Dynamic Roles** — Admin creates roles and adds staff (single or **bulk upload** via CSV/JSON/XLSX). **Collapsible role cards** (collapsed by default). Edit/delete staff moved to **Remote Device Management** — select staff, then batch edit (vertical list in modal) or batch delete. Google Sign-In maps emails automatically
-- **Multi-Gate System** — Toggle multi-gate mode in Configuration (**admin-only** UI + server enforcement). Create gate categories (Guest Entry, Staff, Security, Management — free text). **Collapsible categories** (collapsed by default). Add gates inside categories with ticket-type acceptance (Classic/VIP/SVIP/VVIP). **Round-robin auto-assignment** balances tickets across gates. Staff assigned to specific gates. Wrong-gate scans blocked with "WRONG GATE" error. Gate column in guest list. Ticket face shows assigned gate. Full cascade delete on disable/clear/factory-reset. **Multi-device realtime sync** for the toggle
-- **Configuration** — **Calendar + time picker** for deadline (shadcn Calendar with month/year dropdown selectors, 12-hour AM/PM time input). **Premium Active Settings card** (gradient, hero event name, icon chips for venue/deadline, timezone + multi-gate badges). Staff see a **read-only** version of this card (no form, no gate config). **Admin-only** edit form
+- **Multi-Gate System** — Toggle multi-gate mode in Configuration (**admin-only** UI + server enforcement). Create gate categories (Guest Entry, Staff, Security, Management — free text). **Collapsible categories** (collapsed by default). Add gates inside categories with ticket-type acceptance (Classic/VIP/SVIP/VVIP). **Round-robin auto-assignment** balances tickets across gates. Staff assigned to specific gates. Wrong-gate scans blocked with "WRONG GATE" error (shows gate **name** not ID). Gate column in guest list + **gate filter**. Export includes gate. Ticket face shows assigned gate. Full cascade delete on disable/clear/factory-reset. **Multi-device realtime sync** for the toggle
+- **Multi-Kiosk System** — Create multiple self check-in kiosks, each with its own **name, PIN, gate assignment, and URL** (`/kiosk?id={kioskId}`). Admin CRUD via Configuration (**realtime onSnapshot**). Kiosk picker shown if no `?id=` param. Each kiosk validates its own PIN + enforces its gate. Per-kiosk+IP rate limiting. Kiosk 404 page if link is invalid/deleted. Deletion detected within 2-min cache refresh cycle
+- **Configuration** — **Calendar + time picker** for deadline (shadcn Calendar with month/year dropdown selectors, 12-hour AM/PM two-box time input). **Premium Active Settings card** (gradient, hero event name, icon chips for venue/deadline, timezone + multi-gate badges). Staff see a **read-only** version of this card (no form, no gate config). **Admin-only** edit form
 - **Remote Device Management** — Select staff from role → batch **edit** (name/email/gate) or **delete**. Staff selection modal shows 10 rows on mobile, 8 on desktop before scrolling. Lock/unlock tabs with reason (basic/review/maintenance)
 - **Remote Lock** — Lock or unlock specific tabs per staff member with live status badges. Selective unlock
 - **Maintenance Mode** — Lock all staff instantly with duration timer (OctagonAlert icon). Auto-unlock when time expires
 - **Staff Auto-Logout** — Removing a staff member instantly revokes their session and kicks them out
 - **Auto-Absent** — Deadline-based status automation with **timezone-aware** offsets (38 zones, UTC-12 to UTC+14). Zero page reload
-- **Activity Logs** — 12 colored action types. **Unlimited** — Redis stores first 1000, overflow routes to Firestore. CSV/XLSX/PDF export of selected logs. All logins logged (incl. Google display name). Single ticket deletions now logged with guest name
-- **Factory Reset** — Nukes the database with an immutable audit trail preserved. Also deletes gates + OG snapshots
+- **Activity Logs** — 12 colored action types. **Unlimited** — Redis stores first 1000, overflow routes to Firestore. CSV/XLSX/PDF export of selected logs. All logins logged (incl. Google display name). Single ticket deletions logged with guest name
+- **Factory Reset** — Nukes the database with an immutable audit trail preserved. Also deletes gates + OG snapshots + kiosks. Separate glass card with "Danger Zone" heading
 - **Session-Expired UX** — Expired cookies redirect to `/login?reason=expired` with a toast explanation
 
 ### Help & Support
@@ -61,6 +63,7 @@ Built with Next.js 16, React 19, Tailwind v4, Firebase Admin SDK, and Upstash Re
 - **Delete Confirmations** — Both guest list + activity logs + gate categories/gates have confirmation modals before destructive actions
 - **Login Logging** — All staff/admin logins recorded (incl. Google display name). Session expiry shows a toast on the login page
 - **Landing Page** — Premium glass aesthetic matching the app: Starfield + atmospheric drifting gradient orbs, Lenis smooth scroll, live holographic shader ticket showcase (all 4 tiers), glass-pill nav, animated glow cards, magnetic CTAs with button-in-button trailing icons, Outfit + The Seasons typography. Motion forced past prefers-reduced-motion for ambient effects
+- **Error Pages** — Custom **404** (ticket-specific + generic) and global **error boundary** with glass aesthetic, The Seasons serif, and contextual CTAs (Contact Organizer, Go Home, Try Again)
 
 ### Customization
 - **Custom Backgrounds** — Pick from 12 atmospheric background images (or Starfield default) via the image icon in the header. Applies live across all tabs, per-device via localStorage. Tiny WebP thumbnails for instant modal load; full-res only fetches on selection.
@@ -83,8 +86,8 @@ Built with Next.js 16, React 19, Tailwind v4, Firebase Admin SDK, and Upstash Re
 - **Report Issue** — Floating button (bottom-right) opens a form panel (name, phone with country code dropdown, reason, message). Submits via **Telegram Bot API** to admin's chat. Rate-limited (5/IP/5min). Confirmation screen with animated BadgeCheck + Report ID + copy button. Uses `TELEGRAM_BOT_TOKEN` + `CHAT_ID` env vars
 
 ### Offline & Kiosk
-- **PWA / Offline Scanner** — Installable app (manifest + service worker, network-first caching). Staff scanner caches a minimal ticket snapshot in IndexedDB (refreshed every 5 min, not an always-on listener) and works with no WiFi; queued scans sync automatically on reconnect. Critical for venues with poor connectivity.
-- **Self Check-in Kiosk** — A public PIN-gated URL (`/kiosk`) where guests scan their own QR code on a mounted tablet. Admin sets the PIN in Configuration (kill-switch: clear the PIN). Separate from the staff scanner; scans are logged as `SELF_CHECKIN`. **Works offline** the same way as the staff scanner, but caches only `{id, status, scanned}` (no guest PII) since it's a public device. Brute-force protected: 5 wrong-PIN attempts per IP per 5 minutes (Upstash-backed; a correct PIN resets the counter). Features: **front camera** (selfie mode for guest-facing tablet), physical **keyboard input** for the PIN (numpad + number row + Backspace + Enter), stays active permanently after unlock (no exit button), rectangular SVG country flags in dropdown.
+- **PWA / Offline Scanner** — Installable app (manifest + service worker, network-first caching). Staff scanner caches a minimal ticket snapshot in IndexedDB (refreshed every 5 min, not an always-on listener) and works with no WiFi; queued scans sync automatically on reconnect. **Scanner warning** if multi-gate is on but staff has no gate assigned. Critical for venues with poor connectivity.
+- **Self Check-in Kiosk** — **Multiple kiosks**, each with its own PIN + gate + URL (`/kiosk?id={kioskId}`). Admin creates/manages kiosks in Configuration (realtime sync). Kiosk picker shown when no `?id=` param. Each kiosk validates its own PIN and enforces its assigned gate (wrong-gate blocked). Per-kiosk+IP rate limiting (5 wrong PINs/5min). **6-box PIN entry** with show/hide toggle. Front camera (selfie mode). Physical keyboard input. Kiosk-specific 404 page if link is invalid or kiosk deleted. Works offline (caches `{id, status, scanned}` — no guest PII).
 
 ---
 
@@ -114,6 +117,7 @@ Built with Next.js 16, React 19, Tailwind v4, Firebase Admin SDK, and Upstash Re
 | **Toasts** | [Sonner](https://sonner.emilkowal.ski) | 2.0.7 |
 | **Flags** | [flag-icons](https://github.com/lipis/flag-icons) | 7.5 |
 | **Wallet** | [Google Wallet API](https://developers.google.com/wallet) | JWT RS256 |
+| **2FA** | [otplib](https://github.com/yeojz/otplib) (TOTP) | 13.4 |
 | **Shaders** | [Paper Shaders](https://github.com/simeydotme/pokemon-cards-css) (AdmitOneTicket) | — |
 
 ---
@@ -365,7 +369,8 @@ Collections are created automatically on first write, or pre-initialize with `no
 | `help_contacts` | Admin-managed help tray contacts |
 | `activity_logs/{logId}` | Overflow activity logs (when Redis is full) |
 | `og_snapshots/{ticketId}` | Pre-rendered OG share previews (base64 JPEG, server-only) |
-| `admin_settings/security` | Kiosk PIN (admin-only) |
+| `admin_settings/security` | Multi-kiosk configs (`kiosks[]`) — admin-only |
+| `admin_settings/two_factor` | Admin 2FA secrets + recovery codes — admin-only |
 | `audit_trail/{doc}` | Factory reset audit records |
 | `communications` | Legacy chat messages (backwards compat, unused) |
 | `typing_status` | Legacy typing indicators (backwards compat, unused) |
@@ -554,6 +559,27 @@ interface EventSettings {
 }
 ```
 
+### Kiosk Config
+```typescript
+interface KioskConfig {      // stored in admin_settings/security.kiosks[]
+  id: string;                // short random id (for URL)
+  name: string;              // e.g. "Gate A Kiosk"
+  pin: string;               // 4-6 digits
+  gateId: string | null;     // assigned gate (null = accept all)
+  createdAt: number;
+}
+```
+
+### 2FA Config
+```typescript
+interface TwoFactorConfig {  // stored in admin_settings/two_factor.admins[uid]
+  secret: string;            // base32 TOTP secret
+  enabled: boolean;
+  recoveryCodes: string[];   // hashed (SHA-256)
+  setupAt: number;
+}
+```
+
 ### Remote Lock
 ```typescript
 interface GlobalLockDoc {
@@ -583,6 +609,8 @@ interface GlobalLockDoc {
 | `/api/ticket-verify` | POST | Public phone verification for guest ticket access (full number + country code, rate-limited 5/IP/5min) |
 | `/api/og-snapshot` | POST | Stores a pre-rendered OG share preview JPEG for a ticket (captured at creation time). Rate-limited 10/IP/5min. |
 | `/api/report-issue` | POST | Receives issue reports from the interactive ticket page, forwards to Telegram Bot API. Rate-limited 5/IP/5min. |
+| `/api/kiosk-list` | GET | Public list of available kiosks (id + name only, no PINs). Used by kiosk picker. |
+| `/api/2fa-setup` | GET/POST/DELETE | Admin 2FA setup: GET returns QR+secret, POST verifies code + enables, DELETE disables. |
 | `/api/wallet-pass` | POST | Generates signed Google Wallet JWT with inline class+object, per-type hero images |
 
 **Login flow:**
@@ -616,6 +644,9 @@ interface GlobalLockDoc {
 | `addGateCategory` | `actions/gates.ts` | Add a gate category (free text) |
 | `deleteGateCategory` | `actions/gates.ts` | Delete category + all its gates |
 | `disableMultiGate` | `actions/gates.ts` | Cascade: delete gates, clear ticket/staff gate fields |
+| `createKiosk` | `actions/admin.ts` | Create a kiosk (name + PIN + gateId) |
+| `updateKiosk` | `actions/admin.ts` | Update kiosk name/PIN/gate |
+| `deleteKiosk` | `actions/admin.ts` | Delete a kiosk by id |
 | `createRole` | `actions/roles.ts` | Create a new staff role |
 | `addStaffToRole` | `actions/roles.ts` | Add staff member to a role (incl. gateId) |
 | `bulkAddStaffToRole` | `actions/roles.ts` | Bulk add staff (CSV/JSON/XLSX) with dedup |
