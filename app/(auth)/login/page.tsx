@@ -98,11 +98,15 @@ function LoginForm() {
       if (code === "auth/invalid-credential" || code === "auth/wrong-password" || code === "auth/user-not-found") {
         setError("Invalid email or password.");
       } else if (code === "auth/unauthorized-domain") {
-        setError("This domain is not authorized for Firebase sign-in.");
+        setError("This domain is not authorized for Firebase sign-in. Add it in Firebase Console → Auth → Settings → Authorized domains.");
       } else if (code === "auth/too-many-requests") {
         setError("Too many attempts. Try again later.");
+      } else if (code === "auth/network-request-failed" || msg.includes("unexpected response")) {
+        setError("Network error reaching Firebase. Check your connection and try again.");
+      } else if (code === "auth/internal-error") {
+        setError("Firebase Auth service error. Please try again in a moment.");
       } else {
-        setError(`${code || "Authentication failed"}: ${msg}`);
+        setError(msg || "Authentication failed.");
       }
     } finally {
       setLoading(false);
@@ -126,10 +130,15 @@ function LoginForm() {
       await handleLoginResult(res, idToken);
     } catch (err) {
       const code = (err as { code?: string }).code ?? "";
+      const msg = (err as { message?: string }).message ?? "";
       if (code === "auth/popup-closed-by-user") {
         setError("Sign-in cancelled.");
+      } else if (code === "auth/network-request-failed" || msg.includes("unexpected response")) {
+        setError("Network error reaching Firebase. Check your connection and try again.");
+      } else if (code === "auth/internal-error") {
+        setError("Firebase service error. Try again in a moment.");
       } else {
-        setError("Google sign-in failed. Try again.");
+        setError(msg || "Google sign-in failed.");
       }
     } finally {
       setLoading(false);
