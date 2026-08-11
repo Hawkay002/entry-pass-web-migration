@@ -4,7 +4,7 @@
 
 import { useState, useEffect } from "react";
 import { toast } from "sonner";
-import { Loader2, Trash2, CalendarIcon, Clock, MapPin, Sparkles } from "lucide-react";
+import { Loader2, Trash2, CalendarIcon, Clock, MapPin, Sparkles, DoorOpen } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -324,7 +324,7 @@ export function SettingsForm({ isAdmin = false }: { isAdmin?: boolean }) {
           {(settings.name || settings.place || settings.deadline) && (
             <button
               onClick={() => setClearOpen(true)}
-              className="absolute right-3 top-3 flex h-7 w-7 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
+              className="absolute right-3 top-3 flex h-7 w-7 items-center justify-center rounded-lg text-destructive transition-colors hover:bg-destructive/10"
               title="Clear all settings"
             >
               <Trash2 className="h-4 w-4" />
@@ -383,7 +383,7 @@ export function SettingsForm({ isAdmin = false }: { isAdmin?: boolean }) {
               )}
               {settings.multiGate && (
                 <Badge variant="outline" className="gap-1 border-accent-secondary/30 text-[0.65rem] font-normal text-accent-secondary">
-                  <Sparkles className="h-2.5 w-2.5" />
+                  <DoorOpen className="h-2.5 w-2.5" />
                   Multi-Gate Active
                 </Badge>
               )}
@@ -393,6 +393,8 @@ export function SettingsForm({ isAdmin = false }: { isAdmin?: boolean }) {
           {/* Countdown */}
           {settings.deadline && <DeadlineCountdown deadline={settings.deadline} />}
         </div>
+
+        <Separator className="my-2" />
 
         {/* Gate management — admin only, visible when multiGate is saved ON */}
         {isAdmin && savedMultiGate && (
