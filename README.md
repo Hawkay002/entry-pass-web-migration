@@ -236,9 +236,14 @@ COOKIE_SIGNATURE_KEY_CURRENT=your_random_32_char_secret
 # Firebase Admin SDK (paste the ENTIRE service account JSON on ONE line)
 FIREBASE_SERVICE_ACCOUNT_KEY={"type":"service_account",...}
 
-# Upstash Redis (for activity logs)
+# Upstash Redis (for activity logs + rate limiting)
 KV_REST_API_URL=https://your-db.upstash.io
 KV_REST_API_TOKEN=your_token
+
+# Telegram Bot (optional — issue reports from interactive ticket page)
+# Create a bot via @BotFather, get your chat ID via @userinfobot
+TELEGRAM_BOT_TOKEN=your_bot_token
+CHAT_ID=your_chat_id
 ```
 
 ### Step 4: Set Admin Email
@@ -248,17 +253,6 @@ In `app/api/login/route.ts` and `lib/firebase/server-auth.ts`, update the `ADMIN
 ```ts
 const ADMIN_EMAILS = ["your-email@gmail.com"];
 ```
-
-### Step 5b: Enable the Self Check-in Kiosk (optional)
-
-The public `/kiosk` route is disabled by default. To enable it:
-
-1. Sign in as admin → **Configuration** → **Self Check-in Kiosk**
-2. Enter a 4–8 digit PIN → **Enable Kiosk**
-3. Open `/kiosk` on a mounted tablet (e.g. `https://etsweb.vercel.app/kiosk`)
-4. Guests enter the PIN once, then scan their own QR code
-
-The PIN is stored in the admin-only `admin_settings/security` Firestore doc — regular staff cannot read it. To disable the kiosk instantly, clear the PIN (or change it). Kiosk scans are attributed to `KIOSK` and logged as `SELF_CHECKIN` in the Activity Logs.
 
 ### Step 5: Deploy Firestore Security Rules
 
@@ -272,6 +266,27 @@ firebase deploy --only firestore:rules
 ```
 
 Or paste the contents of [`firestore.rules`](./firestore.rules) into the Firebase Console -> Firestore -> Rules.
+
+### Step 5b: Initialize Firestore Collections (one-time)
+
+Collections are created automatically on first write, but you can pre-initialize them with placeholder docs using the included script:
+
+```bash
+node scripts/init-collections.cjs
+```
+
+This creates all 10 collections with a single placeholder doc each (then deletes them). See **Firebase Setup → Firestore Collections** below for the full list.
+
+### Step 5c: Enable the Self Check-in Kiosk (optional)
+
+The public `/kiosk` route is disabled by default. To enable it:
+
+1. Sign in as admin → **Configuration** → **Self Check-in Kiosk**
+2. Enter a 4–8 digit PIN → **Enable Kiosk**
+3. Open `/kiosk` on a mounted tablet (e.g. `https://etsweb.vercel.app/kiosk`)
+4. Guests enter the PIN once, then scan their own QR code
+
+The PIN is stored in the admin-only `admin_settings/security` Firestore doc — regular staff cannot read it. To disable the kiosk instantly, clear the PIN (or change it). Kiosk scans are attributed to `KIOSK` and logged as `SELF_CHECKIN` in the Activity Logs.
 
 ### Step 6: Set Custom Claims (one-time)
 
@@ -335,7 +350,7 @@ pnpm dev
 
 ### Firestore Collections
 
-Collections are created automatically on first write. The app uses:
+Collections are created automatically on first write, or pre-initialize with `node scripts/init-collections.cjs`. The app uses:
 
 | Collection | Purpose |
 |---|---|
@@ -346,9 +361,11 @@ Collections are created automatically on first write. The app uses:
 | `global_locks/{userEmail}` | Remote tab locks per staff |
 | `help_contacts` | Admin-managed help tray contacts |
 | `activity_logs/{logId}` | Overflow activity logs (when Redis is full) |
-| `og_snapshots/{ticketId}` | Pre-rendered OG share previews (base64 JPEG) |
+| `og_snapshots/{ticketId}` | Pre-rendered OG share previews (base64 JPEG, server-only) |
 | `admin_settings/security` | Kiosk PIN (admin-only) |
 | `audit_trail/{doc}` | Factory reset audit records |
+| `communications` | Legacy chat messages (backwards compat, unused) |
+| `typing_status` | Legacy typing indicators (backwards compat, unused) |
 
 ---
 
@@ -423,34 +440,36 @@ entry-pass-web/
 |   |-- (app)/              # Authenticated routes (gated by layout)
 |   |   |-- layout.tsx      # Server-side auth check + auto-absent
 |   |   |-- tickets/        # Issue Ticket (form + QR + WhatsApp + live ticket preview + OG capture)
-|   |   |-- guests/         # Guest List (table + filter + import/export + gate column)
-|   |   |-- scanner/        # Camera QR scanner (gate-aware, wrong-gate blocking)
-|   |   |-- settings/       # Configuration + admin panels (multi-gate toggle + gate CRUD)
+|   |   |-- guests/         # Guest List (table + filter + import/export + gate column + edit name)
+|   |   |-- scanner/        # Camera QR scanner (gate-aware, wrong-gate blocking, bell toggle)
+|   |   |-- settings/       # Configuration (admin: form + multi-gate + gate CRUD; staff: read-only)
 |   |   `-- logs/           # Activity Logs (admin only)
 |   |-- (auth)/login/       # Login page (email + Google)
 |   |-- actions/            # Server Actions (tickets, admin, roles, gates, gates-scanner)
-|   |-- api/                # Route Handlers (login, logout, auto-absent, kiosk, ticket-verify, og-snapshot, wallet-pass)
+|   |-- api/                # Route Handlers (login, logout, auto-absent, kiosk, ticket-verify, og-snapshot, report-issue, wallet-pass)
 |   |-- kiosk/              # Public self check-in kiosk (PIN-gated)
-|   |-- ticket/[id]/        # Interactive guest ticket (phone gate + tilt ticket)
+|   |-- ticket/[id]/        # Interactive guest ticket (phone gate + tilt ticket + report issue)
+|   |-- not-found.tsx       # Custom 404 (glass aesthetic)
+|   |-- error.tsx           # Global error boundary
 |   |-- layout.tsx          # Root layout (fonts, toaster, theme, SW registration)
 |   `-- page.tsx            # Landing page (glass aesthetic, Starfield, Lenis, shader ticket showcase)
 |-- components/
-|   |-- admin/              # Admin panels (roles, RDM, maintenance, kiosk, factory reset, gate-panel)
+|   |-- admin/              # Admin panels (roles, RDM w/ batch edit/delete, maintenance, kiosk, factory reset, gate-panel, settings-content)
 |   |-- animate-ui/         # @animate-ui registry icons (BadgeCheck, Bell, BellOff + IconWrapper engine)
 |   |-- guests/             # Import/Export modals
 |   |-- landing/            # Landing sections (Nav, Hero, TicketTiers, Features, CTA, Atmosphere, etc.)
-|   |-- layout/             # App shell, header, nav, starfield, atmosphere, smooth-scroll, help tray
+|   |-- layout/             # App shell, header, nav, starfield, atmosphere, smooth-scroll, help tray, IsAdminContext
 |   |-- logs/               # Activity logs table
 |   |-- scanner/            # Shared QR scanner (admin + kiosk, wrong-gate support)
-|   |-- tickets/            # Interactive ticket, phone gate, ticket card, view modal
-|   `-- ui/                 # shadcn/ui primitives + AdmitOneTicket (WebGL shader) + Switch + animated-glow-card
-|-- hooks/                  # React hooks (settings, tickets, roles, gates, remote-locks, staff-check, contacts, background)
+|   |-- tickets/            # Interactive ticket, phone gate, ticket card, view modal, report issue panel
+|   `-- ui/                 # shadcn/ui primitives + AdmitOneTicket (WebGL shader) + Switch + animated-glow-card + Calendar + Popover + Textarea
+|-- hooks/                  # React hooks (settings, tickets, roles, gates, remote-locks, staff-check, contacts, background, is-in-view)
 |-- lib/
-|   |-- firebase/           # Admin SDK, client SDK, server-auth, logging
-|   |-- auth.ts             # AppUser type (incl. gateId), role helpers
+|   |-- firebase/           # Admin SDK, client SDK, server-auth (resolves gateId), logging
+|   |-- auth.ts             # AppUser type (incl. gateId), role helpers, IsAdminContext
 |   |-- env.ts              # Typed + validated env access
 |   |-- types.ts            # Shared data model (Ticket, Gate, EventSettings, StaffMember)
-|   |-- paths.ts            # Firestore collection paths
+|   |-- paths.ts            # Firestore collection paths (incl. gates, og_snapshots)
 |   |-- capture-ticket.ts   # html-to-image ticket snapshot for OG previews
 |   |-- phone-sanitize.ts   # Paste-sanitizing phone field (dial code extraction)
 |   |-- redis-log.ts        # Upstash activity logging + Firestore overflow (incl. kiosk)
@@ -464,8 +483,8 @@ entry-pass-web/
 |   |-- import-export.ts    # Parse + format (CSV/XLSX/PDF/TXT/DOC/JSON + logs export)
 |   `-- whatsapp.ts         # Ticket snapshot -> WhatsApp share (ticket URL)
 |-- public/                 # Static assets (icons, PWA manifest + SW, backgrounds, fonts, wallet images, audio)
-|-- scripts/                # Dev utilities (jose fix, claim setup, Firebase domain management)
-|-- firestore.rules         # Security rules
+|-- scripts/                # Dev utilities (jose fix, claim setup, domain mgmt, init-collections, generate-staff)
+|-- firestore.rules         # Security rules (incl. gates + og_snapshots)
 |-- proxy.ts                # Edge middleware (cookie gate)
 |-- next.config.ts          # Next.js config
 |-- vercel.json             # Vercel deployment config

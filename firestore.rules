@@ -25,9 +25,11 @@ service cloud.firestore {
       return isSignedIn() && request.auth.token.email == email;
     }
 
-    // ---- Tickets + settings ----------------------------------------------
+    // ---- Tickets + settings + gates --------------------------------------
     // ticket_events_data/shared_event_db/tickets/{ticketId}
     // ticket_events_data/shared_event_db/settings/config
+    // ticket_events_data/shared_event_db/gates/{gateId}
+    // (gates live under ticket_events_data, covered by the wildcard)
     match /ticket_events_data/{docId=**} {
       allow read: if isSignedIn();
       allow create, update: if isSignedIn();
@@ -80,6 +82,12 @@ service cloud.firestore {
     match /audit_trail/{doc} {
       allow write: if isAdmin();
       allow read: if isAdmin();
+    }
+
+    // ---- OG snapshots (server-only, never client-accessible) -------------
+    // og_snapshots/{ticketId} — written/read by Admin SDK only
+    match /og_snapshots/{doc} {
+      allow read, write: if false;
     }
 
     // ---- Default deny -----------------------------------------------------
