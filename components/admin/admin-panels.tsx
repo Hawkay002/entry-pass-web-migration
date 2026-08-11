@@ -1284,6 +1284,7 @@ function KioskPanel() {
   const [addOpen, setAddOpen] = useState(false);
   const [editKiosk, setEditKiosk] = useState<{ id: string; name: string; gateId: string | null } | null>(null);
   const [busy, setBusy] = useState(false);
+  const [deleteKioskConfirm, setDeleteKioskConfirm] = useState<{ id: string; name: string } | null>(null);
   const { settings: kioskSettings } = useSettings();
   const { gates: kioskGates } = useGatesMode();
   const kioskMultiGate = Boolean(kioskSettings.multiGate);
@@ -1402,12 +1403,11 @@ function KioskPanel() {
                   <Pencil className="h-3 w-3" />
                 </button>
                 <button
-                  onClick={() => handleDelete(k.id, k.name)}
-                  disabled={busy}
+                  onClick={() => setDeleteKioskConfirm({ id: k.id, name: k.name })}
                   className="flex h-6 w-6 items-center justify-center rounded text-destructive transition-colors hover:bg-destructive/10"
                   title="Delete"
                 >
-                  {busy ? <Loader2 className="h-3 w-3 animate-spin" /> : <X className="h-3 w-3" />}
+                  <Trash2 className="h-3 w-3" />
                 </button>
               </div>
             </div>
@@ -1490,6 +1490,34 @@ function KioskPanel() {
             <Button onClick={handleEditSave} disabled={busy || !editName.trim()}>
               {busy && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               Save
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Kiosk confirmation */}
+      <Dialog open={!!deleteKioskConfirm} onOpenChange={(o) => !o && setDeleteKioskConfirm(null)}>
+        <DialogContent className="border-destructive">
+          <DialogHeader>
+            <DialogTitle className="text-destructive">Delete Kiosk?</DialogTitle>
+            <DialogDescription>
+              Permanently delete <strong>{deleteKioskConfirm?.name}</strong>?
+              The kiosk URL will stop working immediately.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setDeleteKioskConfirm(null)}>Cancel</Button>
+            <Button
+              variant="destructive"
+              onClick={async () => {
+                if (deleteKioskConfirm) {
+                  await handleDelete(deleteKioskConfirm.id, deleteKioskConfirm.name);
+                  setDeleteKioskConfirm(null);
+                }
+              }}
+            >
+              <Trash2 className="mr-1.5 h-3.5 w-3.5" />
+              Delete
             </Button>
           </DialogFooter>
         </DialogContent>

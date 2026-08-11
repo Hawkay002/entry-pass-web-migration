@@ -95,14 +95,20 @@ export async function POST(request: Request): Promise<Response> {
     if (status === "coming-soon" && !scanned) {
       // Multi-gate enforcement.
       if (ticketGate && kiosk.gateId && ticketGate !== kiosk.gateId) {
+        // Resolve gate name so the kiosk UI shows "Gate A" not the raw id.
+        let gateName = ticketGate;
+        try {
+          const gateSnap = await db.collection(paths.gatesCollection).doc(ticketGate).get();
+          if (gateSnap.exists) gateName = String(gateSnap.data()?.name ?? ticketGate);
+        } catch {}
         await logKioskAction(
           "SELF_CHECKIN",
-          `Wrong gate: ${name} (ID: ${ticketId.slice(0, 6)}) — expected ${ticketGate}, kiosk ${kiosk.name} at ${kiosk.gateId}`
+          `Wrong gate: ${name} (ID: ${ticketId.slice(0, 6)}) — expected ${gateName}, kiosk ${kiosk.name} at ${kiosk.gateId}`
         );
         return NextResponse.json<CheckinResponse>({
           ok: true,
           outcome: "wrong-gate",
-          ticket: { name, id: ticketId, status, expectedGate: ticketGate },
+          ticket: { name, id: ticketId, status, expectedGate: gateName },
         });
       }
 

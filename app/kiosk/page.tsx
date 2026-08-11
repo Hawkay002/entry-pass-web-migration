@@ -9,7 +9,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { QrScanner, type ScanOutcome } from "@/components/scanner/qr-scanner";
 import { cn } from "@/lib/utils";
-import { WifiOff, CloudUpload, Delete, ArrowUpRight, LoaderCircle } from "lucide-react";
+import { WifiOff, CloudUpload, Delete, ArrowUpRight, LoaderCircle, Eye, EyeOff, TicketX, MessageCircle } from "lucide-react";
 import {
   cacheKioskTickets,
   getCachedKioskTickets,
@@ -65,6 +65,33 @@ export default function KioskPage() {
   return <KioskScanner pin={storedPin} kioskId={kioskId} onLock={handleLock} />;
 }
 
+/** Kiosk 404 — shown when ?id= doesn't match any kiosk. */
+function KioskNotFound() {
+  return (
+    <div className="flex min-h-screen flex-col items-center justify-center bg-[#050505] px-4 text-center">
+      <div className="flex h-16 w-16 items-center justify-center rounded-full bg-destructive/10">
+        <TicketX className="h-8 w-8 text-destructive" />
+      </div>
+      <h1 className="mt-6 text-3xl font-bold tracking-tight text-white" style={{ fontFamily: '"The Seasons", serif' }}>
+        Kiosk not found
+      </h1>
+      <p className="mt-2 max-w-sm text-sm text-muted-foreground">
+        This kiosk link is invalid or the kiosk has been removed.
+        Please contact the event organizer.
+      </p>
+      <a
+        href="https://wa.me/918777845713"
+        target="_blank"
+        rel="noopener noreferrer"
+        className="mt-6 flex items-center gap-2 rounded-full bg-primary px-5 py-2.5 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/80"
+      >
+        <MessageCircle className="h-4 w-4" />
+        Contact Organizer
+      </a>
+    </div>
+  );
+}
+
 /** Kiosk picker — shown when no ?id= param and nothing in sessionStorage. */
 function KioskPicker({ onSelect }: { onSelect: (id: string) => void }) {
   const [kiosks, setKiosks] = useState<Array<{ id: string; name: string }>>([]);
@@ -110,6 +137,8 @@ function PinGate({ onUnlock, kioskId }: { onUnlock: (pin: string) => void; kiosk
   const [entry, setEntry] = useState("");
   const [error, setError] = useState("");
   const [checking, setChecking] = useState(false);
+  const [showPin, setShowPin] = useState(false);
+  const [notFound, setNotFound] = useState(false);
 
   // Refs so the keydown handler always sees the latest values without
   // re-registering on every keystroke.
@@ -141,9 +170,13 @@ function PinGate({ onUnlock, kioskId }: { onUnlock: (pin: string) => void; kiosk
         body: JSON.stringify({ pin: entry, ticketId: "kiosk-pin-check", kioskId }),
       });
       if (res.status === 403) {
-        // 403 = PIN missing or wrong. A granted/already/invalid outcome means
-        // the PIN was accepted (the dummy id just won't match a real ticket).
-        setError("Incorrect PIN or kiosk not enabled.");
+        // Check if kiosk doesn't exist vs wrong PIN.
+        const data = await res.json().catch(() => ({}));
+        if (data.error?.includes("not found")) {
+          setNotFound(true);
+        } else {
+          setError("Incorrect PIN or kiosk not enabled.");
+        }
       } else if (res.ok) {
         onUnlock(entry);
       } else {
@@ -182,48 +215,64 @@ function PinGate({ onUnlock, kioskId }: { onUnlock: (pin: string) => void; kiosk
     return () => window.removeEventListener("keydown", onKeyDown);
   }, []);
 
+  if (notFound) return <KioskNotFound />;
+
   return (
-    <div className="glass-panel mx-auto flex max-w-md flex-col items-center justify-center px-8 py-10 text-white">
-      <div className="mb-2 flex items-center gap-2 text-emerald-400">
-        <ScanLineIcon className="h-7 w-7" />
-        <h1 className="text-2xl font-semibold tracking-tight">Self Check-in</h1>
-      </div>
-      <p className="mb-8 text-sm text-white/60">Enter the event PIN to begin</p>
+    <div className="flex min-h-screen flex-col items-center justify-center bg-[#050505] p-4">
+      <div className="glass-panel flex w-full max-w-md flex-col items-center px-6 py-8 text-white md:py-6">
+        <div className="mb-2 flex items-center gap-2 text-emerald-400">
+          <ScanLineIcon className="h-7 w-7" />
+          <h1 className="text-2xl font-semibold tracking-tight">Self Check-in</h1>
+        </div>
+        <p className="mb-6 text-sm text-white/60">Enter the event PIN to begin</p>
 
-      <div className="mb-6 flex h-16 flex-wrap items-center justify-center gap-2">
-        {Array.from({ length: 8 }).map((_, i) => (
-          <span
-            key={i}
-            className={cn(
-              "h-4 w-4 rounded-full transition-colors",
-              i < entry.length ? "bg-emerald-400" : "bg-white/15"
+        {/* PIN display + show/hide toggle */}
+        <div className="mb-6 flex items-center gap-3">
+          <div className="flex flex-wrap items-center justify-center gap-2">
+            {Array.from({ length: Math.max(4, entry.length) }).map((_, i) => (
+              <span
+                key={i}
+                className={cn(
+                  "flex h-10 w-8 items-center justify-center rounded-lg border text-lg transition-colors",
+                  i < entry.length ? "border-emerald-400/40 bg-emerald-400/10 text-emerald-400" : "border-white/15 bg-white/5"
+                )}
+              >
+                {showPin && i < entry.length ? entry[i] : ""}
+              </span>
+            ))}
+          </div>
+          <button
+            onClick={() => setShowPin((s) => !s)}
+            className="flex h-8 w-8 items-center justify-center rounded-lg text-white/50 transition-colors hover:bg-white/10 hover:text-white"
+            title={showPin ? "Hide PIN" : "Show PIN"}
+          >
+            {showPin ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+          </button>
+        </div>
+
+        <div className="grid grid-cols-3 gap-2 md:gap-3">
+          {["1", "2", "3", "4", "5", "6", "7", "8", "9"].map((d) => (
+            <KeypadButton key={d} onClick={() => press(d)}>{d}</KeypadButton>
+          ))}
+          <KeypadButton onClick={() => press("del")} variant="ghost">
+            <Delete className="h-7 w-7" />
+          </KeypadButton>
+          <KeypadButton onClick={() => press("0")}>0</KeypadButton>
+          <KeypadButton
+            onClick={submit}
+            disabled={entry.length < 4 || checking}
+            variant="primary"
+          >
+            {checking ? (
+              <LoaderCircle className="h-7 w-7 !animate-spin" />
+            ) : (
+              <ArrowUpRight className="h-7 w-7" />
             )}
-          />
-        ))}
-      </div>
+          </KeypadButton>
+        </div>
 
-      <div className="grid grid-cols-3 gap-3">
-        {["1", "2", "3", "4", "5", "6", "7", "8", "9"].map((d) => (
-          <KeypadButton key={d} onClick={() => press(d)}>{d}</KeypadButton>
-        ))}
-        <KeypadButton onClick={() => press("del")} variant="ghost">
-          <Delete className="h-7 w-7" />
-        </KeypadButton>
-        <KeypadButton onClick={() => press("0")}>0</KeypadButton>
-        <KeypadButton
-          onClick={submit}
-          disabled={entry.length < 4 || checking}
-          variant="primary"
-        >
-          {checking ? (
-            <LoaderCircle className="h-7 w-7 !animate-spin" />
-          ) : (
-            <ArrowUpRight className="h-7 w-7" />
-          )}
-        </KeypadButton>
+        {error && <p className="mt-6 text-sm text-red-400">{error}</p>}
       </div>
-
-      {error && <p className="mt-6 text-sm text-red-400">{error}</p>}
     </div>
   );
 }
@@ -244,7 +293,7 @@ function KeypadButton({
       onClick={onClick}
       disabled={disabled}
       className={cn(
-        "flex h-20 w-20 items-center justify-center rounded-2xl text-2xl font-medium transition-all active:scale-95 disabled:opacity-40",
+        "flex h-16 w-16 items-center justify-center rounded-2xl text-2xl font-medium transition-all active:scale-95 disabled:opacity-40 md:h-[4.5rem] md:w-[4.5rem]",
         variant === "default" && "bg-white/10 hover:bg-white/20",
         variant === "primary" && "bg-emerald-500 text-black hover:bg-emerald-400",
         variant === "ghost" && "bg-transparent text-white/70 hover:bg-white/10"
@@ -420,7 +469,8 @@ function KioskScanner({ pin, kioskId, onLock }: { pin: string; kioskId: string; 
   }
 
   return (
-    <div className="glass-panel mx-auto flex max-w-md flex-col items-center justify-center px-6 py-8 text-white">
+    <div className="flex min-h-screen flex-col items-center justify-center bg-[#050505] p-4">
+      <div className="glass-panel flex w-full max-w-md flex-col items-center px-6 py-8 text-white">
       <div className="mb-6 flex items-center gap-2 text-emerald-400">
         <ScanLineIcon className="h-6 w-6" />
         <h1 className="text-xl font-semibold">Self Check-in</h1>
@@ -450,6 +500,7 @@ function KioskScanner({ pin, kioskId, onLock }: { pin: string; kioskId: string; 
         <p className="mt-6 text-center text-sm text-white/50">
           Point your camera at the QR code on your pass
         </p>
+      </div>
       </div>
     </div>
   );

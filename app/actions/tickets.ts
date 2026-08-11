@@ -121,15 +121,21 @@ export async function validateTicket(
     // Multi-gate enforcement: if the ticket has an assigned gate and this
     // scanner's gate doesn't match, block entry WITHOUT mutating the ticket.
     if (ticketGate && scannerGateId && ticketGate !== scannerGateId) {
+      // Resolve the gate name so the scanner UI shows "Gate A" not the raw id.
+      let gateName = ticketGate;
+      try {
+        const gateSnap = await db.collection(paths.gatesCollection).doc(ticketGate).get();
+        if (gateSnap.exists) gateName = String(gateSnap.data()?.name ?? ticketGate);
+      } catch {}
       await logAction(
         user,
         "SCAN_ENTRY",
-        `Wrong gate: ${name} (ID: ${ticketId.slice(0, 6)}) — expected ${ticketGate}, scanned at ${scannerGateId}`
+        `Wrong gate: ${name} (ID: ${ticketId.slice(0, 6)}) — expected ${gateName}, scanned at ${scannerGateId}`
       );
       return {
         ok: true,
         outcome: "wrong-gate",
-        ticket: { name, id: ticketId, status, expectedGate: ticketGate },
+        ticket: { name, id: ticketId, status, expectedGate: gateName },
       };
     }
 

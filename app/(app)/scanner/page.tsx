@@ -13,6 +13,7 @@ import { useLockedTabs } from "@/components/layout/locked-tabs-context";
 import { QrScanner, type ScanOutcome } from "@/components/scanner/qr-scanner";
 import { validateTicket, syncOfflineScans, getTicketsForOfflineCache } from "@/app/actions/tickets";
 import { getScannerGate } from "@/app/actions/gates-scanner";
+import { useGatesMode } from "@/hooks/use-gates";
 import { Bell } from "@/components/animate-ui/icons/bell";
 import { BellOff } from "@/components/animate-ui/icons/bell-off";
 import {
@@ -45,6 +46,7 @@ export default function ScannerPage() {
   });
   const [scannerGate, setScannerGate] = useState<{ id: string; name: string } | null>(null);
   const [multiGateOn, setMultiGateOn] = useState(false);
+  const { gateMap } = useGatesMode();
 
   // Resolve this scanner's gate on mount (from staff assignment + settings).
   useEffect(() => {
@@ -165,7 +167,7 @@ export default function ScannerPage() {
           kind: "wrong-gate",
           name: t.name,
           id: ticketId,
-          expectedGate: t.gate,
+          expectedGate: gateMap.get(t.gate)?.name ?? t.gate,
         };
       }
       if (t.status === "coming-soon" && !t.scanned) {
