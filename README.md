@@ -747,7 +747,15 @@ pnpm typecheck    # TypeScript check (no emit)
 
 ## Firebase Read Cost Estimate (Spark / Free Tier)
 
-The Spark (free) plan includes **50,000 Firestore reads/day**. This app is optimized to stay well within that limit. The **Typical** column shows a standard event; the **Optimal** column shows the maximum event size that stays just under the 50K cap.
+The Spark (free) plan includes these daily quotas (**separate, not shared**):
+
+| Quota | Daily Limit |
+|---|---|
+| Document reads | 50,000 |
+| Document writes | 20,000 |
+| Document deletes | 20,000 |
+
+The **Typical** column shows a standard event; the **Optimal** column shows the maximum event size that stays just under the 50K read cap.
 
 > **Typical:** 200 tickets · 1 admin (8h, 2h on Settings) · 4 staff (8h) · 1 kiosk (8h) · 2 scanners (8h, 500 scans)
 >
@@ -788,6 +796,25 @@ Adding a **3rd scanner tab** adds ~6,600 reads/day at 200 tickets (reduces max c
 - **Auto-absent** — replaced 10s polling with a single `setTimeout` at the exact deadline moment (timezone-aware)
 - **Help contacts** — `onSnapshot` only activates when the Help Tray opens (was on every authenticated page)
 - **Kiosk deletion** — instant via `onSnapshot` on `kiosk_status/{id}` (replaced 2-min poll)
+
+### Write estimate (20K writes/day limit)
+
+Writes are **not a bottleneck** — the read-heavy polling dominates by 200×. A typical event uses <10% of the write quota:
+
+| Write source | Typical (200 tix) | Optimal (450 tix) |
+|---|---|---|
+| Ticket creation | ~200 | ~450 |
+| Per-scan update (`scanned`, `scannedAt`, `scannedBy`) | ~500 | ~900 |
+| Kiosk self check-in writes | ~200 | ~450 |
+| Remote lock/unlock operations | ~10 | ~15 |
+| Maintenance mode (lock all staff) | ~4 | ~6 |
+| Auto-absent batch update | ~200 | ~450 |
+| Settings save | ~5 | ~5 |
+| Kiosk CRUD (`kiosk_status` doc) | ~3 | ~3 |
+| Role/gate CRUD | ~10 | ~15 |
+| Activity log overflow → Firestore | ~0 | ~0 |
+| | **~1,132** | **~2,294** |
+| | **% of 20K writes** | **~5.7%** ✅ | **~11.5%** ✅ |
 
 ---
 
