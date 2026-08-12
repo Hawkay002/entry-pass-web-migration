@@ -66,14 +66,18 @@ export function InteractiveTicket({ tickets, settings }: { tickets: TicketData[]
     return () => clearTimeout(t);
   }, []);
   const [hovering, setHovering] = useState(false);
-  const [ticketWidth, setTicketWidth] = useState(741);
+  const [ticketWidth, setTicketWidth] = useState(typeof window !== "undefined" ? Math.min(741, window.innerWidth - 32) : 741);
   const [qrDataUrl, setQrDataUrl] = useState("");
 
   useEffect(() => {
     const update = () => setTicketWidth(Math.min(741, window.innerWidth - 32));
     update();
     window.addEventListener("resize", update);
-    return () => window.removeEventListener("resize", update);
+    window.visualViewport?.addEventListener("resize", update);
+    return () => {
+      window.removeEventListener("resize", update);
+      window.visualViewport?.removeEventListener("resize", update);
+    };
   }, []);
 
   // Gyroscope support — tilt based on device orientation (iOS/Android).
