@@ -30,8 +30,8 @@ Built with Next.js 16, React 19, Tailwind v4, Firebase Admin SDK, and Upstash Re
 ## Features
 
 ### Core Ticket Loop
-- **Issue Tickets** — Form with country code dropdown (203 countries with flags, India default). **Paste-sanitizing phone field** — paste `+4915210899596` → auto-selects Germany (+49), shows `15210899596`. Accepts international number lengths (6–15 digits, E.164). Live ticket confirmation with animated BadgeCheck (draw-on-path loop), auto-scrolls to preview on mobile + desktop. WhatsApp share button doubles as capture-status indicator. WhatsApp share message includes link-expiry notice
-- **Guest List** — 7 sort options, 4 filters (type/status/gender + search), bulk delete, import/export. **Gate column** appears when multi-gate mode is on (blue gate badges per ticket). **Admin-only edit guest name** (pencil icon per row). View eye opens interactive ticket page. Share column sends WhatsApp with ticket link + expiry notice. **Button group** (Select + Select All dropdown) + **Actions overflow menu** (Manage / Mark All Absent / Delete). **Manual Mark All Absent** button (admin override, skips deadline check). **Auto-absent** fires once at exact deadline via `setTimeout` (timezone-aware, zero polling)
+- **Issue Tickets** — Form with country code dropdown (203 countries with flags, India default). **Paste-sanitizing phone field** — paste `+4915210899596` → auto-selects Germany (+49), shows `15210899596`. Accepts international number lengths (6–15 digits, E.164). Live ticket confirmation with animated BadgeCheck (draw-on-path loop), auto-scrolls to preview on mobile + desktop. WhatsApp share button doubles as capture-status indicator. WhatsApp share message includes link-expiry notice. **Has Kids?** toggle for family/group tickets — add kid name/gender/age rows; creates parent + kids as separate tickets sharing a `groupId` + parent's phone. One WhatsApp link covers the whole family
+- **Guest List** — 7 sort options, 4 filters (type/status/gender + search), bulk delete, import/export. **Gate column** appears when multi-gate mode is on (blue gate badges per ticket). **Admin-only edit guest name** (pencil icon per row). View eye opens interactive ticket page. Share column sends WhatsApp with ticket link + expiry notice. **Button group** (Select + Select All dropdown) + **Actions overflow menu** (Manage / Mark All Absent / Delete). **Manual Mark All Absent** button (admin override, skips deadline check). **Auto-absent** fires once at exact deadline via `setTimeout` (timezone-aware, zero polling). **Family grouping** — parent + kids stay together in the sorted list (parent first, then kids by age). Kids show a blue **Child** badge. **Import dedup** uses `phone:name` composite key (same phone + different name = not a duplicate)
 - **Scanner** — Camera QR decode at 480px for maximum speed, **four-way validation** (granted / already scanned / invalid / **wrong gate**). Shows **who scanned** + **when** on duplicate scans. **Camera flip** button (front/back). **Animated bell toggle** for haptic feedback (synced to localStorage, rings/shakes on toggle). **Gate badge** in header showing the scanner's assigned gate. Offline mode with IndexedDB cache + auto-sync on reconnect. Wrong-gate scans are blocked without mutating the ticket
 - **4 Ticket Types** — Classic, VIP, SVIP, VVIP — each with unique shader colors, fonts (The Seasons for names + Gotham Nights for body), and VVIP engraved text effect. Ticket names auto-balance across up to 3 lines and fill the space to the perforation. Gate number shown on ticket face footer (`age / gender • Gate X`)
 
@@ -80,6 +80,8 @@ Built with Next.js 16, React 19, Tailwind v4, Firebase Admin SDK, and Upstash Re
 - **QR Code** — Rendered as data URL, overlaid on ticket, scaled proportionally
 - **Gate Number** — When multi-gate is on, the assigned gate shows on the ticket face footer (`age / gender • Gate X`)
 - **Download** — Captures ticket at 4x resolution, rotates 90° to portrait, downloads as PNG
+- **Family Ticket Cycling** — When a parent ticket has kids (shared `groupId`), circular chevron buttons appear above the Wallet/Download row: `‹ Name — 1 of 3 ›`. Cycles through parent + all kids; each ticket has its own QR for individual scanning. One phone verification unlocks the whole family
+- **Mobile Pinch-to-Zoom** — Viewport allows user scaling (pinch to zoom on mobile). Ticket width auto-fits to `visualViewport` changes
 - **Save to Google Wallet** — Official Google Wallet button. Generates signed JWT pass with per-type hero images, logo, guest name, gender, age, and event info. Per-type branded hero images (Classic/VIP/SVIP/VVIP)
 - **OG Link Preview** — **Exact live shader ticket snapshot** captured at creation time (in the admin's browser via html-to-image) and stored in Firestore (`og_snapshots`). Served as JPEG for WhatsApp/social link previews. Falls back to SVG for tickets created before the feature
 - **WhatsApp Share** — Message includes interactive ticket URL + phone unlock instructions + "(shader disabled for preview images)" + link-expiry notice
@@ -449,7 +451,7 @@ entry-pass-web/
 |-- app/
 |   |-- (app)/              # Authenticated routes (gated by layout)
 |   |   |-- layout.tsx      # Server-side auth check + auto-absent
-|   |   |-- tickets/        # Issue Ticket (form + QR + WhatsApp + live ticket preview + OG capture)
+|   |   |-- tickets/        # Issue Ticket (form + QR + WhatsApp + live preview + OG capture + Has Kids? group tickets)
 |   |   |-- guests/         # Guest List (table + filter + import/export + gate column + edit name)
 |   |   |-- scanner/        # Camera QR scanner (gate-aware, wrong-gate blocking, bell toggle)
 |   |   |-- settings/       # Configuration (admin: form + multi-gate + gate CRUD; staff: read-only)
@@ -535,6 +537,8 @@ interface Ticket {
   createdAt: number;       // epoch ms
   gate?: string | null;    // assigned gate id (multi-gate mode)
   scannedAtGate?: string | null; // gate id where actually scanned
+  groupId?: string | null;     // shared by parent + kids; null for standalone
+  parentName?: string | null;  // set on kid tickets only; null on parent/standalone
 }
 ```
 
