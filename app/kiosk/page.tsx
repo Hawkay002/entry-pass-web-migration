@@ -7,15 +7,19 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { doc, onSnapshot } from "firebase/firestore";
 import { QrScanner, type ScanOutcome } from "@/components/scanner/qr-scanner";
 import { cn } from "@/lib/utils";
 import { WifiOff, CloudUpload, Delete, ArrowUpRight, LoaderCircle, Eye, EyeOff, TicketX, MessageCircle } from "lucide-react";
+import { db } from "@/lib/firebase/client";
+import { paths } from "@/lib/paths";
 import {
   cacheKioskTickets,
   getCachedKioskTickets,
   markKioskCachedScanned,
   enqueueKioskScan,
   clearKioskPendingScans,
+  clearKioskCache,
   getKioskPendingScans,
   getKioskPendingCount,
 } from "@/lib/kiosk-db";
@@ -25,23 +29,29 @@ const SESSION_KIOSK_KEY = "kiosk_id";
 const CACHE_REFRESH_MS = 2 * 60 * 1000;
 
 export default function KioskPage() {
+  // Defer all browser-only reads (URL params, sessionStorage) until after
+  // hydration to avoid server/client render mismatch.
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => { setMounted(true); }, []);
+
   // Resolve kioskId from URL (?id=xxx) or sessionStorage.
-  const [kioskId, setKioskId] = useState<string | null>(() => {
-    if (typeof window === "undefined") return null;
+  const [kioskId, setKioskId] = useState<string | null>(null);
+  useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const fromUrl = params.get("id");
     if (fromUrl) {
       sessionStorage.setItem(SESSION_KIOSK_KEY, fromUrl);
-      return fromUrl;
+      setKioskId(fromUrl);
+      return;
     }
-    return sessionStorage.getItem(SESSION_KIOSK_KEY);
-  });
+    setKioskId(sessionStorage.getItem(SESSION_KIOSK_KEY) ?? null);
+  }, []);
 
   // Lazy init from sessionStorage so a refresh keeps the kiosk unlocked.
-  const [storedPin, setStoredPin] = useState<string | null>(() => {
-    if (typeof window === "undefined") return null;
-    return sessionStorage.getItem(SESSION_KEY);
-  });
+  const [storedPin, setStoredPin] = useState<string | null>(null);
+  useEffect(() => {
+    setStoredPin(sessionStorage.getItem(SESSION_KEY));
+  }, []);
 
   const handleUnlock = useCallback((validPin: string) => {
     sessionStorage.setItem(SESSION_KEY, validPin);
@@ -53,13 +63,47 @@ export default function KioskPage() {
     setStoredPin(null);
   }, []);
 
+  // If the kiosk is deleted while active, show 404.
+  const [kioskDeleted, setKioskDeleted] = useState(false);
+
+  // Realtime listener on the public kiosk_status doc.
+  // Detects deletion instantly (→ 404) and config edits (→ re-authenticate).
+  const lastUpdatedAtRef = useRef<number>(0);
+  useEffect(() => {
+    if (!kioskId) return;
+    const unsub = onSnapshot(
+      doc(db, paths.kioskStatusDoc(kioskId)),
+      (snap) => {
+        if (!snap.exists()) {
+          // Kiosk was deleted (or factory reset) — wipe cache + show 404.
+          clearKioskCache();
+          sessionStorage.removeItem(SESSION_KEY);
+          setStoredPin(null);
+          setKioskDeleted(true);
+          return;
+        }
+        const newUpdatedAt = snap.data()?.updatedAt ?? 0;
+        if (lastUpdatedAtRef.current > 0 && newUpdatedAt !== lastUpdatedAtRef.current) {
+          // Config changed (name/PIN/gate edit) — force re-authentication.
+          sessionStorage.removeItem(SESSION_KEY);
+          setStoredPin(null);
+        }
+        lastUpdatedAtRef.current = newUpdatedAt;
+      },
+      () => {
+        // Permission error or network failure — silently fall back to polling.
+      }
+    );
+    return unsub;
+  }, [kioskId]);
+
+  // Avoid hydration mismatch — render nothing until client mounts.
+  if (!mounted) return null;
+
   // No kioskId — show picker.
   if (!kioskId) {
     return <KioskPicker onSelect={(id) => { setKioskId(id); sessionStorage.setItem(SESSION_KIOSK_KEY, id); }} />;
   }
-
-  // If the kiosk is deleted while active, show 404.
-  const [kioskDeleted, setKioskDeleted] = useState(false);
 
   if (kioskDeleted) return <KioskNotFound />;
 

@@ -90,6 +90,15 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    // ---- Public kiosk status (existence-only, no PIN) --------------------
+    // kiosk_status/{kioskId} — only { updatedAt: number }. Lets the
+    // unauthenticated /kiosk page detect deletion/config-change instantly
+    // via onSnapshot. No PIN or PII is stored here.
+    match /kiosk_status/{kioskId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
     // ---- Default deny -----------------------------------------------------
     match /{document=**} {
       allow read, write: if false;

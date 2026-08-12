@@ -169,7 +169,7 @@ export function QrScanner({
     if (videoRef.current) {
       videoRef.current.srcObject = stream;
       videoRef.current.setAttribute("playsinline", "true");
-      await videoRef.current.play();
+      await videoRef.current.play().catch(() => {});
     }
     setActive(true);
     setOutcome({ kind: "searching" });

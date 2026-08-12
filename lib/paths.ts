@@ -17,4 +17,9 @@ export const paths = {
   contactsCollection: "help_contacts",
   /** Pre-rendered OG share previews (base64 JPEG), keyed by ticket id. */
   ogSnapshotsCollection: "og_snapshots",
+  /** Public kiosk status docs — existence-only signal (no PIN/PII).
+   *  Read by the unauthenticated /kiosk page via onSnapshot for instant
+   *  deletion detection. `{ updatedAt: number }` is the only field. */
+  kioskStatusDoc: (kioskId: string) => `kiosk_status/${kioskId}`,
+  kioskStatusCollection: "kiosk_status",
 } as const;

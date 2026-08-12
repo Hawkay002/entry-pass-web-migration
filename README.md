@@ -39,9 +39,9 @@ Built with Next.js 16, React 19, Tailwind v4, Firebase Admin SDK, and Upstash Re
 - **Admin 2FA (TOTP)** — Two-factor authentication via Google Authenticator. Admin scans a QR code in Configuration, then enters a 6-digit code on every login. Smart OTP input (type anywhere, auto-fill boxes, paste support, auto-submit). **Recovery code login** — "Lost your device? Use a recovery code" link switches to a single-input recovery mode. 8 one-time recovery codes generated on enable (downloadable as .txt). Staff accounts skip 2FA entirely. Session cookie only minted after 2FA passes. Recovery codes hashed with SHA-256
 - **Dynamic Roles** — Admin creates roles and adds staff (single or **bulk upload** via CSV/JSON/XLSX). **Collapsible role cards** (collapsed by default). Edit/delete staff moved to **Remote Device Management** — select staff, then batch edit (vertical list in modal) or batch delete. Google Sign-In maps emails automatically
 - **Multi-Gate System** — Toggle multi-gate mode in Configuration (**admin-only** UI + server enforcement). Create gate categories (Guest Entry, Staff, Security, Management — free text). **Collapsible categories** (collapsed by default). Add gates inside categories with ticket-type acceptance (Classic/VIP/SVIP/VVIP). **Round-robin auto-assignment** balances tickets across gates. Staff assigned to specific gates. Wrong-gate scans blocked with "WRONG GATE" error (shows gate **name** not ID). Gate column in guest list + **gate filter**. Export includes gate. Ticket face shows assigned gate. Full cascade delete on disable/clear/factory-reset. **Multi-device realtime sync** for the toggle
-- **Multi-Kiosk System** — Create multiple self check-in kiosks, each with its own **name, PIN, gate assignment, and URL** (`/kiosk?id={kioskId}`). Admin CRUD via Configuration (**realtime onSnapshot**). Kiosk picker shown if no `?id=` param. Each kiosk validates its own PIN + enforces its gate. Per-kiosk+IP rate limiting. Kiosk 404 page if link is invalid/deleted. Deletion detected within 2-min cache refresh cycle
-- **Configuration** — **Calendar + time picker** for deadline (shadcn Calendar with month/year dropdown selectors, 12-hour AM/PM two-box time input). **Premium Active Settings card** (gradient, hero event name, icon chips for venue/deadline, timezone + multi-gate badges). Staff see a **read-only** version of this card (no form, no gate config). **Admin-only** edit form
-- **Remote Device Management** — Select staff from role → batch **edit** (name/email/gate) or **delete**. Staff selection modal shows 10 rows on mobile, 8 on desktop before scrolling. Lock/unlock tabs with reason (basic/review/maintenance)
+- **Multi-Kiosk System** — Create multiple self check-in kiosks, each with its own **name, PIN (4–6 digits), gate assignment, and URL** (`/kiosk?id={kioskId}`). Admin CRUD via Configuration (**realtime onSnapshot**). Kiosk picker shown if no `?id=` param. Each kiosk validates its own PIN + enforces its gate. Per-kiosk+IP rate limiting. Kiosk 404 page if link is invalid/deleted. **Instant deletion detection** — a Firestore `onSnapshot` on a public `kiosk_status/{id}` doc fires the moment a kiosk is deleted or factory-reset, showing the 404 within ~1 second (no more 2-min poll delay). Config edits (name/PIN/gate change) instantly force re-authentication on the kiosk tablet
+- **Configuration** — **Calendar + time picker** for deadline (shadcn Calendar with month/year dropdown selectors, 12-hour AM/PM two-box time input). **Premium Active Settings card** (gradient, hero event name, icon chips for venue/deadline, timezone + multi-gate badges). Staff see a **read-only** version of this card (no form, no gate config). **Admin-only** edit form. Admin panel uses **collapsible section cards** (2FA, Kiosks, Maintenance, Roles, RDM, Danger Zone) — each collapsed by default with live status badges (Active/Not configured/count/locked), expand on click. Secondary row actions (Edit/Delete) consolidated into `⋯` overflow menus. Pure CSS grid height animation (no JS measurement)
+- **Remote Device Management** — Select staff from role → batch **edit** (name/email/gate) or **delete** via overflow menu. Staff selection modal shows 10 rows on mobile, 8 on desktop before scrolling. **Select All checkbox** (matches guest list / activity log pattern). Lock/unlock tabs with reason (basic/review/maintenance)
 - **Remote Lock** — Lock or unlock specific tabs per staff member with live status badges. Selective unlock
 - **Maintenance Mode** — Lock all staff instantly with duration timer (OctagonAlert icon). Auto-unlock when time expires
 - **Staff Auto-Logout** — Removing a staff member instantly revokes their session and kicks them out
@@ -87,7 +87,7 @@ Built with Next.js 16, React 19, Tailwind v4, Firebase Admin SDK, and Upstash Re
 
 ### Offline & Kiosk
 - **PWA / Offline Scanner** — Installable app (manifest + service worker, network-first caching). Staff scanner caches a minimal ticket snapshot in IndexedDB (refreshed every 5 min, not an always-on listener) and works with no WiFi; queued scans sync automatically on reconnect. **Scanner warning** if multi-gate is on but staff has no gate assigned. Critical for venues with poor connectivity.
-- **Self Check-in Kiosk** — **Multiple kiosks**, each with its own PIN + gate + URL (`/kiosk?id={kioskId}`). Admin creates/manages kiosks in Configuration (realtime sync). Kiosk picker shown when no `?id=` param. Each kiosk validates its own PIN and enforces its assigned gate (wrong-gate blocked). Per-kiosk+IP rate limiting (5 wrong PINs/5min). **6-box PIN entry** with show/hide toggle. Front camera (selfie mode). Physical keyboard input. Kiosk-specific 404 page if link is invalid or kiosk deleted. Works offline (caches `{id, status, scanned}` — no guest PII).
+- **Self Check-in Kiosk** — **Multiple kiosks**, each with its own PIN (4–6 digits, show/hide eye toggle) + gate + URL (`/kiosk?id={kioskId}`). Admin creates/manages kiosks in Configuration (realtime sync). Kiosk picker shown when no `?id=` param. Each kiosk validates its own PIN and enforces its assigned gate (wrong-gate blocked). Per-kiosk+IP rate limiting (5 wrong PINs/5min). **6-box PIN entry** with show/hide toggle. Front camera (selfie mode). Physical keyboard input. **Instant deletion detection** via Firestore `onSnapshot` on `kiosk_status/{id}` — shows 404 within ~1s of admin delete (no 2-min poll). Config edits force instant re-authentication. Works offline (caches `{id, status, scanned}` — no guest PII).
 
 ---
 
@@ -170,7 +170,8 @@ Built with Next.js 16, React 19, Tailwind v4, Firebase Admin SDK, and Upstash Re
      | - audit_trail|   |              |   |  Firestore |
      | - act_logs   |   |              |   |            |
      | - og_snapshots|  |              |   | - rate     |
-     +--------------+   +--------------+   |   limiting |
+     | - kiosk_status| |              |   |   limiting |
+     +--------------+   +--------------+   |            |
                                            +------------+
 ```
 
@@ -371,6 +372,7 @@ Collections are created automatically on first write, or pre-initialize with `no
 | `og_snapshots/{ticketId}` | Pre-rendered OG share previews (base64 JPEG, server-only) |
 | `admin_settings/security` | Multi-kiosk configs (`kiosks[]`) — admin-only |
 | `admin_settings/two_factor` | Admin 2FA secrets + recovery codes — admin-only |
+| `kiosk_status/{kioskId}` | Public kiosk existence signal (`{ updatedAt: number }` only — no PIN/PII). Read by the unauthenticated `/kiosk` page via `onSnapshot` for instant deletion detection. Public read, admin write |
 | `audit_trail/{doc}` | Factory reset audit records |
 | `communications` | Legacy chat messages (backwards compat, unused) |
 | `typing_status` | Legacy typing indicators (backwards compat, unused) |
@@ -462,7 +464,19 @@ entry-pass-web/
 |   |-- layout.tsx          # Root layout (fonts, toaster, theme, SW registration)
 |   `-- page.tsx            # Landing page (glass aesthetic, Starfield, Lenis, shader ticket showcase)
 |-- components/
-|   |-- admin/              # Admin panels (roles, RDM w/ batch edit/delete, maintenance, kiosk, factory reset, gate-panel, settings-content)
+|   |-- admin/              # Admin Configuration section
+|   |   |-- admin-panels.tsx        # Thin shell — stacks panels in separate glass cards
+|   |   |-- collapsible-section.tsx # Collapsible wrapper (CSS grid height animation, live status badges)
+|   |   |-- panels/                 # One file per panel (split from former 1900-line monolith)
+|   |   |   |-- two-factor-panel.tsx         # Admin 2FA (TOTP) setup/disable + OTP boxes
+|   |   |   |-- maintenance-panel.tsx        # Lock-all-roles maintenance mode
+|   |   |   |-- role-management-panel.tsx    # Create roles + add/bulk-import staff
+|   |   |   |-- remote-device-management.tsx # Role cards → staff modal → lock/unlock + batch edit/delete
+|   |   |   |-- kiosk-panel.tsx              # Self check-in kiosk CRUD
+|   |   |   `-- factory-reset-panel.tsx      # Danger Zone (nukes DB, preserves audit trail)
+|   |   |-- gate-panel.tsx       # Gate CRUD (categories + gates)
+|   |   |-- settings-form.tsx   # Event config form + DeadlineCountdown
+|   |   `-- settings-content.tsx # Settings page shell (admin form vs staff read-only)
 |   |-- animate-ui/         # @animate-ui registry icons (BadgeCheck, Bell, BellOff + IconWrapper engine)
 |   |-- guests/             # Import/Export modals
 |   |-- landing/            # Landing sections (Nav, Hero, TicketTiers, Features, CTA, Atmosphere, etc.)
@@ -471,7 +485,7 @@ entry-pass-web/
 |   |-- scanner/            # Shared QR scanner (admin + kiosk, wrong-gate support)
 |   |-- tickets/            # Interactive ticket, phone gate, ticket card, view modal, report issue panel
 |   `-- ui/                 # shadcn/ui primitives + AdmitOneTicket (WebGL shader) + Switch + animated-glow-card + Calendar + Popover + Textarea
-|-- hooks/                  # React hooks (settings, tickets, roles, gates, remote-locks, staff-check, contacts, background, is-in-view)
+|-- hooks/                  # React hooks (settings, tickets, roles, gates, kiosks, remote-locks, lock-status, staff-check, contacts, background, is-in-view)
 |-- lib/
 |   |-- firebase/           # Admin SDK, client SDK, server-auth (resolves gateId), logging
 |   |-- auth.ts             # AppUser type (incl. gateId), role helpers, IsAdminContext
@@ -491,7 +505,7 @@ entry-pass-web/
 |   |-- import-export.ts    # Parse + format (CSV/XLSX/PDF/TXT/DOC/JSON + logs export)
 |   `-- whatsapp.ts         # Ticket snapshot -> WhatsApp share (ticket URL)
 |-- public/                 # Static assets (icons, PWA manifest + SW, backgrounds, fonts, wallet images, audio)
-|-- scripts/                # Dev utilities (jose fix, claim setup, domain mgmt, init-collections, generate-staff)
+|-- scripts/                # Dev utilities (jose fix, claim setup, domain mgmt, init-collections, generate-staff, deploy-rules)
 |-- firestore.rules         # Security rules (incl. gates + og_snapshots)
 |-- firebase.json           # Firebase CLI config (for rules deployment)
 |-- proxy.ts                # Edge middleware (cookie gate)

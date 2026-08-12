@@ -148,3 +148,24 @@ export async function getKioskPendingCount(): Promise<number> {
     return 0;
   }
 }
+
+/** Wipe the PII-free ticket snapshot (the `kv` store). Called when a kiosk
+ *  is deleted or config is changed so stale cached data doesn't linger. */
+export async function clearKioskCache(): Promise<void> {
+  try {
+    await openDb().then((db) => {
+      return new Promise<void>((resolve, reject) => {
+        const t = db.transaction(STORE_KV, "readwrite");
+        const s = t.objectStore(STORE_KV);
+        s.delete(KV_TICKETS_KEY);
+        t.oncomplete = () => {
+          db.close();
+          resolve();
+        };
+        t.onerror = () => reject(t.error);
+      });
+    });
+  } catch (err) {
+    console.error("[kiosk-db] clearKioskCache failed:", err);
+  }
+}

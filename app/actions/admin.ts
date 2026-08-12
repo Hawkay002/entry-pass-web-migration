@@ -133,7 +133,7 @@ export async function clearSettings(): Promise<{ ok: true } | { ok: false; error
 // ---------------- Multi-Kiosk ----------------
 
 function normalizePin(pin: string): string {
-  return pin.replace(/\D/g, "").slice(0, 8);
+  return pin.replace(/\D/g, "").slice(0, 6);
 }
 
 function generateKioskId(): string {
@@ -172,6 +172,9 @@ export async function createKiosk(
   kiosks.push({ id, name: cleanName, pin: cleanPin, gateId, createdAt: Date.now() });
   await writeKiosks(kiosks);
 
+  // Create the public status doc so the kiosk page can listen via onSnapshot.
+  await getAdminDb().doc(paths.kioskStatusDoc(id)).set({ updatedAt: Date.now() });
+
   await logAction(user, "CONFIG_CHANGE", `Kiosk created: ${cleanName}`);
   return { ok: true, id };
 }
@@ -198,6 +201,8 @@ export async function updateKiosk(
   if (patch.gateId !== undefined) kiosks[idx].gateId = patch.gateId;
 
   await writeKiosks(kiosks);
+  // Bump the public status doc so the kiosk page re-authenticates (config changed).
+  await getAdminDb().doc(paths.kioskStatusDoc(id)).set({ updatedAt: Date.now() });
   await logAction(user, "CONFIG_CHANGE", `Kiosk updated: ${kiosks[idx].name}`);
   return { ok: true };
 }
@@ -213,6 +218,9 @@ export async function deleteKiosk(
   const kiosks = await readKiosks();
   const filtered = kiosks.filter((k) => k.id !== id);
   await writeKiosks(filtered);
+
+  // Delete the public status doc — kiosk page detects this instantly via onSnapshot.
+  await getAdminDb().doc(paths.kioskStatusDoc(id)).delete();
 
   await logAction(user, "CONFIG_CHANGE", `Kiosk deleted: ${id}`);
   return { ok: true };
@@ -453,7 +461,12 @@ export async function factoryReset(): Promise<
   const locksSnap = await db.collection(paths.locksCollection).get();
   await Promise.all(locksSnap.docs.map((d) => d.ref.delete()));
 
-  // 6. Delete admin_settings/security (legacy password doc — now empty).
+  // 6. Delete admin_settings/security (kiosks config + legacy password doc).
+  //    Also delete all public kiosk_status docs so active kiosks detect reset instantly.
+  const kiosksBeforeReset = await readKiosks();
+  await Promise.all(
+    kiosksBeforeReset.map((k) => db.doc(paths.kioskStatusDoc(k.id)).delete())
+  );
   await db.doc(paths.adminSecurityDoc).delete();
 
   // 7. Delete all activity_logs.

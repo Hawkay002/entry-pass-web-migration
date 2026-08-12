@@ -1,0 +1,185 @@
+// components/admin/panels/maintenance-panel.tsx — locks ALL roles at once.
+
+"use client";
+
+import { useEffect, useState } from "react";
+import { toast } from "sonner";
+import { Loader2, LockOpen, OctagonAlert } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { applyRemoteLocks, fetchMaintenanceInfo, checkAndEndMaintenance, unlockStaff } from "@/app/actions/admin";
+import { useRoles } from "@/hooks/use-roles";
+import { CollapsibleSection } from "@/components/admin/collapsible-section";
+
+export function MaintenancePanel() {
+  const { roles } = useRoles();
+  const [open, setOpen] = useState(false);
+  const [hrs, setHrs] = useState("");
+  const [mins, setMins] = useState("");
+  const [applying, setApplying] = useState(false);
+  const [maintInfo, setMaintInfo] = useState<{ active: boolean; duration: string | null }>({ active: false, duration: null });
+
+  // Poll maintenance status every 5s + auto-end if duration elapsed
+  useEffect(() => {
+    let active = true;
+    async function load() {
+      const res = await fetchMaintenanceInfo();
+      if (active && res.ok) {
+        setMaintInfo({ active: res.active, duration: res.duration });
+        if (res.active) {
+          const endRes = await checkAndEndMaintenance();
+          if (active && endRes.ok && endRes.ended) {
+            toast.success("Maintenance time over — all staff unlocked automatically");
+          }
+        }
+      }
+    }
+    load();
+    const interval = setInterval(load, 5000);
+    return () => { active = false; clearInterval(interval); };
+  }, []);
+
+  async function startMaintenance() {
+    setApplying(true);
+    const h = Number(hrs) || 0;
+    const m = Number(mins) || 0;
+    let duration = "Unknown";
+    if (h > 0 || m > 0) {
+      duration = "";
+      if (h > 0) duration += `${h} hr `;
+      if (m > 0) duration += `${m} min`;
+      duration = duration.trim();
+    }
+
+    // Lock ALL tabs for ALL staff across ALL roles
+    for (const role of roles) {
+      for (const staff of role.staff) {
+        await applyRemoteLocks({
+          targetEmail: staff.email,
+          usernames: [staff.name],
+          lockedTabs: ["create", "booked", "scanner", "settings"],
+          reason: "maintenance",
+          duration,
+        });
+      }
+    }
+
+    setApplying(false);
+    setOpen(false);
+    toast.success(`Maintenance mode activated for all staff (${roles.reduce((n, r) => n + r.staff.length, 0)} total)`);
+  }
+
+  async function endMaintenance() {
+    setApplying(true);
+    // Unlock ALL staff across ALL roles
+    for (const role of roles) {
+      for (const staff of role.staff) {
+        await unlockStaff({ targetEmail: staff.email, username: staff.name });
+      }
+    }
+    setApplying(false);
+    toast.success("Maintenance mode ended — all staff unlocked");
+  }
+
+  const maintBadge = maintInfo.active ? (
+    <span className="flex items-center gap-1.5 rounded-full bg-amber-500/15 px-2.5 py-0.5 text-[0.65rem] font-medium text-amber-400">
+      <span className="h-1.5 w-1.5 rounded-full bg-amber-500 animate-pulse" />
+      Active
+    </span>
+  ) : null;
+
+  return (
+    <>
+    <CollapsibleSection
+      icon={<OctagonAlert className="h-4 w-4" />}
+      title="Maintenance Mode"
+      badge={maintBadge}
+      defaultOpen={maintInfo.active}
+    >
+    <div className="space-y-4 px-6 py-5">
+      <p className="mb-4 text-xs text-muted-foreground">
+        Locks all tabs for all staff across all roles simultaneously.
+      </p>
+
+      {maintInfo.active && (
+        <div className="mb-4 flex items-center gap-2 rounded-lg bg-amber-500/10 border border-amber-500/20 px-3 py-2">
+          <span className="h-2 w-2 rounded-full bg-amber-500 animate-pulse" />
+          <span className="text-sm text-amber-500">
+            Maintenance Active
+            {maintInfo.duration && maintInfo.duration !== "Unknown" && (
+              <span className="ml-1 text-muted-foreground">— Est. {maintInfo.duration}</span>
+            )}
+          </span>
+        </div>
+      )}
+
+      <div className="flex gap-2">
+        <Button
+          variant="outline"
+          className="border-amber-500 text-amber-500 hover:bg-amber-500/10"
+          onClick={() => setOpen(true)}
+        >
+          <OctagonAlert className="mr-1.5 h-3.5 w-3.5" />
+          Start Maintenance
+        </Button>
+        <Button
+          variant="outline"
+          className="border-success-green text-success-green hover:bg-success-green/10"
+          disabled={applying}
+          onClick={endMaintenance}
+        >
+          {applying ? (
+            <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+          ) : (
+            <LockOpen className="mr-1.5 h-3.5 w-3.5" />
+          )}
+          End Maintenance
+        </Button>
+      </div>
+
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Start Maintenance Mode</DialogTitle>
+            <DialogDescription>
+              This will lock ALL tabs for ALL staff ({roles.reduce((n, r) => n + r.staff.length, 0)} members).
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label>Estimated Duration (optional)</Label>
+              <div className="mt-2 flex gap-3">
+                <Input type="number" min={0} placeholder="Hrs" value={hrs} onChange={(e) => setHrs(e.target.value)} />
+                <Input type="number" min={0} placeholder="Mins" value={mins} onChange={(e) => setMins(e.target.value)} />
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setOpen(false)}>Cancel</Button>
+            <Button
+              variant="outline"
+              className="border-amber-500 text-amber-500 hover:bg-amber-500/10"
+              disabled={applying}
+              onClick={startMaintenance}
+            >
+              {applying && <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />}
+              <OctagonAlert className="mr-1.5 h-3.5 w-3.5" />
+              Activate
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
+    </CollapsibleSection>
+    </>
+  );
+}
