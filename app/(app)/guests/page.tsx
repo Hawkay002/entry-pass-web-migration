@@ -5,7 +5,7 @@
 import { useMemo, useState, useRef, useEffect } from "react";
 import { LockedTab } from "@/components/layout/locked-tab";
 import { useLockedTabs } from "@/components/layout/locked-tabs-context";
-import { Loader2, Search, Trash2, Filter, Eye, Users, Pencil } from "lucide-react";
+import { Loader2, Search, Trash2, Filter, Eye, Users, Pencil, UserX } from "lucide-react";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { WhatsappIcon } from "@hugeicons/core-free-icons";
 import { toast } from "sonner";
@@ -41,7 +41,7 @@ import {
   type TicketTypeFilter,
   type GenderFilter,
 } from "@/lib/guest-list";
-import { deleteOneTicket, autoMarkAbsent, updateGuestName } from "@/app/actions/tickets";
+import { deleteOneTicket, updateGuestName } from "@/app/actions/tickets";
 import { useIsAdmin } from "@/components/layout/app-shell";
 import { TICKET_TYPE_LABELS } from "@/lib/types";
 import type { Ticket, TicketStatus } from "@/lib/types";
@@ -81,27 +81,58 @@ export default function GuestsPage() {
   const { gates, gateMap } = useGatesMode();
   const multiGate = Boolean(settings.multiGate);
 
-  // Auto-absent: only polls when there's a deadline set AND coming-soon tickets.
-  // Skips entirely when no deadline or all tickets are already arrived/absent.
+  // Auto-absent: fires once exactly at the deadline moment via setTimeout.
+  // No polling — calculates the ms until deadline and sets a single timer.
+  // Also checks immediately on mount in case the deadline already passed.
   const hasComingSoon = tickets.some((t) => t.status === "coming-soon");
   const hasDeadline = !!settings.deadline;
+  const [absentMarking, setAbsentMarking] = useState(false);
+
+  async function triggerAutoAbsent(force = false) {
+    setAbsentMarking(true);
+    try {
+      const r = await fetch("/api/auto-absent", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ force }),
+      });
+      const res = await r.json();
+      if (res.ok && res.count > 0) {
+        toast.success(`${res.count} guest(s) marked absent.`);
+      } else if (res.ok && res.count === 0 && force) {
+        toast.info("No pending guests to mark absent.");
+      } else if (!res.ok && isAdmin) {
+        toast.error("Auto-absent failed", { description: res.error ?? "Unknown error" });
+      }
+    } catch {
+      if (isAdmin) {
+        toast.error("Auto-absent failed", {
+          description: "Network error. Use the manual button below.",
+        });
+      }
+    }
+    setAbsentMarking(false);
+  }
 
   useEffect(() => {
     if (!hasDeadline || !hasComingSoon) return;
-    function check() {
-      fetch("/api/auto-absent", { method: "POST" })
-        .then((r) => r.json())
-        .then((res) => {
-          if (res.ok && res.count > 0) {
-            toast.success(`Deadline passed — ${res.count} guest(s) marked absent.`);
-          }
-        })
-        .catch(() => {});
+
+    // Parse the deadline. The stored value includes a timezone offset
+    // (e.g. "2026-08-04T17:00:00+05:30") so Date() parses it correctly.
+    const deadlineMs = new Date(settings.deadline!).getTime();
+    const msUntilDeadline = deadlineMs - Date.now();
+
+    if (msUntilDeadline <= 0) {
+      // Deadline already passed — check immediately.
+      triggerAutoAbsent(false);
+      return;
     }
-    check();
-    const interval = setInterval(check, 10000);
-    return () => clearInterval(interval);
-  }, [hasDeadline, hasComingSoon]);
+
+    // Set a single timeout for the exact deadline moment.
+    const timeout = setTimeout(() => triggerAutoAbsent(false), msUntilDeadline);
+    return () => clearTimeout(timeout);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hasDeadline, hasComingSoon, settings.deadline]);
 
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
@@ -190,7 +221,26 @@ export default function GuestsPage() {
   return (
     <div className="glass-panel space-y-4 p-6">
       <div className="flex items-start justify-between gap-1">
-        <h2 className="shrink-0 text-lg font-semibold">Guest List</h2>
+        <div className="flex items-center gap-2">
+          <h2 className="shrink-0 text-lg font-semibold">Guest List</h2>
+          {isAdmin && hasComingSoon && (
+            <Button
+              size="sm"
+              variant="ghost"
+              className="h-7 gap-1 px-2 text-xs text-amber-400 hover:bg-amber-500/10"
+              disabled={absentMarking}
+              onClick={() => triggerAutoAbsent(true)}
+              title="Mark all pending guests as absent"
+            >
+              {absentMarking ? (
+                <Loader2 className="h-3 w-3 animate-spin" />
+              ) : (
+                <UserX className="h-3 w-3" />
+              )}
+              Mark All Absent
+            </Button>
+          )}
+        </div>
         <div className="flex flex-wrap justify-end gap-1.5">
           <ImportExportButtons
             selectedTickets={filtered.filter((t) => selected.has(t.id))}

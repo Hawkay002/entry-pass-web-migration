@@ -509,3 +509,55 @@ export async function fetchAllLocks(): Promise<
 
   return { ok: true, map };
 }
+
+/** Combined read of global_locks — returns lock map + maintenance info in ONE read.
+ *  Replaces the former pattern of fetchAllLocks + fetchMaintenanceInfo + checkAndEndMaintenance
+ *  each doing separate full-collection reads. */
+export async function fetchLockDashboard(): Promise<{
+  ok: true;
+  lockMap: Record<string, string[]>;
+  maintActive: boolean;
+  maintDuration: string | null;
+  maintUpdatedAt: number | null;
+} | { ok: false; error: string }> {
+  const user = await getAppUser();
+  if (!user) return { ok: false, error: "Not authenticated." };
+
+  const snap = await getAdminDb().collection(paths.locksCollection).get();
+  const lockMap: Record<string, string[]> = {};
+  let maintActive = false;
+  let maintDuration: string | null = null;
+  let maintUpdatedAt: number | null = null;
+
+  snap.docs.forEach((d) => {
+    const data = d.data();
+    const email = d.id.toLowerCase();
+
+    // Build lock map
+    const userLocks = data.userSpecificLocks as Record<string, string[]> | undefined;
+    if (userLocks) {
+      const allTabs = new Set<string>();
+      Object.values(userLocks).forEach((tabs) => {
+        if (Array.isArray(tabs)) tabs.forEach((t) => allTabs.add(t));
+      });
+      if (allTabs.size > 0) lockMap[email] = [...allTabs];
+    }
+    if (data.lockedTabs && Array.isArray(data.lockedTabs) && data.lockedTabs.length > 0) {
+      lockMap[email] = data.lockedTabs;
+    }
+
+    // Check for maintenance locks
+    const meta = data.lockMetadata as Record<string, { type?: string; duration?: string; updatedAt?: number }> | undefined;
+    if (meta) {
+      for (const [, m] of Object.entries(meta)) {
+        if (m?.type === "maintenance") {
+          maintActive = true;
+          if (m.duration && m.duration !== "Unknown") maintDuration = m.duration;
+          if (m.updatedAt) maintUpdatedAt = m.updatedAt;
+        }
+      }
+    }
+  });
+
+  return { ok: true, lockMap, maintActive, maintDuration, maintUpdatedAt };
+}

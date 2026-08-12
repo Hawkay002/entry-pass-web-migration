@@ -5,9 +5,6 @@
 "use client";
 
 import { useEffect, useRef, useState, useCallback, type RefObject } from "react";
-import { doc, onSnapshot } from "firebase/firestore";
-import { db } from "@/lib/firebase/client";
-import { paths } from "@/lib/paths";
 import { TICKET_TYPE_LABELS } from "@/lib/types";
 import { Download, Loader2, Flag, Copy, Check } from "lucide-react";
 import { toast } from "sonner";

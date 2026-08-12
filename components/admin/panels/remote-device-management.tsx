@@ -36,7 +36,7 @@ import { updateStaffInRole, removeStaffFromRole } from "@/app/actions/roles";
 import { useRoles } from "@/hooks/use-roles";
 import { useSettings } from "@/hooks/use-settings";
 import { useGatesMode } from "@/hooks/use-gates";
-import { useLockStatus } from "@/hooks/use-lock-status";
+import { useLockDashboard } from "@/hooks/use-lock-dashboard";
 import { CollapsibleSection } from "@/components/admin/collapsible-section";
 import type { LockReasonType, StaffRole, TabName } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -55,8 +55,8 @@ export function RemoteDeviceManagement() {
   const [lockedTabs, setLockedTabs] = useState<Set<TabName>>(new Set());
   const [reason, setReason] = useState<LockReasonType>("basic");
 
-  // Real-time lock status from global_locks collection.
-  const lockMap = useLockStatus();
+  // Real-time lock status from global_locks collection (shared with Maintenance panel).
+  const { lockMap } = useLockDashboard();
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [locking, setLocking] = useState(false);
   const [unlocking, setUnlocking] = useState(false);

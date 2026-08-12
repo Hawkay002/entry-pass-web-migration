@@ -26,11 +26,12 @@ import {
   getPendingScans,
 } from "@/lib/offline-db";
 
-// Refresh the offline cache every 5 minutes instead of an always-on realtime
-// listener. One snapshot covers ~5 min of scanning; a single ticket lookup at
-// validation time catches anything newer. This cuts Firestore reads to a
-// fraction of what a live onSnapshot would consume.
-const CACHE_REFRESH_MS = 5 * 60 * 1000;
+// Refresh the offline cache every 15 minutes. The cache is a fallback for
+// offline scanning — when online, each scan validates against the server
+// directly (1 doc read). The 15-min refresh keeps the cache warm enough
+// for the offline case without hammering Firestore.
+// Also refreshed immediately on reconnect (see handleOnline below).
+const CACHE_REFRESH_MS = 15 * 60 * 1000;
 
 export default function ScannerPage() {
   const lockedTabs = useLockedTabs();
@@ -103,6 +104,7 @@ export default function ScannerPage() {
   useEffect(() => {
     const handleOnline = () => {
       setOnline(true);
+      refreshCache().catch(() => {});
       drainQueue();
     };
     const handleOffline = () => setOnline(false);
@@ -112,7 +114,7 @@ export default function ScannerPage() {
       window.removeEventListener("online", handleOnline);
       window.removeEventListener("offline", handleOffline);
     };
-  }, [drainQueue]);
+  }, [drainQueue, refreshCache]);
 
   // Refresh the pending count on mount (async — no synchronous setState).
   useEffect(() => {

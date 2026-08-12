@@ -8,11 +8,14 @@ import { db } from "@/lib/firebase/client";
 import { paths } from "@/lib/paths";
 import type { HelpContact } from "@/lib/types";
 
-export function useContacts() {
+/** Subscribe to help contacts. Pass `enabled: false` to skip the Firestore
+ *  listener until the consumer actually needs the data (e.g. HelpTray closed). */
+export function useContacts(enabled = true) {
   const [contacts, setContacts] = useState<HelpContact[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(enabled);
 
   useEffect(() => {
+    if (!enabled) return;
     const unsub = onSnapshot(
       query(collection(db, paths.contactsCollection), orderBy("createdAt", "asc")),
       (snap) => {
@@ -38,7 +41,7 @@ export function useContacts() {
       }
     );
     return unsub;
-  }, []);
+  }, [enabled]);
 
   return { contacts, loading };
 }

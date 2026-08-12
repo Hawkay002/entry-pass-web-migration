@@ -25,8 +25,8 @@ import { useContacts } from "@/hooks/use-contacts";
 import { createContact, deleteContact, updateContact } from "@/app/actions/contacts";
 
 export function HelpTray({ isAdmin = false }: { isAdmin?: boolean }) {
-  const { contacts, loading } = useContacts();
   const [open, setOpen] = useState(false);
+  const { contacts, loading } = useContacts(open);
   const [addOpen, setAddOpen] = useState(false);
   const [form, setForm] = useState({ role: "", name: "", phone: "", whatsapp: "", description: "" });
   const [editId, setEditId] = useState<string | null>(null);

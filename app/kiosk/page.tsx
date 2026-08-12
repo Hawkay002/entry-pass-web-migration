@@ -26,7 +26,7 @@ import {
 
 const SESSION_KEY = "kiosk_pin";
 const SESSION_KIOSK_KEY = "kiosk_id";
-const CACHE_REFRESH_MS = 2 * 60 * 1000;
+const CACHE_REFRESH_MS = 15 * 60 * 1000;
 
 export default function KioskPage() {
   // Defer all browser-only reads (URL params, sessionStorage) until after
@@ -400,10 +400,12 @@ function KioskScanner({ pin, kioskId, onLock, onKioskDeleted }: { pin: string; k
     return () => clearInterval(interval);
   }, [refreshCache]);
 
-  // Track connectivity. `online` is lazy-init'd from navigator.onLine above,
-  // so this effect only wires the event listeners (no synchronous setState).
+  // Track connectivity. On reconnect: refresh cache + drain queue.
   useEffect(() => {
-    const on = () => setOnline(true);
+    const on = () => {
+      setOnline(true);
+      refreshCache();
+    };
     const off = () => setOnline(false);
     window.addEventListener("online", on);
     window.addEventListener("offline", off);
@@ -411,7 +413,7 @@ function KioskScanner({ pin, kioskId, onLock, onKioskDeleted }: { pin: string; k
       window.removeEventListener("online", on);
       window.removeEventListener("offline", off);
     };
-  }, []);
+  }, [refreshCache]);
 
   // Pending count on mount.
   useEffect(() => {

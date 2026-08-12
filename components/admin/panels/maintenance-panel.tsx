@@ -2,7 +2,7 @@
 
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { toast } from "sonner";
 import { Loader2, LockOpen, OctagonAlert } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -16,37 +16,18 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { applyRemoteLocks, fetchMaintenanceInfo, checkAndEndMaintenance, unlockStaff } from "@/app/actions/admin";
+import { applyRemoteLocks, unlockStaff } from "@/app/actions/admin";
 import { useRoles } from "@/hooks/use-roles";
+import { useLockDashboard } from "@/hooks/use-lock-dashboard";
 import { CollapsibleSection } from "@/components/admin/collapsible-section";
 
 export function MaintenancePanel() {
   const { roles } = useRoles();
+  const { maintActive, maintDuration } = useLockDashboard();
   const [open, setOpen] = useState(false);
   const [hrs, setHrs] = useState("");
   const [mins, setMins] = useState("");
   const [applying, setApplying] = useState(false);
-  const [maintInfo, setMaintInfo] = useState<{ active: boolean; duration: string | null }>({ active: false, duration: null });
-
-  // Poll maintenance status every 5s + auto-end if duration elapsed
-  useEffect(() => {
-    let active = true;
-    async function load() {
-      const res = await fetchMaintenanceInfo();
-      if (active && res.ok) {
-        setMaintInfo({ active: res.active, duration: res.duration });
-        if (res.active) {
-          const endRes = await checkAndEndMaintenance();
-          if (active && endRes.ok && endRes.ended) {
-            toast.success("Maintenance time over — all staff unlocked automatically");
-          }
-        }
-      }
-    }
-    load();
-    const interval = setInterval(load, 5000);
-    return () => { active = false; clearInterval(interval); };
-  }, []);
 
   async function startMaintenance() {
     setApplying(true);
@@ -90,7 +71,7 @@ export function MaintenancePanel() {
     toast.success("Maintenance mode ended — all staff unlocked");
   }
 
-  const maintBadge = maintInfo.active ? (
+  const maintBadge = maintActive ? (
     <span className="flex items-center gap-1.5 rounded-full bg-amber-500/15 px-2.5 py-0.5 text-[0.65rem] font-medium text-amber-400">
       <span className="h-1.5 w-1.5 rounded-full bg-amber-500 animate-pulse" />
       Active
@@ -103,20 +84,20 @@ export function MaintenancePanel() {
       icon={<OctagonAlert className="h-4 w-4" />}
       title="Maintenance Mode"
       badge={maintBadge}
-      defaultOpen={maintInfo.active}
+      defaultOpen={maintActive}
     >
     <div className="space-y-4 px-6 py-5">
       <p className="mb-4 text-xs text-muted-foreground">
         Locks all tabs for all staff across all roles simultaneously.
       </p>
 
-      {maintInfo.active && (
+      {maintActive && (
         <div className="mb-4 flex items-center gap-2 rounded-lg bg-amber-500/10 border border-amber-500/20 px-3 py-2">
           <span className="h-2 w-2 rounded-full bg-amber-500 animate-pulse" />
           <span className="text-sm text-amber-500">
             Maintenance Active
-            {maintInfo.duration && maintInfo.duration !== "Unknown" && (
-              <span className="ml-1 text-muted-foreground">— Est. {maintInfo.duration}</span>
+            {maintDuration && maintDuration !== "Unknown" && (
+              <span className="ml-1 text-muted-foreground">— Est. {maintDuration}</span>
             )}
           </span>
         </div>

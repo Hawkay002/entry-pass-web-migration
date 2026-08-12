@@ -8,27 +8,40 @@ import { paths } from "@/lib/paths";
 
 export const dynamic = "force-dynamic";
 
-export async function POST() {
+export async function POST(req: Request) {
   const user = await getAppUser();
   if (!user) {
     return NextResponse.json({ ok: false, error: "Not authenticated" }, { status: 401 });
   }
 
   try {
+    // Parse optional `force` flag — admin manual override skips deadline checks.
+    let force = false;
+    try {
+      const body = await req.json();
+      force = Boolean(body?.force);
+    } catch {
+      // Empty body = automatic trigger (respect deadline checks).
+    }
+
     const db = getAdminDb();
-    const settingsSnap = await db.doc(paths.settingsDoc).get();
-    const deadline = settingsSnap.data()?.deadline as string | undefined;
 
-    if (!deadline) {
-      return NextResponse.json({ ok: true, count: 0, reason: "no deadline" });
+    if (!force) {
+      // Automatic trigger — only act if deadline is set AND has passed.
+      const settingsSnap = await db.doc(paths.settingsDoc).get();
+      const deadline = settingsSnap.data()?.deadline as string | undefined;
+
+      if (!deadline) {
+        return NextResponse.json({ ok: true, count: 0, reason: "no deadline" });
+      }
+
+      const deadlineMs = new Date(deadline).getTime();
+      if (isNaN(deadlineMs) || Date.now() <= deadlineMs) {
+        return NextResponse.json({ ok: true, count: 0, reason: "not passed" });
+      }
     }
 
-    const deadlineMs = new Date(deadline).getTime();
-    if (isNaN(deadlineMs) || Date.now() <= deadlineMs) {
-      return NextResponse.json({ ok: true, count: 0, reason: "not passed" });
-    }
-
-    // Deadline passed — mark coming-soon as absent.
+    // Mark all coming-soon tickets as absent.
     const snap = await db
       .collection(paths.ticketsCollection)
       .where("status", "==", "coming-soon")
