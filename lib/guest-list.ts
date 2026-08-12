@@ -65,6 +65,8 @@ export function filterTickets(
 
 export function sortTickets(tickets: Ticket[], sort: SortKey): Ticket[] {
   const arr = [...tickets];
+
+  // First pass: apply the user-selected sort.
   switch (sort) {
     case "newest":
       arr.sort((a, b) => b.createdAt - a.createdAt);
@@ -88,5 +90,50 @@ export function sortTickets(tickets: Ticket[], sort: SortKey): Ticket[] {
       arr.sort((a, b) => a.gender.localeCompare(b.gender));
       break;
   }
-  return arr;
+
+  // Second pass: re-group family members so kids follow their parent.
+  // Standalone tickets (no groupId) stay in their sorted position.
+  // Group tickets are clustered: parent (no parentName) first, then kids
+  // by age descending. The group takes the position of its first member
+  // in the sorted array.
+  const seen = new Set<string>();
+  const result: Ticket[] = [];
+
+  for (const ticket of arr) {
+    // Skip if already added as part of a group.
+    if (ticket.id && seen.has(ticket.id)) continue;
+
+    if (!ticket.groupId) {
+      // Standalone — just add it.
+      result.push(ticket);
+      if (ticket.id) seen.add(ticket.id);
+      continue;
+    }
+
+    // Group member — find all tickets in this group from the full set.
+    const groupMembers = arr.filter((t) => t.groupId === ticket.groupId);
+    if (groupMembers.length <= 1) {
+      result.push(ticket);
+      if (ticket.id) seen.add(ticket.id);
+      continue;
+    }
+
+    // Sort: parent first (no parentName), then kids by age descending.
+    groupMembers.sort((a, b) => {
+      const aIsParent = !a.parentName;
+      const bIsParent = !b.parentName;
+      if (aIsParent && !bIsParent) return -1;
+      if (!aIsParent && bIsParent) return 1;
+      return b.age - a.age;
+    });
+
+    for (const member of groupMembers) {
+      if (member.id && !seen.has(member.id)) {
+        result.push(member);
+        seen.add(member.id);
+      }
+    }
+  }
+
+  return result;
 }

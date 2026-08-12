@@ -369,7 +369,7 @@ export default function TicketsPage() {
                           className="h-8 text-sm"
                         />
                       </div>
-                      <div className="w-20">
+                      <div className="w-24">
                         <Label className="text-[0.65rem] text-muted-foreground">Gender</Label>
                         <Select
                           value={kid.gender}
@@ -379,9 +379,9 @@ export default function TicketsPage() {
                             <SelectValue />
                           </SelectTrigger>
                           <SelectContent>
-                            <SelectItem value="Male">M</SelectItem>
-                            <SelectItem value="Female">F</SelectItem>
-                            <SelectItem value="Other">O</SelectItem>
+                            <SelectItem value="Male">Male</SelectItem>
+                            <SelectItem value="Female">Female</SelectItem>
+                            <SelectItem value="Other">Other</SelectItem>
                           </SelectContent>
                         </Select>
                       </div>
