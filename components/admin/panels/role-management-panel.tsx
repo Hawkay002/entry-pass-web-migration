@@ -168,7 +168,15 @@ export function RoleManagementPanel() {
     <>
     <CollapsibleSection
       icon={<Users className="h-4 w-4" />}
-      title={`Role Management${!loading && roles.length > 0 ? ` (${roles.length})` : ""}`}
+      title="Role Management"
+      badge={
+        !loading && roles.length > 0 ? (
+          <span className="flex items-center gap-1.5 rounded-full bg-success-green/15 px-2.5 py-0.5 text-[0.65rem] font-medium text-success-green">
+            <span className="h-1.5 w-1.5 rounded-full bg-success-green" />
+            {roles.length}
+          </span>
+        ) : null
+      }
     >
     <div className="space-y-4 px-6 py-5">
       <p className="mb-4 text-xs text-muted-foreground">

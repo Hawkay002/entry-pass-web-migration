@@ -4,7 +4,7 @@
 
 import { useState } from "react";
 import { toast } from "sonner";
-import { Loader2, Trash2, Plus, ScanLine, ArrowUpRight, Pencil, MoreVertical, Eye, EyeOff } from "lucide-react";
+import { Loader2, Trash2, Plus, ScanLine, ArrowUpRight, Pencil, MoreVertical, Eye, EyeOff, Copy } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -101,7 +101,8 @@ export function KioskPanel() {
       title="Self Check-in Kiosks"
       badge={
         !loading && kiosks.length > 0 ? (
-          <span className="rounded-full bg-white/5 px-2.5 py-0.5 text-[0.65rem] font-medium text-muted-foreground">
+          <span className="flex items-center gap-1.5 rounded-full bg-success-green/15 px-2.5 py-0.5 text-[0.65rem] font-medium text-success-green">
+            <span className="h-1.5 w-1.5 rounded-full bg-success-green" />
             {kiosks.length}
           </span>
         ) : null
@@ -155,6 +156,18 @@ export function KioskPanel() {
                     <MoreVertical className="h-3 w-3" />
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end">
+                    <DropdownMenuItem
+                      onClick={() => {
+                        const link = `${window.location.origin}/kiosk?id=${k.id}`;
+                        navigator.clipboard.writeText(link).then(() => {
+                          toast.success("Kiosk link copied to clipboard");
+                        }).catch(() => {
+                          toast.error("Failed to copy link");
+                        });
+                      }}
+                    >
+                      <Copy className="mr-2 h-3.5 w-3.5" /> Copy Link
+                    </DropdownMenuItem>
                     <DropdownMenuItem onClick={() => { setEditKiosk(k); setEditName(k.name); setEditPin(""); setEditGate(k.gateId); }}>
                       <Pencil className="mr-2 h-3.5 w-3.5" /> Edit
                     </DropdownMenuItem>

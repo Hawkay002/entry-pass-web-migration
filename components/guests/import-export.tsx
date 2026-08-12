@@ -37,24 +37,36 @@ import type { Ticket as TicketType } from "@/lib/types";
 export function ImportExportButtons({
   selectedTickets,
   allTickets,
+  externalManageOpen,
+  onManageOpenChange,
 }: {
   selectedTickets: TicketType[];
   allTickets: TicketType[];
+  /** When provided, the standalone Manage button is hidden and the modal is
+   *  controlled externally (e.g. from a dropdown menu). */
+  externalManageOpen?: boolean;
+  onManageOpenChange?: (open: boolean) => void;
 }) {
-  const [manageOpen, setManageOpen] = useState(false);
+  const [internalManageOpen, setInternalManageOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
 
+  const isExternal = externalManageOpen !== undefined;
+  const manageOpen = isExternal ? externalManageOpen! : internalManageOpen;
+  const setManageOpen = isExternal ? (onManageOpenChange ?? (() => {})) : setInternalManageOpen;
+
   return (
     <>
-      <Button
-        size="sm"
-        variant="outline"
-        onClick={() => setManageOpen(true)}
-      >
-        <HugeiconsIcon icon={FileManagementIcon} size={16} className="mr-1.5" />
-        Manage
-      </Button>
+      {!isExternal && (
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={() => setManageOpen(true)}
+        >
+          <HugeiconsIcon icon={FileManagementIcon} size={16} className="mr-1.5" />
+          Manage
+        </Button>
+      )}
 
       {/* Manage modal — choose Import or Export */}
       <Dialog open={manageOpen} onOpenChange={setManageOpen}>

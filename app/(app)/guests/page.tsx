@@ -5,11 +5,12 @@
 import { useMemo, useState, useRef, useEffect } from "react";
 import { LockedTab } from "@/components/layout/locked-tab";
 import { useLockedTabs } from "@/components/layout/locked-tabs-context";
-import { Loader2, Search, Trash2, Filter, Eye, Users, Pencil, UserX } from "lucide-react";
+import { Loader2, Search, Trash2, Filter, Eye, Users, Pencil, UserX, ChevronDown, CheckSquare, MoreVertical } from "lucide-react";
 import { HugeiconsIcon } from "@hugeicons/react";
-import { WhatsappIcon } from "@hugeicons/core-free-icons";
+import { WhatsappIcon, FileManagementIcon } from "@hugeicons/core-free-icons";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
+import { ButtonGroup } from "@/components/ui/button-group";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
@@ -21,6 +22,13 @@ import {
   DialogFooter,
   DialogDescription,
 } from "@/components/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+} from "@/components/ui/dropdown-menu";
 import {
   Table,
   TableBody,
@@ -70,6 +78,7 @@ export default function GuestsPage() {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [manageOpen, setManageOpen] = useState(false);
   const [viewTicket] = useState<Ticket | null>(null);
   const [viewOpen] = useState(false);
   const [filterOpen, setFilterOpen] = useState(false);
@@ -220,51 +229,88 @@ export default function GuestsPage() {
 
   return (
     <div className="glass-panel space-y-4 p-6">
+      {/* Hidden ImportExportButtons — only renders the modals (Manage button hidden,
+          triggered externally via manageOpen state from the Actions dropdown). */}
+      <ImportExportButtons
+        selectedTickets={filtered.filter((t) => selected.has(t.id))}
+        allTickets={tickets}
+        externalManageOpen={manageOpen}
+        onManageOpenChange={setManageOpen}
+      />
+
       <div className="flex items-start justify-between gap-1">
         <div className="flex items-center gap-2">
           <h2 className="shrink-0 text-lg font-semibold">Guest List</h2>
-          {isAdmin && hasComingSoon && (
+        </div>
+        <div className="flex flex-wrap items-center justify-end gap-1.5">
+          {selectionMode && (
             <Button
+              variant="outline"
               size="sm"
-              variant="ghost"
-              className="h-7 gap-1 px-2 text-xs text-amber-400 hover:bg-amber-500/10"
-              disabled={absentMarking}
-              onClick={() => triggerAutoAbsent(true)}
-              title="Mark all pending guests as absent"
+              className="h-8 rounded-lg text-destructive hover:bg-destructive/10"
+              onClick={exitSelectionMode}
             >
-              {absentMarking ? (
-                <Loader2 className="h-3 w-3 animate-spin" />
-              ) : (
-                <UserX className="h-3 w-3" />
-              )}
-              Mark All Absent
+              Cancel
             </Button>
           )}
-        </div>
-        <div className="flex flex-wrap justify-end gap-1.5">
-          <ImportExportButtons
-            selectedTickets={filtered.filter((t) => selected.has(t.id))}
-            allTickets={tickets}
-          />
-          {selectionMode ? (
-            <>
+          <ButtonGroup>
               <Button
+                variant="outline"
                 size="sm"
+                className="h-8"
+                onClick={enterSelectionMode}
+              >
+                Select{selectionMode && selected.size > 0 ? ` (${selected.size})` : ""}
+              </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger
+                render={<Button variant="outline" size="sm" className="h-8 px-2" aria-label="Select options" />}
+              >
+                <ChevronDown className="h-3.5 w-3.5" />
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={() => { enterSelectionMode(); setSelected(new Set(filtered.map((t) => t.id))); }}>
+                  <CheckSquare className="mr-2 h-3.5 w-3.5" />
+                  Select All
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </ButtonGroup>
+          <DropdownMenu>
+            <DropdownMenuTrigger
+              className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-white/10 bg-white/5 text-muted-foreground transition-colors hover:bg-white/10 hover:text-white"
+            >
+              <MoreVertical className="h-4 w-4" />
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="min-w-[180px]">
+              <DropdownMenuItem onClick={() => setManageOpen(true)}>
+                <HugeiconsIcon icon={FileManagementIcon} size={14} className="mr-2" />
+                Manage
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              {isAdmin && (
+                <DropdownMenuItem
+                  disabled={!hasComingSoon || absentMarking}
+                  onClick={() => triggerAutoAbsent(true)}
+                >
+                  {absentMarking ? (
+                    <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <UserX className="mr-2 h-3.5 w-3.5" />
+                  )}
+                  Mark All Absent
+                </DropdownMenuItem>
+              )}
+              <DropdownMenuItem
                 variant="destructive"
                 disabled={selected.size === 0}
                 onClick={() => setDeleteOpen(true)}
               >
-                <Trash2 className="mr-1.5 h-4 w-4" /> Delete
-              </Button>
-              <Button size="sm" variant="ghost" onClick={exitSelectionMode}>
-                Cancel
-              </Button>
-            </>
-          ) : (
-            <Button size="sm" variant="ghost" onClick={enterSelectionMode}>
-              Select
-            </Button>
-          )}
+                <Trash2 className="mr-2 h-3.5 w-3.5" />
+                Delete{selectionMode ? ` (${selected.size})` : ""}
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </div>
 
@@ -372,19 +418,6 @@ export default function GuestsPage() {
           )}
         </div>
       </div>
-
-      {/* Select-all bar */}
-      {selectionMode && (
-        <div className="flex items-center justify-between gap-3 rounded-lg bg-white/5 p-3">
-          <div className="flex items-center gap-3">
-            <Checkbox checked={allVisibleSelected} onCheckedChange={toggleSelectAll} />
-            <span className="text-sm">Select All</span>
-          </div>
-          <span className="text-sm text-accent-secondary">
-            ({selected.size} selected)
-          </span>
-        </div>
-      )}
 
       {/* Table */}
       <div className="overflow-x-auto scrollbar-thin">

@@ -31,7 +31,7 @@ Built with Next.js 16, React 19, Tailwind v4, Firebase Admin SDK, and Upstash Re
 
 ### Core Ticket Loop
 - **Issue Tickets** — Form with country code dropdown (203 countries with flags, India default). **Paste-sanitizing phone field** — paste `+4915210899596` → auto-selects Germany (+49), shows `15210899596`. Accepts international number lengths (6–15 digits, E.164). Live ticket confirmation with animated BadgeCheck (draw-on-path loop), auto-scrolls to preview on mobile + desktop. WhatsApp share button doubles as capture-status indicator. WhatsApp share message includes link-expiry notice
-- **Guest List** — 7 sort options, 4 filters (type/status/gender + search), bulk delete, import/export. **Gate column** appears when multi-gate mode is on (blue gate badges per ticket). **Admin-only edit guest name** (pencil icon per row). View eye opens interactive ticket page. Share column sends WhatsApp with ticket link + expiry notice
+- **Guest List** — 7 sort options, 4 filters (type/status/gender + search), bulk delete, import/export. **Gate column** appears when multi-gate mode is on (blue gate badges per ticket). **Admin-only edit guest name** (pencil icon per row). View eye opens interactive ticket page. Share column sends WhatsApp with ticket link + expiry notice. **Button group** (Select + Select All dropdown) + **Actions overflow menu** (Manage / Mark All Absent / Delete). **Manual Mark All Absent** button (admin override, skips deadline check). **Auto-absent** fires once at exact deadline via `setTimeout` (timezone-aware, zero polling)
 - **Scanner** — Camera QR decode at 480px for maximum speed, **four-way validation** (granted / already scanned / invalid / **wrong gate**). Shows **who scanned** + **when** on duplicate scans. **Camera flip** button (front/back). **Animated bell toggle** for haptic feedback (synced to localStorage, rings/shakes on toggle). **Gate badge** in header showing the scanner's assigned gate. Offline mode with IndexedDB cache + auto-sync on reconnect. Wrong-gate scans are blocked without mutating the ticket
 - **4 Ticket Types** — Classic, VIP, SVIP, VVIP — each with unique shader colors, fonts (The Seasons for names + Gotham Nights for body), and VVIP engraved text effect. Ticket names auto-balance across up to 3 lines and fill the space to the perforation. Gate number shown on ticket face footer (`age / gender • Gate X`)
 
@@ -41,8 +41,8 @@ Built with Next.js 16, React 19, Tailwind v4, Firebase Admin SDK, and Upstash Re
 - **Multi-Gate System** — Toggle multi-gate mode in Configuration (**admin-only** UI + server enforcement). Create gate categories (Guest Entry, Staff, Security, Management — free text). **Collapsible categories** (collapsed by default). Add gates inside categories with ticket-type acceptance (Classic/VIP/SVIP/VVIP). **Round-robin auto-assignment** balances tickets across gates. Staff assigned to specific gates. Wrong-gate scans blocked with "WRONG GATE" error (shows gate **name** not ID). Gate column in guest list + **gate filter**. Export includes gate. Ticket face shows assigned gate. Full cascade delete on disable/clear/factory-reset. **Multi-device realtime sync** for the toggle
 - **Multi-Kiosk System** — Create multiple self check-in kiosks, each with its own **name, PIN (4–6 digits), gate assignment, and URL** (`/kiosk?id={kioskId}`). Admin CRUD via Configuration (**realtime onSnapshot**). Kiosk picker shown if no `?id=` param. Each kiosk validates its own PIN + enforces its gate. Per-kiosk+IP rate limiting. Kiosk 404 page if link is invalid/deleted. **Instant deletion detection** — a Firestore `onSnapshot` on a public `kiosk_status/{id}` doc fires the moment a kiosk is deleted or factory-reset, showing the 404 within ~1 second (no more 2-min poll delay). Config edits (name/PIN/gate change) instantly force re-authentication on the kiosk tablet
 - **Configuration** — **Calendar + time picker** for deadline (shadcn Calendar with month/year dropdown selectors, 12-hour AM/PM two-box time input). **Premium Active Settings card** (gradient, hero event name, icon chips for venue/deadline, timezone + multi-gate badges). Staff see a **read-only** version of this card (no form, no gate config). **Admin-only** edit form. Admin panel uses **collapsible section cards** (2FA, Kiosks, Maintenance, Roles, RDM, Danger Zone) — each collapsed by default with live status badges (Active/Not configured/count/locked), expand on click. Secondary row actions (Edit/Delete) consolidated into `⋯` overflow menus. Pure CSS grid height animation (no JS measurement)
-- **Remote Device Management** — Select staff from role → batch **edit** (name/email/gate) or **delete** via overflow menu. Staff selection modal shows 10 rows on mobile, 8 on desktop before scrolling. **Select All checkbox** (matches guest list / activity log pattern). Lock/unlock tabs with reason (basic/review/maintenance)
-- **Remote Lock** — Lock or unlock specific tabs per staff member with live status badges. Selective unlock
+- **Remote Device Management** — Select staff from role → batch **edit** (name/email/gate) or **delete** via overflow menu. Staff selection modal shows 10 rows on mobile, 8 on desktop before scrolling. **Select All checkbox** (matches guest list / activity log pattern). Lock/unlock tabs with reason (basic/review). **Configuration tab excluded** from lockable tabs (staff can only view, not edit)
+- **Remote Lock** — Lock or unlock specific tabs per staff member with live status badges. Selective unlock. **3 lockable tabs** (Issue Ticket, Guest List, Scanner) — Configuration excluded since staff view-only
 - **Maintenance Mode** — Lock all staff instantly with duration timer (OctagonAlert icon). Auto-unlock when time expires
 - **Staff Auto-Logout** — Removing a staff member instantly revokes their session and kicks them out
 - **Auto-Absent** — Deadline-based status automation with **timezone-aware** offsets (38 zones, UTC-12 to UTC+14). Zero page reload
@@ -742,6 +742,36 @@ pnpm build        # Production build
 pnpm lint         # ESLint
 pnpm typecheck    # TypeScript check (no emit)
 ```
+
+---
+
+## Firebase Read Cost Estimate (Spark / Free Tier)
+
+The Spark (free) plan includes **50,000 Firestore reads/day**. This app is optimized to stay well within that limit for a typical event. Below is an estimated daily breakdown for an event with **200 tickets**, **1 admin** (8h active, 2h on Settings), **4 staff** (8h each), **1 kiosk tablet** (8h), and **2 scanner tabs** (8h, 500 scans total).
+
+| Component | Mechanism | Est. reads/day |
+|---|---|---|
+| **Staff remote-locks** (`useRemoteLocks`) | Single-doc `onSnapshot` per staff | ~24 |
+| **Kiosk status** (`onSnapshot`) | Single-doc listener (public, existence-only) | ~3 |
+| **Scanner offline cache** | Full tickets poll every **15 min** + on reconnect | ~12,933 |
+| **Kiosk offline cache** | Full tickets poll every **15 min** + on reconnect | ~6,461 |
+| **Per-scan validation** | 1 ticket + 1 gate doc per scan × 500 | ~1,500 |
+| **Phone verification** | 1 doc per verify × ~100 | ~100 |
+| **Ticket creation** | ~3 reads × 200 tickets | ~600 |
+| **Lock dashboard** (admin Settings) | Single `global_locks` read every **15 s** (merged) | ~480 |
+| **Roles/Settings/Gates listeners** | `onSnapshot` on doc/collection | ~50 |
+| **Help contacts** | `onSnapshot` — lazy-mounted (only when tray opens) | ~10 |
+| **Auto-absent** | `setTimeout` at deadline — fires once (no polling) | ~1 |
+| **`getAppUser()` server calls** | Reads `roles` collection to resolve identity | ~200 |
+| | **Total estimated** | **~22,362** |
+| | **% of 50K free tier** | **~45%** ✅ |
+
+### Key optimizations
+- **Merged lock polling** — formerly 3 separate 5s polls (3 full `global_locks` reads per 5s = ~21K/day) merged into a single 15s `fetchLockDashboard` call (~480/day)
+- **Scanner/kiosk cache** — poll interval increased from 2–5 min to 15 min + refresh on reconnect (offline-first design, onSnapshot dies when WiFi drops)
+- **Auto-absent** — replaced 10s polling with a single `setTimeout` at the exact deadline moment (timezone-aware)
+- **Help contacts** — `onSnapshot` only activates when the Help Tray opens (was on every authenticated page)
+- **Kiosk deletion** — instant via `onSnapshot` on `kiosk_status/{id}` (replaced 2-min poll)
 
 ---
 

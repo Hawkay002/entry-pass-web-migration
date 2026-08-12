@@ -45,7 +45,6 @@ const LOCKABLE_TABS: { value: TabName; label: string }[] = [
   { value: "create", label: "Issue Ticket Tab" },
   { value: "booked", label: "Guest List Tab" },
   { value: "scanner", label: "Scanner Tab" },
-  { value: "settings", label: "Configuration Tab" },
 ];
 
 export function RemoteDeviceManagement() {
