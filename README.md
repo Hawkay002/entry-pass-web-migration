@@ -755,6 +755,28 @@ The Spark (free) plan includes these daily quotas (**separate, not shared**):
 | Document writes | 20,000 |
 | Document deletes | 20,000 |
 
+### What event sizes can the free tier handle?
+
+The bottleneck is always **reads** (writes stay under 12% even at maximum capacity). The read cost scales with **ticket count × number of active scanner/kiosk devices**. Here's what fits on the free tier:
+
+| Event size | Scanners | Kiosks | Duration | Est. reads/day | Free tier |
+|---|---|---|---|---|---|
+| **Small** — birthday, private party | 1 | 0 | 4h | ~6,500 | ✅ 13% |
+| **Small + kiosk** — small gig, meetup | 1 | 1 | 6h | ~13,000 | ✅ 26% |
+| **Medium** — conference, workshop, club night | 2 | 1 | 8h | ~22,000 | ✅ 45% |
+| **Medium+** — 300 tickets, more devices | 2 | 1 | 8h | ~30,000 | ✅ 60% |
+| **Large** — wedding, corporate event, festival | 2 | 1 | 8h | ~38,000 | ✅ 76% |
+| **Max** — 450 tickets, 6 staff, 900 scans | 2 | 1 | 8h | ~49,800 | ⚠️ 99.5% |
+| **Over capacity** — 500+ tickets or 3+ scanners | 3 | 1 | 8h | ~58,000+ | ❌ Exceeds |
+
+**Rules of thumb:**
+- **Under 200 tickets**: unlimited staff/kiosks — you'll never hit the cap
+- **200–450 tickets**: keep to ≤2 scanners + ≤1 kiosk to stay safe
+- **450+ tickets**: exceeds free tier — either reduce active devices, increase poll interval beyond 15 min, or upgrade to Blaze ($0.036/100K reads)
+- **Adding a 3rd scanner**: costs ~6,600 reads/day per 100 tickets — reduces max capacity by ~100 tickets
+- **Removing the kiosk**: frees ~6,500 reads/day — extends max capacity to ~530 tickets
+- **Multi-day events**: quota resets daily at midnight Pacific time, so a 2-day event at 200 tickets/day is fine
+
 The **Typical** column shows a standard event; the **Optimal** column shows the maximum event size that stays just under the 50K read cap.
 
 > **Typical:** 200 tickets · 1 admin (8h, 2h on Settings) · 4 staff (8h) · 1 kiosk (8h) · 2 scanners (8h, 500 scans)
