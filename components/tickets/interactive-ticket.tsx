@@ -276,7 +276,7 @@ export function InteractiveTicket({ tickets, settings }: { tickets: TicketData[]
           <button
             onClick={() => setActiveIdx((i) => Math.max(0, i - 1))}
             disabled={activeIdx === 0}
-            className="flex h-8 w-8 items-center justify-center rounded-full bg-white/5 text-white transition-colors hover:bg-white/15 disabled:opacity-30"
+            className="flex h-8 w-8 items-center justify-center rounded-md border border-border bg-background text-white transition-colors hover:bg-muted disabled:opacity-30"
             aria-label="Previous ticket"
           >
             <ChevronLeft className="h-4 w-4" />
@@ -287,7 +287,7 @@ export function InteractiveTicket({ tickets, settings }: { tickets: TicketData[]
           <button
             onClick={() => setActiveIdx((i) => Math.min(tickets.length - 1, i + 1))}
             disabled={activeIdx === tickets.length - 1}
-            className="flex h-8 w-8 items-center justify-center rounded-full bg-white/5 text-white transition-colors hover:bg-white/15 disabled:opacity-30"
+            className="flex h-8 w-8 items-center justify-center rounded-md border border-border bg-background text-white transition-colors hover:bg-muted disabled:opacity-30"
             aria-label="Next ticket"
           >
             <ChevronRight className="h-4 w-4" />
