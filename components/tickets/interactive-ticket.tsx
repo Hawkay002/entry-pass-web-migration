@@ -6,7 +6,7 @@
 
 import { useEffect, useRef, useState, useCallback, type RefObject } from "react";
 import { TICKET_TYPE_LABELS } from "@/lib/types";
-import { Download, Loader2, Flag, Copy, Check } from "lucide-react";
+import { Download, Loader2, Flag, Copy, Check, ChevronLeft, ChevronRight } from "lucide-react";
 import { toast } from "sonner";
 import AdmitOneTicket, { TICKET_TEXTURE, TICKET_GRADIENT, TICKET_LAYOUT, TICKET_GEOMETRY, ticketClipPath } from "@/components/ui/admit-one-ticket";
 import { Button } from "@/components/ui/button";
@@ -50,7 +50,9 @@ const TYPE_STYLES: Record<string, { texture: typeof TICKET_TEXTURE; gradient: ty
   Gold: { texture: TICKET_TEXTURE, gradient: TICKET_GRADIENT },
 };
 
-export function InteractiveTicket({ ticket, settings }: { ticket: TicketData; settings: SettingsData }) {
+export function InteractiveTicket({ tickets, settings }: { tickets: TicketData[]; settings: SettingsData }) {
+  const [activeIdx, setActiveIdx] = useState(0);
+  const ticket = tickets[activeIdx];
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const tiltRef = useRef<HTMLDivElement>(null);
   const glareRef = useRef<HTMLDivElement>(null);
@@ -184,8 +186,9 @@ export function InteractiveTicket({ ticket, settings }: { ticket: TicketData; se
 
   return (
     <div className="flex min-h-screen flex-col items-center justify-center bg-[#050505] px-4 py-8">
-      {/* Tilt container — transparent bg so notch cutouts don't show white */}
+      {/* Tilt container — keyed on ticket.id so QR/tilt/effects reset when cycling */}
       <div
+        key={ticket.id}
         ref={tiltRef}
         onPointerEnter={() => setHovering(true)}
         onPointerMove={onMove}
@@ -266,6 +269,31 @@ export function InteractiveTicket({ ticket, settings }: { ticket: TicketData; se
 
       {/* Hidden QR canvas for Wallet */}
       <canvas ref={canvasRef} className="hidden" />
+
+      {/* Family ticket navigation — chevrons to cycle through parent + kids */}
+      {tickets.length > 1 && (
+        <div className="mt-4 flex items-center justify-center gap-4">
+          <button
+            onClick={() => setActiveIdx((i) => Math.max(0, i - 1))}
+            disabled={activeIdx === 0}
+            className="flex h-8 w-8 items-center justify-center rounded-full bg-white/5 text-white transition-colors hover:bg-white/15 disabled:opacity-30"
+            aria-label="Previous ticket"
+          >
+            <ChevronLeft className="h-4 w-4" />
+          </button>
+          <span className="text-sm text-muted-foreground">
+            {ticket.name} — {activeIdx + 1} of {tickets.length}
+          </span>
+          <button
+            onClick={() => setActiveIdx((i) => Math.min(tickets.length - 1, i + 1))}
+            disabled={activeIdx === tickets.length - 1}
+            className="flex h-8 w-8 items-center justify-center rounded-full bg-white/5 text-white transition-colors hover:bg-white/15 disabled:opacity-30"
+            aria-label="Next ticket"
+          >
+            <ChevronRight className="h-4 w-4" />
+          </button>
+        </div>
+      )}
 
       {/* Buttons row: Google Wallet + Download */}
       <div className="mt-6 flex w-full max-w-[380px] items-start gap-2 sm:gap-3"

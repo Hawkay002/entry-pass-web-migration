@@ -44,6 +44,11 @@ export interface Ticket {
   gate?: string | null;
   /** Gate id where the ticket was actually scanned. */
   scannedAtGate?: string | null;
+  /** Shared by parent + kids in a group ticket. null for standalone tickets.
+   *  groupId set + parentName null = parent; groupId set + parentName set = kid. */
+  groupId?: string | null;
+  /** Parent's name. Set on kid tickets only; null on parent/standalone. */
+  parentName?: string | null;
 }
 
 /** Path: ticket_events_data/shared_event_db/gates/{gateId} */

@@ -12,6 +12,11 @@ import type { Gender, TicketStatus, TicketType } from "@/lib/types";
 import { revalidatePath } from "next/cache";
 import { pickGateForTicket } from "@/app/actions/gates";
 
+/** Short random ID for group tickets (same pattern as generateKioskId in admin.ts). */
+function generateGroupId(): string {
+  return Math.random().toString(36).slice(2, 8);
+}
+
 /**
  * Fetch the full ticket list for offline-cache warming on the scanner.
  * Returns ONLY the fields the offline validator needs (id/name/status/scanned)
@@ -48,6 +53,7 @@ export async function createTicket(input: {
   phone: string; // raw digits, will be prefixed with the selected dial code
   ticketType: TicketType;
   dialCode?: string; // e.g. "+91" (default "+91")
+  kids?: { name: string; gender: Gender; age: number }[];
 }): Promise<{ ok: true; id: string; gate?: string | null } | { ok: false; error: string }> {
   const user = await getAppUser();
   if (!user) return { ok: false, error: "Not authenticated." };
@@ -55,6 +61,7 @@ export async function createTicket(input: {
   const db = getAdminDb();
   const dial = input.dialCode ?? "+91";
   const now = Date.now();
+  const fullPhone = dial + input.phone.replace(/\D/g, "");
 
   // Multi-gate: auto-assign a gate via category match + round-robin (if enabled).
   let assignedGate: string | null = null;
@@ -63,11 +70,15 @@ export async function createTicket(input: {
     assignedGate = await pickGateForTicket(input.ticketType);
   }
 
+  // Generate a shared groupId only if kids are present.
+  const hasKids = input.kids && input.kids.length > 0;
+  const groupId = hasKids ? generateGroupId() : null;
+
   const ticket = {
     name: input.name.trim(),
     gender: input.gender,
     age: input.age,
-    phone: dial + input.phone.replace(/\D/g, ""),
+    phone: fullPhone,
     ticketType: input.ticketType,
     status: "coming-soon" as const,
     scanned: false,
@@ -77,15 +88,46 @@ export async function createTicket(input: {
     createdAt: now,
     gate: assignedGate,
     scannedAtGate: null,
+    groupId,
+    parentName: null,
   };
 
   const ref = await db.collection(paths.ticketsCollection).add(ticket);
 
-  await logAction(
-    user,
-    "TICKET_CREATE",
-    `Ticket issued for ${ticket.name} (ID: ${ref.id.slice(0, 6)})`
-  );
+  // Create kid tickets — they share the parent's phone + ticketType + gate.
+  if (hasKids && groupId) {
+    for (const kid of input.kids!) {
+      await db.collection(paths.ticketsCollection).add({
+        name: kid.name.trim(),
+        gender: kid.gender,
+        age: kid.age,
+        phone: fullPhone,
+        ticketType: input.ticketType,
+        status: "coming-soon" as const,
+        scanned: false,
+        scannedAt: null,
+        scannedBy: null,
+        createdBy: user.username,
+        createdAt: now,
+        gate: assignedGate,
+        scannedAtGate: null,
+        groupId,
+        parentName: input.name.trim(),
+      });
+    }
+
+    await logAction(
+      user,
+      "TICKET_CREATE",
+      `Ticket issued for ${ticket.name} + ${input.kids!.length} kid(s) (ID: ${ref.id.slice(0, 6)})`
+    );
+  } else {
+    await logAction(
+      user,
+      "TICKET_CREATE",
+      `Ticket issued for ${ticket.name} (ID: ${ref.id.slice(0, 6)})`
+    );
+  }
 
   revalidatePath("/guests");
   return { ok: true, id: ref.id, gate: assignedGate };

@@ -109,7 +109,7 @@ export function ImportExportButtons({
         open={importOpen}
         onOpenChange={setImportOpen}
         existingPhones={allTickets.map((t) =>
-          t.phone.replace("+91", "")
+          t.phone.replace("+91", "") + ":" + t.name.toLowerCase()
         )}
       />
       <ExportModal

@@ -43,6 +43,8 @@ interface ExportRow {
   "Ticket ID": string;
   Gate: string;
   "Entry Time": string;
+  "Group ID": string;
+  Parent: string;
 }
 
 function toExportRow(t: Ticket, index: number): ExportRow {
@@ -59,6 +61,8 @@ function toExportRow(t: Ticket, index: number): ExportRow {
     "Entry Time": t.scannedAt
       ? new Date(t.scannedAt).toLocaleString()
       : "",
+    "Group ID": t.groupId ?? "",
+    Parent: t.parentName ?? "",
   };
 }
 
@@ -77,13 +81,13 @@ export function downloadBlob(blob: Blob, filename: string) {
 // ---- CSV ----
 export function exportCSV(tickets: Ticket[], filename: string) {
   const header =
-    "S.No.,Guest Name,Ticket Type,Age,Gender,Phone,Status,Ticket ID,Gate,Entry Time";
+    "S.No.,Guest Name,Ticket Type,Age,Gender,Phone,Status,Ticket ID,Gate,Entry Time,Group ID,Parent";
   const rows = tickets.map((t, i) => {
     const cleanName = t.name.replace(/,/g, "");
     const entry = t.scannedAt
       ? new Date(t.scannedAt).toLocaleString().replace(/,/g, " ")
       : "";
-    return `${i + 1},${cleanName},${displayTicketType(t.ticketType)},${t.age},${t.gender},${t.phone},${t.status},${t.id},${t.gate ?? ""},${entry}`;
+    return `${i + 1},${cleanName},${displayTicketType(t.ticketType)},${t.age},${t.gender},${t.phone},${t.status},${t.id},${t.gate ?? ""},${entry},${t.groupId ?? ""},${(t.parentName ?? "").replace(/,/g, "")}`;
   });
   const csv = [header, ...rows].join("\n");
   const blob = new Blob(["\ufeff", csv], { type: "text/csv;charset=utf-8;" });
@@ -281,6 +285,8 @@ export interface ParsedTicket {
   ticketType: TicketType;
   status: TicketStatus;
   entryTimeRaw?: string;
+  groupId?: string | null;
+  parentName?: string | null;
 }
 
 /** Strip non-alphanumeric and lowercase a key for alias matching. */
@@ -313,6 +319,8 @@ export function normalizeRecord(raw: Record<string, unknown>): ParsedTicket {
     ticketType: parseTicketType(typeRaw),
     status: parseStatus(statusRaw),
     entryTimeRaw: getVal("entrytime", "entry", "scannedat", "time") || undefined,
+    groupId: getVal("groupid", "group") || null,
+    parentName: getVal("parentname", "parent") || null,
   };
 }
 

@@ -7,13 +7,14 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { toast } from "sonner";
-import { Loader2, UserRound, Smartphone, Tickets, ExternalLink } from "lucide-react";
+import { Loader2, UserRound, Smartphone, Tickets, ExternalLink, Baby, Plus, X } from "lucide-react";
 import { FaVenusMars } from "react-icons/fa6";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { AddInvoiceIcon, WhatsappIcon } from "@hugeicons/core-free-icons";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { LockedTab } from "@/components/layout/locked-tab";
 import { useLockedTabs } from "@/components/layout/locked-tabs-context";
@@ -86,6 +87,10 @@ export default function TicketsPage() {
   const [dialCode, setDialCode] = useState(DEFAULT_DIAL_CODE);
   const previewRef = useRef<HTMLDivElement>(null);
 
+  // Kids toggle + kid fields (outside react-hook-form — managed locally).
+  const [hasKids, setHasKids] = useState(false);
+  const [kids, setKids] = useState<{ name: string; gender: Gender; age: string }[]>([]);
+
   // Scroll the preview into view after a ticket is generated so the admin sees
   // the confirmation + live ticket without manual scrolling, on every screen.
   useEffect(() => {
@@ -151,6 +156,12 @@ export default function TicketsPage() {
   const livePreview = preview;
 
   async function onSubmit(values: FormValues) {
+    const validKids = hasKids
+      ? kids
+          .filter((k) => k.name.trim() && k.age)
+          .map((k) => ({ name: k.name.trim(), gender: k.gender, age: Number(k.age) }))
+      : [];
+
     const res = await createTicket({
       name: values.name,
       gender: values.gender,
@@ -158,6 +169,7 @@ export default function TicketsPage() {
       phone: values.phone,
       ticketType: values.ticketType,
       dialCode,
+      kids: validKids.length > 0 ? validKids : undefined,
     });
     if (res.ok) {
       setPreview({
@@ -169,10 +181,15 @@ export default function TicketsPage() {
         ticketType: values.ticketType,
         gate: res.gate ?? null,
       });
-      toast.success("Pass generated", { description: values.name });
+      toast.success(
+        "Pass generated",
+        { description: validKids.length > 0 ? `${values.name} + ${validKids.length} kid(s)` : values.name }
+      );
       reset();
       setValue("gender", "Male");
       setValue("ticketType", "Classic");
+      setHasKids(false);
+      setKids([]);
     } else {
       toast.error("Could not issue pass", { description: res.error });
     }
@@ -324,6 +341,85 @@ export default function TicketsPage() {
               </div>
             </div>
 
+            {/* Has Kids toggle */}
+            <div className="rounded-lg border border-white/8 bg-white/[0.02] p-3">
+              <div className="flex items-center justify-between">
+                <Label htmlFor="has-kids" className="flex items-center gap-1.5 text-sm">
+                  <Baby className="h-3.5 w-3.5" /> Has Kids?
+                </Label>
+                <Switch checked={hasKids} onCheckedChange={(v) => {
+                  setHasKids(v);
+                  if (v && kids.length === 0) {
+                    setKids([{ name: "", gender: "Male", age: "" }]);
+                  }
+                  if (!v) setKids([]);
+                }} />
+              </div>
+
+              {hasKids && (
+                <div className="mt-3 space-y-2">
+                  {kids.map((kid, idx) => (
+                    <div key={idx} className="flex items-end gap-2">
+                      <div className="flex-1">
+                        <Label className="text-[0.65rem] text-muted-foreground">Kid {idx + 1} Name</Label>
+                        <Input
+                          value={kid.name}
+                          onChange={(e) => setKids((prev) => prev.map((k, i) => i === idx ? { ...k, name: e.target.value } : k))}
+                          placeholder="Name"
+                          className="h-8 text-sm"
+                        />
+                      </div>
+                      <div className="w-20">
+                        <Label className="text-[0.65rem] text-muted-foreground">Gender</Label>
+                        <Select
+                          value={kid.gender}
+                          onValueChange={(v) => setKids((prev) => prev.map((k, i) => i === idx ? { ...k, gender: v as Gender } : k))}
+                        >
+                          <SelectTrigger className="h-8 text-sm">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="Male">M</SelectItem>
+                            <SelectItem value="Female">F</SelectItem>
+                            <SelectItem value="Other">O</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="w-16">
+                        <Label className="text-[0.65rem] text-muted-foreground">Age</Label>
+                        <Input
+                          type="number"
+                          min={1}
+                          max={17}
+                          value={kid.age}
+                          onChange={(e) => setKids((prev) => prev.map((k, i) => i === idx ? { ...k, age: e.target.value } : k))}
+                          placeholder="Age"
+                          className="h-8 text-sm"
+                        />
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setKids((prev) => prev.filter((_, i) => i !== idx))}
+                        className="mb-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
+                        title="Remove kid"
+                      >
+                        <X className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  ))}
+                  {kids.length < 10 && (
+                    <button
+                      type="button"
+                      onClick={() => setKids((prev) => [...prev, { name: "", gender: "Male", age: "" }])}
+                      className="flex items-center gap-1 text-xs font-medium text-accent-secondary hover:underline"
+                    >
+                      <Plus className="h-3 w-3" /> Add another kid
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
+
             <Button type="submit" className="w-full" disabled={isSubmitting}>
               {isSubmitting ? (
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -350,6 +446,8 @@ export default function TicketsPage() {
               reset();
               setValue("gender", "Male");
               setValue("ticketType", "Classic");
+              setHasKids(false);
+              setKids([]);
             }}
           />
         ) : (

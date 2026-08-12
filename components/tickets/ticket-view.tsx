@@ -23,19 +23,20 @@ interface SettingsData {
 }
 
 export function TicketView({
-  ticket,
+  tickets,
   settings,
 }: {
-  ticket: TicketData;
+  tickets: TicketData[];
   settings: SettingsData;
 }) {
   const [verified, setVerified] = useState(false);
 
+  // Gate against the first ticket (parent) — all family members share its phone.
   if (!verified) {
-    return <PhoneGate ticketId={ticket.id} onVerified={() => setVerified(true)} />;
+    return <PhoneGate ticketId={tickets[0].id} onVerified={() => setVerified(true)} />;
   }
 
   return (
-    <InteractiveTicket ticket={ticket} settings={settings} />
+    <InteractiveTicket tickets={tickets} settings={settings} />
   );
 }

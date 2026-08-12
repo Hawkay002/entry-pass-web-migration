@@ -12,7 +12,7 @@ import { revalidatePath } from "next/cache";
 
 export async function importTickets(
   records: ParsedTicket[],
-  existingPhones: string[]
+  existingKeys: string[]
 ): Promise<
   | { ok: true; imported: number; duplicates: number }
   | { ok: false; error: string }
@@ -21,16 +21,19 @@ export async function importTickets(
   if (!user) return { ok: false, error: "Not authenticated." };
 
   const db = getAdminDb();
-  const existingSet = new Set(existingPhones);
+  // Dedup by composite key: phone + name (so parent + kids with same phone but
+  // different names are NOT treated as duplicates).
+  const existingSet = new Set(existingKeys);
   let imported = 0;
   let duplicates = 0;
 
   for (const record of records) {
-    if (existingSet.has(record.phone)) {
+    const dedupKey = record.phone + ":" + record.name.toLowerCase();
+    if (existingSet.has(dedupKey)) {
       duplicates++;
       continue;
     }
-    existingSet.add(record.phone);
+    existingSet.add(dedupKey);
 
     const scannedState = record.status === "arrived";
     const scannedAtTime = scannedState
@@ -49,6 +52,8 @@ export async function importTickets(
       scannedBy: scannedState ? "Import" : null,
       createdBy: user.username,
       createdAt: Date.now(),
+      groupId: record.groupId ?? null,
+      parentName: record.parentName ?? null,
     };
 
     if (record.id) {

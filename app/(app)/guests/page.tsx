@@ -113,7 +113,7 @@ export default function GuestsPage() {
     } catch {
       if (isAdmin) {
         toast.error("Auto-absent failed", {
-          description: "Network error. Use the manual button below.",
+          description: "Network error. Try again from the Actions menu.",
         });
       }
     }
@@ -465,6 +465,11 @@ export default function GuestsPage() {
                   <TableCell className="font-medium">
                     <div className="flex items-center gap-1.5">
                       {t.name}
+                      {t.parentName && (
+                        <span className="inline-block rounded-full bg-accent-secondary/15 px-2 py-0.5 text-[0.6rem] font-medium text-accent-secondary">
+                          Child
+                        </span>
+                      )}
                       {isAdmin && (
                         <button
                           onClick={() => setEditName({ id: t.id, name: t.name })}

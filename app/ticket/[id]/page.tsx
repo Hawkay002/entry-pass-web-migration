@@ -101,6 +101,7 @@ export default async function TicketPage({ params }: { params: Promise<{ id: str
   }
 
   const t = ticketSnap.data() as Record<string, unknown>;
+  const groupId = t.groupId ? String(t.groupId) : null;
 
   // Resolve the gate name if this ticket has an assigned gate.
   let gateName: string | undefined;
@@ -112,15 +113,64 @@ export default async function TicketPage({ params }: { params: Promise<{ id: str
     }
   }
 
-  const ticket: TicketData = {
-    id,
-    name: String(t.name ?? ""),
-    gender: String(t.gender ?? "Other"),
-    age: Number(t.age ?? 0),
-    ticketType: String(t.ticketType ?? "Classic"),
-    status: String(t.status ?? "coming-soon"),
-    gate: gateName,
-  };
+  // Fetch all family members if this ticket belongs to a group.
+  let tickets: TicketData[] = [];
+  if (groupId) {
+    const groupSnap = await db
+      .collection(paths.ticketsCollection)
+      .where("groupId", "==", groupId)
+      .get();
+
+    // Resolve gate names for all group members.
+    const gateCache = new Map<string, string>();
+    tickets = await Promise.all(
+      groupSnap.docs.map(async (doc) => {
+        const d = doc.data();
+        let gName: string | undefined;
+        const gId = d.gate != null ? String(d.gate) : null;
+        if (gId) {
+          if (gateCache.has(gId)) {
+            gName = gateCache.get(gId);
+          } else {
+            const gs = await db.collection(paths.gatesCollection).doc(gId).get();
+            gName = gs.exists ? String(gs.data()?.name ?? gId) : gId;
+            gateCache.set(gId, gName!);
+          }
+        }
+        return {
+          id: doc.id,
+          name: String(d.name ?? ""),
+          gender: String(d.gender ?? "Other"),
+          age: Number(d.age ?? 0),
+          ticketType: String(d.ticketType ?? "Classic"),
+          status: String(d.status ?? "coming-soon"),
+          gate: gName,
+        } as TicketData;
+      })
+    );
+
+    // Sort: parent first (no parentName), then kids by age descending.
+    tickets.sort((a, b) => {
+      const aIsParent = !(groupSnap.docs.find((d) => d.id === a.id)?.data()?.parentName);
+      const bIsParent = !(groupSnap.docs.find((d) => d.id === b.id)?.data()?.parentName);
+      if (aIsParent && !bIsParent) return -1;
+      if (!aIsParent && bIsParent) return 1;
+      return b.age - a.age;
+    });
+  } else {
+    // Standalone ticket — single-element array.
+    tickets = [
+      {
+        id,
+        name: String(t.name ?? ""),
+        gender: String(t.gender ?? "Other"),
+        age: Number(t.age ?? 0),
+        ticketType: String(t.ticketType ?? "Classic"),
+        status: String(t.status ?? "coming-soon"),
+        gate: gateName,
+      },
+    ];
+  }
 
   const s = settingsSnap.data();
   const settings: SettingsData = {
@@ -128,5 +178,5 @@ export default async function TicketPage({ params }: { params: Promise<{ id: str
     place: String(s?.place ?? ""),
   };
 
-  return <TicketView ticket={ticket} settings={settings} />;
+  return <TicketView tickets={tickets} settings={settings} />;
 }
