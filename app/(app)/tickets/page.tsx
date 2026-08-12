@@ -359,52 +359,56 @@ export default function TicketsPage() {
               {hasKids && (
                 <div className="mt-3 space-y-2">
                   {kids.map((kid, idx) => (
-                    <div key={idx} className="flex items-end gap-2">
-                      <div className="flex-1">
-                        <Label className="text-[0.65rem] text-muted-foreground">Kid {idx + 1} Name</Label>
-                        <Input
-                          value={kid.name}
-                          onChange={(e) => setKids((prev) => prev.map((k, i) => i === idx ? { ...k, name: e.target.value } : k))}
-                          placeholder="Name"
-                          className="h-8 text-sm"
-                        />
-                      </div>
-                      <div className="w-24">
-                        <Label className="text-[0.65rem] text-muted-foreground">Gender</Label>
-                        <Select
-                          value={kid.gender}
-                          onValueChange={(v) => setKids((prev) => prev.map((k, i) => i === idx ? { ...k, gender: v as Gender } : k))}
+                    <div key={idx} className="rounded-md border border-white/8 bg-black/20 p-2">
+                      <div className="flex items-center gap-2">
+                        <div className="flex-1">
+                          <Label className="text-[0.65rem] text-muted-foreground">Kid {idx + 1} Name</Label>
+                          <Input
+                            value={kid.name}
+                            onChange={(e) => setKids((prev) => prev.map((k, i) => i === idx ? { ...k, name: e.target.value } : k))}
+                            placeholder="Name"
+                            className="h-8 text-sm"
+                          />
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setKids((prev) => prev.filter((_, i) => i !== idx))}
+                          className="mb-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
+                          title="Remove kid"
                         >
-                          <SelectTrigger className="h-8 text-sm">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="Male">Male</SelectItem>
-                            <SelectItem value="Female">Female</SelectItem>
-                            <SelectItem value="Other">Other</SelectItem>
-                          </SelectContent>
-                        </Select>
+                          <X className="h-3.5 w-3.5" />
+                        </button>
                       </div>
-                      <div className="w-16">
-                        <Label className="text-[0.65rem] text-muted-foreground">Age</Label>
-                        <Input
-                          type="number"
-                          min={1}
-                          max={17}
-                          value={kid.age}
-                          onChange={(e) => setKids((prev) => prev.map((k, i) => i === idx ? { ...k, age: e.target.value } : k))}
-                          placeholder="Age"
-                          className="h-8 text-sm"
-                        />
+                      <div className="mt-2 flex gap-2">
+                        <div className="flex-1">
+                          <Label className="text-[0.65rem] text-muted-foreground">Gender</Label>
+                          <Select
+                            value={kid.gender}
+                            onValueChange={(v) => setKids((prev) => prev.map((k, i) => i === idx ? { ...k, gender: v as Gender } : k))}
+                          >
+                            <SelectTrigger className="h-8 text-sm">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="Male">Male</SelectItem>
+                              <SelectItem value="Female">Female</SelectItem>
+                              <SelectItem value="Other">Other</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div className="flex-1">
+                          <Label className="text-[0.65rem] text-muted-foreground">Age</Label>
+                          <Input
+                            type="number"
+                            min={1}
+                            max={17}
+                            value={kid.age}
+                            onChange={(e) => setKids((prev) => prev.map((k, i) => i === idx ? { ...k, age: e.target.value } : k))}
+                            placeholder="Age"
+                            className="h-8 text-sm"
+                          />
+                        </div>
                       </div>
-                      <button
-                        type="button"
-                        onClick={() => setKids((prev) => prev.filter((_, i) => i !== idx))}
-                        className="mb-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
-                        title="Remove kid"
-                      >
-                        <X className="h-3.5 w-3.5" />
-                      </button>
                     </div>
                   ))}
                   {kids.length < 10 && (
