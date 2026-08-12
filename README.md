@@ -54,7 +54,7 @@ Built with Next.js 16, React 19, Tailwind v4, Firebase Admin SDK, and Upstash Re
 - **Help Tray** — Slide-out contact directory. Admin can add/edit/delete contacts from the tray or Configuration page. Firestore-backed, realtime updates.
 
 ### UX
-- **Import / Export** — CSV, XLSX, PDF, TXT, DOC, JSON. Auto-dedupe by phone on import
+- **Import / Export** — CSV, XLSX, PDF, TXT, DOC, JSON. Auto-dedupe by `phone:name` composite key on import (same phone + different name = not a duplicate — supports family group tickets)
 - **Mobile-First** — Fully responsive. 2-row nav on mobile. Fixed 380px ticket dimensions across devices
 - **Guest List Summary Bar** — Live counts: Total, Arrived, Pending, Absent with color coding
 - **Scanner Haptics** — Vibration feedback on scan results with **animated bell toggle** (rings when on, shakes when off, synced to localStorage)
@@ -88,7 +88,7 @@ Built with Next.js 16, React 19, Tailwind v4, Firebase Admin SDK, and Upstash Re
 - **Report Issue** — Floating button (bottom-right) opens a form panel (name, phone with country code dropdown, reason, message). Submits via **Telegram Bot API** to admin's chat. Rate-limited (5/IP/5min). Confirmation screen with animated BadgeCheck + Report ID + copy button. Uses `TELEGRAM_BOT_TOKEN` + `CHAT_ID` env vars
 
 ### Offline & Kiosk
-- **PWA / Offline Scanner** — Installable app (manifest + service worker, network-first caching). Staff scanner caches a minimal ticket snapshot in IndexedDB (refreshed every 5 min, not an always-on listener) and works with no WiFi; queued scans sync automatically on reconnect. **Scanner warning** if multi-gate is on but staff has no gate assigned. Critical for venues with poor connectivity.
+- **PWA / Offline Scanner** — Installable app (manifest + service worker, network-first caching). Staff scanner caches a minimal ticket snapshot in IndexedDB (refreshed every 15 min, not an always-on listener) and works with no WiFi; queued scans sync automatically on reconnect. **Scanner warning** if multi-gate is on but staff has no gate assigned. Critical for venues with poor connectivity.
 - **Self Check-in Kiosk** — **Multiple kiosks**, each with its own PIN (4–6 digits, show/hide eye toggle) + gate + URL (`/kiosk?id={kioskId}`). Admin creates/manages kiosks in Configuration (realtime sync). Kiosk picker shown when no `?id=` param. Each kiosk validates its own PIN and enforces its assigned gate (wrong-gate blocked). Per-kiosk+IP rate limiting (5 wrong PINs/5min). **6-box PIN entry** with show/hide toggle. Front camera (selfie mode). Physical keyboard input. **Instant deletion detection** via Firestore `onSnapshot` on `kiosk_status/{id}` — shows 404 within ~1s of admin delete (no 2-min poll). Config edits force instant re-authentication. Works offline (caches `{id, status, scanned}` — no guest PII).
 
 ---
@@ -285,14 +285,14 @@ Collections are created automatically on first write, but you can pre-initialize
 node scripts/init-collections.cjs
 ```
 
-This creates all 12 collections with a single placeholder doc each (then deletes them). See **Firebase Setup → Firestore Collections** below for the full list.
+This creates all collections with a single placeholder doc each (then deletes them). See **Firebase Setup → Firestore Collections** below for the full list.
 
 ### Step 5c: Enable the Self Check-in Kiosk (optional)
 
 The public `/kiosk` route is disabled by default. To enable it:
 
 1. Sign in as admin → **Configuration** → **Self Check-in Kiosk**
-2. Enter a 4–8 digit PIN → **Enable Kiosk**
+2. Enter a 4–6 digit PIN → **Enable Kiosk**
 3. Open `/kiosk` on a mounted tablet (e.g. `https://etsweb.vercel.app/kiosk`)
 4. Guests enter the PIN once, then scan their own QR code
 
@@ -487,7 +487,7 @@ entry-pass-web/
 |   |-- scanner/            # Shared QR scanner (admin + kiosk, wrong-gate support)
 |   |-- tickets/            # Interactive ticket, phone gate, ticket card, view modal, report issue panel
 |   `-- ui/                 # shadcn/ui primitives + AdmitOneTicket (WebGL shader) + Switch + animated-glow-card + Calendar + Popover + Textarea
-|-- hooks/                  # React hooks (settings, tickets, roles, gates, kiosks, remote-locks, lock-status, staff-check, contacts, background, is-in-view)
+|-- hooks/                  # React hooks (settings, tickets, roles, gates, kiosks, remote-locks, lock-dashboard, staff-check, contacts, background, is-in-view)
 |-- lib/
 |   |-- firebase/           # Admin SDK, client SDK, server-auth (resolves gateId), logging
 |   |-- auth.ts             # AppUser type (incl. gateId), role helpers, IsAdminContext
@@ -505,7 +505,7 @@ entry-pass-web/
 |   |-- google-wallet.ts    # Google Wallet JWT signing (inline class+object, RS256)
 |   |-- guest-list.ts       # Filter/sort helpers (pure)
 |   |-- import-export.ts    # Parse + format (CSV/XLSX/PDF/TXT/DOC/JSON + logs export)
-|   `-- whatsapp.ts         # Ticket snapshot -> WhatsApp share (ticket URL)
+|   `-- two-factor.ts       # Admin TOTP (secret gen, code verify, recovery code hashing)
 |-- public/                 # Static assets (icons, PWA manifest + SW, backgrounds, fonts, wallet images, audio)
 |-- scripts/                # Dev utilities (jose fix, claim setup, domain mgmt, init-collections, generate-staff, deploy-rules)
 |-- firestore.rules         # Security rules (incl. gates + og_snapshots)
@@ -621,7 +621,7 @@ interface GlobalLockDoc {
 |---|---|---|
 | `/api/login` | POST | Verify Firebase ID token, create httpOnly session cookie |
 | `/api/logout` | POST | Clear session cookie |
-| `/api/auto-absent` | POST | Check deadline, mark coming-soon tickets as absent |
+| `/api/auto-absent` | POST | Check deadline, mark coming-soon tickets as absent. Accepts optional `{ force: true }` for admin manual override (skips deadline check). |
 | `/api/kiosk-checkin` | POST | Public self check-in — validates a PIN + marks a ticket arrived (logged as `SELF_CHECKIN`). Rate-limited: 5 failed PIN attempts/IP/5min. |
 | `/api/kiosk-tickets` | POST | Public, PIN-gated fetch of the PII-free ticket list (`{id, status, scanned}` only) for the kiosk's offline cache. Same rate limit. |
 | `/api/ticket-verify` | POST | Public phone verification for guest ticket access (full number + country code, rate-limited 5/IP/5min) |
@@ -642,7 +642,7 @@ interface GlobalLockDoc {
 
 | Action | File | Description |
 |---|---|---|
-| `createTicket` | `actions/tickets.ts` | Create a new ticket with QR + auto-gate assignment (round-robin) |
+| `createTicket` | `actions/tickets.ts` | Create a new ticket with QR + auto-gate assignment (round-robin). Accepts optional `kids[]` for group tickets |
 | `validateTicket` | `actions/tickets.ts` | Scan validation (granted/already/invalid/wrong-gate + scannedBy + gate enforcement) |
 | `deleteOneTicket` | `actions/tickets.ts` | Delete a single ticket (logs with guest name) |
 | `updateGuestName` | `actions/tickets.ts` | Edit a guest's name (admin-only, busts ISR cache) |
@@ -651,11 +651,11 @@ interface GlobalLockDoc {
 | `getTicketsForOfflineCache` | `actions/tickets.ts` | Minimal-fields ticket list for scanner offline cache (incl. gate) |
 | `saveSettings` | `actions/admin.ts` | Save event configuration (name, venue, deadline, timezone, multiGate, gateCategories) |
 | `clearSettings` | `actions/admin.ts` | Clear settings + cascade (disables multi-gate, deletes gates) |
-| `saveKioskPin` | `actions/admin.ts` | Set/clear the kiosk PIN (admin-only doc) |
-| `getKioskStatus` | `actions/admin.ts` | Whether the kiosk PIN is enabled (no value exposed) |
-| `factoryReset` | `actions/admin.ts` | Wipe database (preserves audit trail + deletes gates + OG snapshots) |
+| `factoryReset` | `actions/admin.ts` | Wipe database (preserves audit trail + deletes gates + OG snapshots + kiosks + kiosk_status) |
 | `applyRemoteLocks` | `actions/admin.ts` | Lock/unlock staff tabs |
 | `unlockStaff` | `actions/admin.ts` | Fully unlock a staff member |
+| `fetchLockDashboard` | `actions/admin.ts` | Combined lock map + maintenance status (single `global_locks` read, replaces 3 separate polls) |
+| `checkAndEndMaintenance` | `actions/admin.ts` | Auto-end maintenance if duration elapsed |
 | `createGate` | `actions/gates.ts` | Create a gate within a category (admin-only) |
 | `updateGate` | `actions/gates.ts` | Rename / toggle active / update ticket types |
 | `deleteGate` | `actions/gates.ts` | Delete a gate + clear assignments |
@@ -671,7 +671,7 @@ interface GlobalLockDoc {
 | `updateStaffInRole` | `actions/roles.ts` | Edit staff name/email/gate (spread-merge preserves gateId) |
 | `removeStaffFromRole` | `actions/roles.ts` | Remove staff + revoke tokens |
 | `deleteRole` | `actions/roles.ts` | Delete a role entirely |
-| `importTickets` | `actions/import.ts` | Bulk import with phone dedupe |
+| `importTickets` | `actions/import.ts` | Bulk import with `phone:name` composite dedup |
 
 ---
 
@@ -723,10 +723,12 @@ Browser                    Server                      Firebase
 
 1. Admin selects a timezone from 38 options (UTC-12 to UTC+14, India default) and sets a deadline
 2. The timezone offset is appended to the deadline before storing (e.g., `2026-08-04T17:00:00+05:30`)
-3. Guest List page polls `/api/auto-absent` every 10s (only when deadline set + coming-soon tickets exist)
+3. Guest List page sets a single `setTimeout` for the exact deadline moment (no polling). Also fires immediately on mount if the deadline already passed
 4. Server (always UTC on Vercel) parses the offset-aware ISO string and checks `Date.now() > deadline`
 5. Batch updates all `coming-soon` -> `absent`
 6. `onSnapshot` picks up the change -> table updates live (no refresh)
+7. **Fallback**: the server layout (`app/(app)/layout.tsx`) also runs this check on every navigation, so even if the tab is closed the next page load catches it
+8. **Manual override**: admin can click "Mark All Absent" in the Actions menu → `/api/auto-absent` with `{ force: true }` skips deadline checks entirely
 
 ---
 
