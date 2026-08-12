@@ -13,7 +13,6 @@ import { Button } from "@/components/ui/button";
 import { ButtonGroup } from "@/components/ui/button-group";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Badge } from "@/components/ui/badge";
 import {
   Dialog,
   DialogContent,
@@ -52,7 +51,7 @@ import {
 import { deleteOneTicket, updateGuestName } from "@/app/actions/tickets";
 import { useIsAdmin } from "@/components/layout/app-shell";
 import { TICKET_TYPE_LABELS } from "@/lib/types";
-import type { Ticket, TicketStatus } from "@/lib/types";
+import type { TicketStatus } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { ImportExportButtons } from "@/components/guests/import-export";
 
@@ -79,8 +78,6 @@ export default function GuestsPage() {
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [manageOpen, setManageOpen] = useState(false);
-  const [viewTicket] = useState<Ticket | null>(null);
-  const [viewOpen] = useState(false);
   const [filterOpen, setFilterOpen] = useState(false);
   const filterRef = useRef<HTMLDivElement>(null);
   const { settings } = useSettings();
@@ -157,21 +154,6 @@ export default function GuestsPage() {
     () => filterTickets(tickets, filters),
     [tickets, filters]
   );
-
-  const allVisibleSelected =
-    filtered.length > 0 && filtered.every((t) => selected.has(t.id));
-
-  function toggleSelectAll() {
-    setSelected((prev) => {
-      const next = new Set(prev);
-      if (allVisibleSelected) {
-        filtered.forEach((t) => next.delete(t.id));
-      } else {
-        filtered.forEach((t) => next.add(t.id));
-      }
-      return next;
-    });
-  }
 
   function toggleRow(id: string) {
     setSelected((prev) => {

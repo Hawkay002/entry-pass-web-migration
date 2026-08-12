@@ -58,11 +58,6 @@ export default function KioskPage() {
     setStoredPin(validPin);
   }, []);
 
-  const handleLock = useCallback(() => {
-    sessionStorage.removeItem(SESSION_KEY);
-    setStoredPin(null);
-  }, []);
-
   // If the kiosk is deleted while active, show 404.
   const [kioskDeleted, setKioskDeleted] = useState(false);
 

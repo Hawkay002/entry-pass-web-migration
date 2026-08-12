@@ -747,24 +747,40 @@ pnpm typecheck    # TypeScript check (no emit)
 
 ## Firebase Read Cost Estimate (Spark / Free Tier)
 
-The Spark (free) plan includes **50,000 Firestore reads/day**. This app is optimized to stay well within that limit for a typical event. Below is an estimated daily breakdown for an event with **200 tickets**, **1 admin** (8h active, 2h on Settings), **4 staff** (8h each), **1 kiosk tablet** (8h), and **2 scanner tabs** (8h, 500 scans total).
+The Spark (free) plan includes **50,000 Firestore reads/day**. This app is optimized to stay well within that limit. The **Typical** column shows a standard event; the **Optimal** column shows the maximum event size that stays just under the 50K cap.
 
-| Component | Mechanism | Est. reads/day |
+> **Typical:** 200 tickets · 1 admin (8h, 2h on Settings) · 4 staff (8h) · 1 kiosk (8h) · 2 scanners (8h, 500 scans)
+>
+> **Optimal:** 450 tickets · 1 admin (8h, 2h on Settings) · 6 staff (8h) · 1 kiosk (8h) · 2 scanners (8h, 900 scans)
+
+| Component | Mechanism | Typical | Optimal |
+|---|---|---|---|
+| **Staff remote-locks** (`useRemoteLocks`) | Single-doc `onSnapshot` per staff | ~24 | ~36 |
+| **Kiosk status** (`onSnapshot`) | Single-doc listener (public, existence-only) | ~3 | ~3 |
+| **Scanner offline cache** | Full tickets poll every **15 min** + on reconnect | ~12,933 | ~29,700 |
+| **Kiosk offline cache** | Full tickets poll every **15 min** + on reconnect | ~6,461 | ~14,883 |
+| **Per-scan validation** | 1 ticket + 1 gate doc per scan | ~1,500 | ~2,700 |
+| **Phone verification** | 1 doc per verify | ~100 | ~225 |
+| **Ticket creation** | ~3 reads per ticket | ~600 | ~1,350 |
+| **Lock dashboard** (admin Settings) | Single `global_locks` read every **15 s** (merged) | ~480 | ~480 |
+| **Roles/Settings/Gates listeners** | `onSnapshot` on doc/collection | ~50 | ~65 |
+| **Help contacts** | `onSnapshot` — lazy-mounted (only when tray opens) | ~10 | ~10 |
+| **Auto-absent** | `setTimeout` at deadline — fires once (no polling) | ~1 | ~1 |
+| **`getAppUser()` server calls** | Reads `roles` collection to resolve identity | ~200 | ~300 |
+| | **Total estimated** | **~22,362** | **~49,753** |
+| | **% of 50K free tier** | **~45%** ✅ | **~99.5%** ⚠️ |
+
+> **⚠️ The Optimal column is the hard ceiling.** At ~450 tickets with 2 scanners + 1 kiosk active for 8 hours, you consume ~99.5% of the daily quota. Beyond this (more tickets, more scanner/kiosk devices, or longer active hours) you'll exceed the free tier. To scale further, either reduce the scanner/kiosk poll frequency (already at 15 min), reduce the number of active scanner/kiosk tabs, or upgrade to the Blaze plan ($0.036 per 100K reads).
+
+### What scales linearly (the bottleneck)
+The two largest costs scale **proportionally with ticket count** because each poll fetches the entire tickets collection:
+
+| Cost driver | Per 100 extra tickets | Notes |
 |---|---|---|
-| **Staff remote-locks** (`useRemoteLocks`) | Single-doc `onSnapshot` per staff | ~24 |
-| **Kiosk status** (`onSnapshot`) | Single-doc listener (public, existence-only) | ~3 |
-| **Scanner offline cache** | Full tickets poll every **15 min** + on reconnect | ~12,933 |
-| **Kiosk offline cache** | Full tickets poll every **15 min** + on reconnect | ~6,461 |
-| **Per-scan validation** | 1 ticket + 1 gate doc per scan × 500 | ~1,500 |
-| **Phone verification** | 1 doc per verify × ~100 | ~100 |
-| **Ticket creation** | ~3 reads × 200 tickets | ~600 |
-| **Lock dashboard** (admin Settings) | Single `global_locks` read every **15 s** (merged) | ~480 |
-| **Roles/Settings/Gates listeners** | `onSnapshot` on doc/collection | ~50 |
-| **Help contacts** | `onSnapshot` — lazy-mounted (only when tray opens) | ~10 |
-| **Auto-absent** | `setTimeout` at deadline — fires once (no polling) | ~1 |
-| **`getAppUser()` server calls** | Reads `roles` collection to resolve identity | ~200 |
-| | **Total estimated** | **~22,362** |
-| | **% of 50K free tier** | **~45%** ✅ |
+| Scanner cache (per device) | +3,300 reads/day | 33 polls/day × 100 tickets |
+| Kiosk cache (per device) | +3,300 reads/day | 33 polls/day × 100 tickets |
+
+Adding a **3rd scanner tab** adds ~6,600 reads/day at 200 tickets (reduces max capacity to ~350 tickets). Removing the kiosk frees ~6,461 reads/day (extends capacity to ~530 tickets).
 
 ### Key optimizations
 - **Merged lock polling** — formerly 3 separate 5s polls (3 full `global_locks` reads per 5s = ~21K/day) merged into a single 15s `fetchLockDashboard` call (~480/day)

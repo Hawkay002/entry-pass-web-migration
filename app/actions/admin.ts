@@ -65,8 +65,6 @@ export async function saveSettings(
 
   // multiGate + gateCategories are admin-only — staff can save name/place/
   // deadline but cannot toggle multi-gate mode or change categories.
-  const isMultiGateChanged =
-    settings.multiGate !== undefined || settings.gateCategories !== undefined;
 
   // Read current settings to know the existing multiGate value.
   const db = getAdminDb();
@@ -326,35 +324,6 @@ export async function unlockStaff(input: {
   }
 }
 
-/** Fetch maintenance metadata (duration + endsAt) from any staff's lock doc. */
-export async function fetchMaintenanceInfo(): Promise<
-  { ok: true; active: boolean; duration: string | null; updatedAt: number | null } | { ok: false; error: string }
-> {
-  const user = await getAppUser();
-  if (!user) return { ok: false, error: "Not authenticated." };
-
-  const snap = await getAdminDb().collection(paths.locksCollection).get();
-  let active = false;
-  let duration: string | null = null;
-  let updatedAt: number | null = null;
-
-  snap.docs.forEach((d) => {
-    const data = d.data();
-    const meta = data.lockMetadata as Record<string, { type?: string; duration?: string; updatedAt?: number }> | undefined;
-    if (meta) {
-      for (const [, m] of Object.entries(meta)) {
-        if (m?.type === "maintenance") {
-          active = true;
-          if (m.duration && m.duration !== "Unknown") duration = m.duration;
-          if (m.updatedAt) updatedAt = m.updatedAt;
-        }
-      }
-    }
-  });
-
-  return { ok: true, active, duration, updatedAt };
-}
-
 /** Check if maintenance time is over and auto-end if so. */
 export async function checkAndEndMaintenance(): Promise<
   { ok: true; ended: boolean } | { ok: false; error: string }
@@ -479,40 +448,8 @@ export async function factoryReset(): Promise<
   return { ok: true };
 }
 
-/** Fetch all global_locks (admin only). Returns email → lockedTabs array map. */
-export async function fetchAllLocks(): Promise<
-  { ok: true; map: Record<string, string[]> } | { ok: false; error: string }
-> {
-  const user = await getAppUser();
-  if (!user) return { ok: false, error: "Not authenticated." };
-
-  const snap = await getAdminDb().collection(paths.locksCollection).get();
-  const map: Record<string, string[]> = {};
-
-  snap.docs.forEach((d) => {
-    const data = d.data();
-    const email = d.id.toLowerCase();
-    const userLocks = data.userSpecificLocks as Record<string, string[]> | undefined;
-    if (userLocks) {
-      const allTabs = new Set<string>();
-      Object.values(userLocks).forEach((tabs) => {
-        if (Array.isArray(tabs)) tabs.forEach((t) => allTabs.add(t));
-      });
-      if (allTabs.size > 0) {
-        map[email] = [...allTabs];
-      }
-    }
-    if (data.lockedTabs && Array.isArray(data.lockedTabs) && data.lockedTabs.length > 0) {
-      map[email] = data.lockedTabs;
-    }
-  });
-
-  return { ok: true, map };
-}
-
 /** Combined read of global_locks — returns lock map + maintenance info in ONE read.
- *  Replaces the former pattern of fetchAllLocks + fetchMaintenanceInfo + checkAndEndMaintenance
- *  each doing separate full-collection reads. */
+ *  Replaces the former pattern of 3 separate full-collection reads. */
 export async function fetchLockDashboard(): Promise<{
   ok: true;
   lockMap: Record<string, string[]>;

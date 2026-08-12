@@ -9,8 +9,6 @@ import { TICKET_TYPE_LABELS } from "@/lib/types";
 import { Download, Loader2, Flag, Copy, Check } from "lucide-react";
 import { toast } from "sonner";
 import AdmitOneTicket, { TICKET_TEXTURE, TICKET_GRADIENT, TICKET_LAYOUT, TICKET_GEOMETRY, ticketClipPath } from "@/components/ui/admit-one-ticket";
-import { HoloOverlay } from "@/components/tickets/holo-overlay";
-import { RadiantOverlay } from "@/components/tickets/radiant-overlay";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -68,9 +66,6 @@ export function InteractiveTicket({ ticket, settings }: { ticket: TicketData; se
   const [hovering, setHovering] = useState(false);
   const [ticketWidth, setTicketWidth] = useState(741);
   const [qrDataUrl, setQrDataUrl] = useState("");
-  const [holoVars, setHoloVars] = useState({
-    px: 50, py: 50, bx: 50, by: 50, fromCenter: 0, opacity: 0,
-  });
 
   useEffect(() => {
     const update = () => setTicketWidth(Math.min(741, window.innerWidth - 32));
@@ -100,18 +95,6 @@ export function InteractiveTicket({ ticket, settings }: { ticket: TicketData; se
       // Normalize to 0-100 for holo vars.
       const px = ((gamma / 45) + 1) * 50;
       const py = ((beta - 45) / 45 + 1) * 50;
-      const dx = (px - 50) / 50;
-      const dy = (py - 50) / 50;
-      const fromCenter = Math.min(1, Math.sqrt(dx * dx + dy * dy));
-
-      setHoloVars({
-        px: Math.max(0, Math.min(100, Math.round(px))),
-        py: Math.max(0, Math.min(100, Math.round(py))),
-        bx: Math.round(37 + (px / 100) * 26),
-        by: Math.round(33 + (py / 100) * 34),
-        fromCenter,
-        opacity: 1,
-      });
 
       if (glareRef.current) {
         glareRef.current.style.background = `radial-gradient(38% 55% at ${px}% ${py}%, rgba(255,255,255,0.16) 0%, rgba(255,255,255,0) 70%)`;
@@ -164,22 +147,11 @@ export function InteractiveTicket({ ticket, settings }: { ticket: TicketData; se
     const py = (clientY - rect.top) / rect.height;
     const dx = px - 0.5;
     const dy = py - 0.5;
-    const fromCenter = Math.min(1, Math.sqrt(dx * dx + dy * dy) / 0.5);
 
     el.style.transform = `perspective(1200px) rotateX(${-(dy * 2) * 20}deg) rotateY(${dx * 2 * 20}deg) scale(1.02)`;
     if (glareRef.current) {
       glareRef.current.style.background = `radial-gradient(38% 55% at ${px * 100}% ${py * 100}%, rgba(255,255,255,0.16) 0%, rgba(255,255,255,0) 70%)`;
     }
-
-    // Update holo vars for the overlay.
-    setHoloVars({
-      px: Math.round(px * 100),
-      py: Math.round(py * 100),
-      bx: Math.round(37 + px * 26),
-      by: Math.round(33 + py * 34),
-      fromCenter,
-      opacity: 1,
-    });
   }, []);
 
   const onLeave = useCallback(() => {
@@ -188,7 +160,6 @@ export function InteractiveTicket({ ticket, settings }: { ticket: TicketData; se
     touchActiveRef.current = false;
     if (tiltRef.current) tiltRef.current.style.transform = "perspective(1200px) rotateX(0deg) rotateY(0deg) scale(1)";
     if (glareRef.current) glareRef.current.style.background = "transparent";
-    setHoloVars((v) => ({ ...v, opacity: 0, bx: 50, by: 50 }));
   }, []);
 
   const typeLabel = TICKET_TYPE_LABELS[ticket.ticketType as keyof typeof TICKET_TYPE_LABELS] ?? ticket.ticketType;
@@ -322,7 +293,7 @@ export function InteractiveTicket({ ticket, settings }: { ticket: TicketData; se
       )}
 
       {/* Report Issue floating button + modal */}
-      <ReportIssueButton ticketId={ticket.id} />
+      <ReportIssueButton />
     </div>
   );
 }
@@ -429,7 +400,7 @@ function DownloadButton({ tiltRef, ticketId }: { tiltRef: RefObject<HTMLDivEleme
 }
 
 /** Floating Report Issue button + modal. Sends to Telegram via API. */
-function ReportIssueButton({ ticketId }: { ticketId: string }) {
+function ReportIssueButton() {
   const [open, setOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [reportId, setReportId] = useState<string | null>(null);
