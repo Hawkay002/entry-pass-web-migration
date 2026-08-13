@@ -10,7 +10,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import PocketBase from "pocketbase";
 import { authConfig, serverEnv } from "@/lib/env";
-import { pbAdmin } from "@/lib/pb/server";
+import { pbAdmin, verifyUserToken } from "@/lib/pb/server";
 import { logAction } from "@/lib/pb/log";
 import { verifyTOTP, hashRecoveryCode, type TwoFactorConfig } from "@/lib/two-factor";
 import type { AppUser } from "@/lib/auth";
@@ -72,18 +72,17 @@ export async function POST(req: NextRequest) {
     let isAdminLogin = false;
 
     if (typeof body.token === "string" && body.token) {
-      // 2FA continuation: resume from the token issued in step 1.
+      // Token continuation: either an OAuth-issued token OR a 2FA resume.
+      // Verify it authoritatively via authRefresh (validates JWT signature).
       pbToken = body.token;
-      const verify = new PocketBase(serverEnv.pbUrl);
-      verify.autoCancellation(false);
-      verify.authStore.save(pbToken, null);
-      const u = verify.authStore.model as { id: string; email: string } | null;
-      if (!u) {
+      const verified = await verifyUserToken(pbToken);
+      if (!verified) {
         return NextResponse.json({ ok: false, error: "Session expired. Try again." }, { status: 401 });
       }
-      userId = u.id;
-      email = u.email;
-      isAdminLogin = ADMIN_EMAILS.includes(email.toLowerCase());
+      userId = verified.id;
+      email = verified.email;
+      isAdminLogin =
+        ADMIN_EMAILS.includes(email.toLowerCase()) || verified.role === "admin";
     } else {
       // Step 1: authenticate with email/password.
       const emailIn = typeof body.email === "string" ? body.email.trim() : "";

@@ -7,7 +7,7 @@
 import { useState, useEffect, useRef } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
-import { pb } from "@/lib/pb/client";
+import { pb, clientEnv } from "@/lib/pb/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -96,45 +96,48 @@ function LoginForm() {
     }
   }
 
-  async function handleGoogleSignIn() {
+  function handleGoogleSignIn() {
     setError("");
     setLoading(true);
-    try {
-      // Pocketbase OAuth — opens Google sign-in, returns with a token we POST
-      // to /api/login as a continuation. Requires the "google" provider enabled
-      // in PB admin (Auth providers). Falls back to an error if not configured.
-      const authData = await pb().collection("users").authWithOAuth2({ provider: "google" });
+    // The OAuth redirect URL must point to the Pocketbase server's
+    // /api/oauth2-redirect handler (derived from NEXT_PUBLIC_POCKETBASE_URL).
+    const redirectUrl = clientEnv.pbUrl.replace(/\/$/, "") + "/api/oauth2-redirect";
+    // The SDK opens its own popup with Google's consent screen, then delivers
+    // the auth result back over a realtime channel and closes the popup.
+    // NOTE: handleGoogleSignIn is NOT async so the popup isn't blocked by
+    // the browser's popup-guard heuristics (the SDK handles the async work).
+    pb().collection("users").authWithOAuth2({
+      provider: "google",
+      redirectUrl,
+    }).then(async () => {
       const token = (pb().authStore.token as string) ?? "";
       const { res, data } = await postLogin({ token });
-
       if (data.status === "2fa_required" && data.token) {
         setPendingToken(data.token);
         setPending2FA(true);
         setOtpCode(["", "", "", "", "", ""]);
         setError("");
         setTimeout(() => otpRefs.current[0]?.focus(), 100);
-        return;
-      }
-      if (res.ok) {
+      } else if (res.ok) {
         router.push("/tickets");
         router.refresh();
-        return;
+      } else {
+        setError(data.error ?? "Google sign-in failed.");
       }
-      setError(data.error ?? "Google sign-in failed.");
-    } catch (err) {
+    }).catch((err) => {
       const msg = (err as { message?: string }).message ?? "";
       if (msg.includes("popup") || msg.includes("cancelled")) {
         setError("Sign-in cancelled.");
       } else if (msg.includes("network") || msg.includes("fetch")) {
         setError("Network error. Check your connection and try again.");
-      } else if (msg.includes("provider") || msg.includes("not found")) {
+      } else if (msg.includes("provider") || msg.includes("not found") || msg.includes("not configured")) {
         setError("Google sign-in is not configured. Ask the admin to enable it.");
       } else {
         setError(msg || "Google sign-in failed.");
       }
-    } finally {
+    }).finally(() => {
       setLoading(false);
-    }
+    });
   }
 
   // --- 2FA OTP handling (smart input — type anywhere, auto-fills boxes) ---

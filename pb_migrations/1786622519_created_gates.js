@@ -68,7 +68,7 @@ migrate((app) => {
         "id": "bool1260321794",
         "name": "active",
         "presentable": false,
-        "required": true,
+        "required": false,
         "system": false,
         "type": "bool"
       },
