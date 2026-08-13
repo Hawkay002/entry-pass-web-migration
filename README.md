@@ -27,6 +27,34 @@ Built with Next.js 16, React 19, Tailwind v4, Firebase Admin SDK, and Upstash Re
 
 ---
 
+> ## ⚠️ Backend migration in progress (Firebase → Pocketbase)
+>
+> This branch (`pocketbase-migration`) is migrating the backend from
+> Firebase to **[Pocketbase](https://pocketbase.io)** (self-hosted, SQLite + realtime).
+> The **UI, features, and UX are unchanged** — only the backend changes.
+>
+> **Status:**
+> - ✅ Pocketbase **schema** is done — committed reproducible migrations live in
+>   [`pb_migrations/`](./pb_migrations) (applied with `pocketbase migrate`).
+> - 🚧 App code (auth, hooks, actions, API routes) is still Firebase-based and
+>   being migrated. **Until that work completes, run the app on the Firebase
+>   instructions below.**
+>
+> **Quick backend setup (for when the migration lands):**
+> ```bash
+> # 1. Install Pocketbase (single binary) — https://pocketbase.io/docs/#use-the-prebuilt-binaries
+> # 2. Start it + create an admin
+> ./pocketbase serve
+> ./pocketbase superuser upsert admin@example.com yourpassword
+> # 3. Apply the committed schema
+> ./pocketbase migrate --migrationsDir=./pb_migrations
+> # 4. Copy .env.example -> .env.local and fill in POCKETBASE_* values
+> ```
+> The schema can also be bootstrapped programmatically via
+> `node scripts/pocketbase/bootstrap-schema.mjs` (requires a running PB + admin).
+
+---
+
 ## Features
 
 ### Core Ticket Loop
