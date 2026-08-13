@@ -187,7 +187,10 @@ export function SettingsForm({ isAdmin = false }: { isAdmin?: boolean }) {
         {/* Event Name + Location — 50/50 */}
         <div className="grid grid-cols-2 gap-3">
           <div className="space-y-2">
-            <Label htmlFor="eventName">Event Name</Label>
+            <Label htmlFor="eventName" className="flex items-center gap-1.5">
+              <HugeiconsIcon icon={TimelineEventIcon} size={14} primaryColor="#3b82f6" />
+              Event Name
+            </Label>
             <Input
               id="eventName"
               value={name}
@@ -196,7 +199,10 @@ export function SettingsForm({ isAdmin = false }: { isAdmin?: boolean }) {
             />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="eventPlace">Location</Label>
+            <Label htmlFor="eventPlace" className="flex items-center gap-1.5">
+              <HugeiconsIcon icon={Location03Icon} size={14} primaryColor="#3b82f6" />
+              Venue Location
+            </Label>
             <Input
               id="eventPlace"
               value={place}
@@ -208,7 +214,10 @@ export function SettingsForm({ isAdmin = false }: { isAdmin?: boolean }) {
         {/* Deadline + Timezone — 50/50 */}
         <div className="grid grid-cols-2 gap-3">
           <div className="space-y-2">
-            <Label>Deadline</Label>
+            <Label className="flex items-center gap-1.5">
+              <CalendarClockIcon size={14} />
+              Deadline
+            </Label>
             <Popover open={calOpen} onOpenChange={setCalOpen}>
               <PopoverTrigger
                 render={
@@ -290,7 +299,10 @@ export function SettingsForm({ isAdmin = false }: { isAdmin?: boolean }) {
             </Popover>
           </div>
           <div className="space-y-2">
-            <Label>Timezone</Label>
+            <Label className="flex items-center gap-1.5">
+              <HugeiconsIcon icon={TimeZoneIcon} size={14} primaryColor="#3b82f6" />
+              Timezone
+            </Label>
             <SearchableSelect
               value={tz}
               onChange={(v) => { setTz(v); setEdited(true); }}
