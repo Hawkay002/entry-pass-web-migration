@@ -35,9 +35,9 @@ import {
 } from "@/components/ui/popover";
 
 /** Calendar-clock icon (custom SVG — hugeicons calendar-clock-stroke-rounded). */
-function CalendarClockIcon({ size = 16 }: { size?: number }) {
+function CalendarClockIcon({ size = 16, color = "#3b82f6" }: { size?: number; color?: string }) {
   return (
-    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width={size} height={size} fill="none" stroke="#3b82f6" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width={size} height={size} fill="none" stroke={color} strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round">
       <path d="M15.5 2V6M7.5 2V6" />
       <path d="M20.3985 8C20.2706 6.69989 19.9816 5.82475 19.3284 5.17157C18.1569 4 16.2712 4 12.5 4H10.5C6.72876 4 4.84315 4 3.67157 5.17157C2.5 6.34315 2.5 8.22876 2.5 12V14C2.5 17.7712 2.5 19.6569 3.67157 20.8284C4.47975 21.6366 5.6277 21.8873 7.5 21.965" />
       <path d="M2.5 10H7.5" />
@@ -235,7 +235,7 @@ export function SettingsForm({ isAdmin = false }: { isAdmin?: boolean }) {
         <div className="grid grid-cols-2 gap-3">
           <div className="space-y-2">
             <Label className="flex items-center gap-1.5">
-              <CalendarClockIcon size={14} />
+              <CalendarClockIcon size={14} color="#ffffff" />
               Deadline
             </Label>
             <Popover open={calOpen} onOpenChange={setCalOpen}>
@@ -266,7 +266,7 @@ export function SettingsForm({ isAdmin = false }: { isAdmin?: boolean }) {
                   captionLayout="dropdown"
                 />
                 <div className="flex items-center gap-2 border-t border-white/8 p-3">
-                  <CalendarClockIcon size={14} />
+                  <CalendarClockIcon size={14} color="#ffffff" />
                   <Label className="text-xs text-muted-foreground">End Time</Label>
                   <div className="ml-auto flex items-center gap-1">
                     <Input
