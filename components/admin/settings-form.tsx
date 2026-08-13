@@ -62,6 +62,9 @@ export function SettingsForm({ isAdmin = false }: { isAdmin?: boolean }) {
   const [calOpen, setCalOpen] = useState(false);
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(undefined);
   const [selectedTime, setSelectedTime] = useState("19:00");
+  // Raw input strings for the time boxes — allow empty while typing.
+  const [hourInput, setHourInput] = useState("");
+  const [minuteInput, setMinuteInput] = useState("");
 
   async function handleClear() {
     setClearOpen(false);
@@ -111,6 +114,16 @@ export function SettingsForm({ isAdmin = false }: { isAdmin?: boolean }) {
       setSeeded(true);
     }
   }, [loading, seeded, settings.name, settings.place, settings.deadline, settings.timezone, settings.multiGate]);
+
+  // Sync the raw time input strings whenever selectedTime changes externally
+  // (form seed, AM/PM toggle, date selection). Skips if the user is actively
+  // typing in the boxes — those update on blur.
+  useEffect(() => {
+    const [hh, mm] = selectedTime.split(":");
+    const h12 = (Number(hh) % 12) || 12;
+    setHourInput(String(h12));
+    setMinuteInput(mm || "00");
+  }, [selectedTime]);
 
   // Sync savedMultiGate from remote when it changes (multi-device realtime).
   // Only updates if the user isn't mid-edit (no unsaved changes).
@@ -252,13 +265,10 @@ export function SettingsForm({ isAdmin = false }: { isAdmin?: boolean }) {
                     <Input
                       type="text"
                       inputMode="numeric"
-                      value={(() => {
-                        const h12 = (Number(selectedTime.split(":")[0]) % 12) || 12;
-                        return String(h12);
-                      })()}
+                      value={hourInput}
                       onChange={(e) => {
-                        // Allow empty while typing — enforce bounds on blur.
                         const raw = e.target.value.replace(/\D/g, "").slice(0, 2);
+                        setHourInput(raw);
                         if (raw === "") return;
                         const val = Math.min(12, Math.max(1, Number(raw)));
                         const mm = selectedTime.split(":")[1] || "00";
@@ -267,9 +277,13 @@ export function SettingsForm({ isAdmin = false }: { isAdmin?: boolean }) {
                         handleTimeChange(`${String(h24).padStart(2, "0")}:${mm}`);
                       }}
                       onBlur={() => {
-                        // Ensure a valid hour when the field loses focus.
-                        const h = Number(selectedTime.split(":")[0]);
-                        if (isNaN(h)) handleTimeChange(`12:${selectedTime.split(":")[1] || "00"}`);
+                        const val = Math.min(12, Math.max(1, Number(hourInput) || 12));
+                        const h12 = String(val);
+                        setHourInput(h12);
+                        const mm = selectedTime.split(":")[1] || "00";
+                        const isPM = Number(selectedTime.split(":")[0]) >= 12;
+                        const h24 = val === 12 ? (isPM ? 12 : 0) : (isPM ? val + 12 : val);
+                        handleTimeChange(`${String(h24).padStart(2, "0")}:${mm}`);
                       }}
                       className="h-8 w-[40px] text-center text-sm"
                       maxLength={2}
@@ -278,18 +292,20 @@ export function SettingsForm({ isAdmin = false }: { isAdmin?: boolean }) {
                     <Input
                       type="text"
                       inputMode="numeric"
-                      value={selectedTime.split(":")[1] || "00"}
+                      value={minuteInput}
                       onChange={(e) => {
-                        // Allow empty while typing — enforce bounds on blur.
                         const raw = e.target.value.replace(/\D/g, "").slice(0, 2);
+                        setMinuteInput(raw);
                         if (raw === "") return;
                         const val = String(Math.min(59, Number(raw))).padStart(2, "0");
                         const hh = selectedTime.split(":")[0] || "12";
                         handleTimeChange(`${hh}:${val}`);
                       }}
                       onBlur={() => {
-                        const m = selectedTime.split(":")[1];
-                        if (!m || isNaN(Number(m))) handleTimeChange(`${selectedTime.split(":")[0] || "12"}:00`);
+                        const val = String(Math.min(59, Math.max(0, Number(minuteInput) || 0))).padStart(2, "0");
+                        setMinuteInput(val);
+                        const hh = selectedTime.split(":")[0] || "12";
+                        handleTimeChange(`${hh}:${val}`);
                       }}
                       className="h-8 w-[40px] text-center text-sm"
                       maxLength={2}
