@@ -37,7 +37,7 @@ import {
 /** Calendar-clock icon (custom SVG — hugeicons calendar-clock-stroke-rounded). */
 function CalendarClockIcon({ size = 16 }: { size?: number }) {
   return (
-    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width={size} height={size} fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width={size} height={size} fill="none" stroke="#3b82f6" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round">
       <path d="M15.5 2V6M7.5 2V6" />
       <path d="M20.3985 8C20.2706 6.69989 19.9816 5.82475 19.3284 5.17157C18.1569 4 16.2712 4 12.5 4H10.5C6.72876 4 4.84315 4 3.67157 5.17157C2.5 6.34315 2.5 8.22876 2.5 12V14C2.5 17.7712 2.5 19.6569 3.67157 20.8284C4.47975 21.6366 5.6277 21.8873 7.5 21.965" />
       <path d="M2.5 10H7.5" />
@@ -257,11 +257,19 @@ export function SettingsForm({ isAdmin = false }: { isAdmin?: boolean }) {
                         return String(h12);
                       })()}
                       onChange={(e) => {
-                        const val = Math.min(12, Math.max(1, Number(e.target.value) || 1));
+                        // Allow empty while typing — enforce bounds on blur.
+                        const raw = e.target.value.replace(/\D/g, "").slice(0, 2);
+                        if (raw === "") return;
+                        const val = Math.min(12, Math.max(1, Number(raw)));
                         const mm = selectedTime.split(":")[1] || "00";
                         const isPM = Number(selectedTime.split(":")[0]) >= 12;
-                        const h24 = val === 12 ? (isPM ? 12 : 0) : (isPM ? val : val);
+                        const h24 = val === 12 ? (isPM ? 12 : 0) : (isPM ? val + 12 : val);
                         handleTimeChange(`${String(h24).padStart(2, "0")}:${mm}`);
+                      }}
+                      onBlur={() => {
+                        // Ensure a valid hour when the field loses focus.
+                        const h = Number(selectedTime.split(":")[0]);
+                        if (isNaN(h)) handleTimeChange(`12:${selectedTime.split(":")[1] || "00"}`);
                       }}
                       className="h-8 w-[40px] text-center text-sm"
                       maxLength={2}
@@ -272,9 +280,16 @@ export function SettingsForm({ isAdmin = false }: { isAdmin?: boolean }) {
                       inputMode="numeric"
                       value={selectedTime.split(":")[1] || "00"}
                       onChange={(e) => {
-                        const val = String(Math.min(59, Math.max(0, Number(e.target.value) || 0))).padStart(2, "0");
+                        // Allow empty while typing — enforce bounds on blur.
+                        const raw = e.target.value.replace(/\D/g, "").slice(0, 2);
+                        if (raw === "") return;
+                        const val = String(Math.min(59, Number(raw))).padStart(2, "0");
                         const hh = selectedTime.split(":")[0] || "12";
                         handleTimeChange(`${hh}:${val}`);
+                      }}
+                      onBlur={() => {
+                        const m = selectedTime.split(":")[1];
+                        if (!m || isNaN(Number(m))) handleTimeChange(`${selectedTime.split(":")[0] || "12"}:00`);
                       }}
                       className="h-8 w-[40px] text-center text-sm"
                       maxLength={2}
