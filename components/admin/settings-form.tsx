@@ -199,11 +199,8 @@ export function SettingsForm({ isAdmin = false }: { isAdmin?: boolean }) {
       <CardContent className="space-y-4">
         {/* Event Details — collapsible form */}
         <details className="group">
-          <summary className="flex cursor-pointer list-none items-center justify-between rounded-lg bg-white/5 px-4 py-3 text-sm font-medium transition-colors hover:bg-white/10">
-            <span className="flex items-center gap-1.5">
-              <HugeiconsIcon icon={TimelineEventIcon} size={14} primaryColor="#3b82f6" />
-              Event Details
-            </span>
+          <summary className="flex cursor-pointer list-none items-center justify-between rounded-lg bg-white/5 px-4 py-3 text-sm font-semibold tracking-tight transition-colors hover:bg-white/10">
+            <span>Event Details</span>
             <ChevronDown className="h-4 w-4 text-muted-foreground transition-transform group-open:rotate-180" />
           </summary>
           <div className="space-y-4 pt-4">
