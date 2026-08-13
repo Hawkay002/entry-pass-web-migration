@@ -4,9 +4,9 @@
 
 "use server";
 
-import { getAdminDb } from "@/lib/firebase/admin";
+import { pbAdmin } from "@/lib/pb/server";
 import { paths } from "@/lib/paths";
-import { getAppUser } from "@/lib/firebase/server-auth";
+import { getAppUser } from "@/lib/pb/server-auth";
 
 export interface ScannerGateState {
   multiGate: boolean;
@@ -17,9 +17,14 @@ export async function getScannerGate(): Promise<ScannerGateState> {
   const user = await getAppUser();
   if (!user) return { multiGate: false, gate: null };
 
-  const db = getAdminDb();
-  const settingsSnap = await db.doc(paths.settingsDoc).get();
-  const isMultiGate = Boolean(settingsSnap.data()?.multiGate);
+  const pb = await pbAdmin();
+  let isMultiGate = false;
+  try {
+    const settings = await pb.collection(paths.settingsCollection).getOne(paths.settingsId);
+    isMultiGate = Boolean(settings.multiGate);
+  } catch {
+    /* settings doc missing — treat as off */
+  }
 
   if (!isMultiGate) return { multiGate: false, gate: null };
 
@@ -27,14 +32,13 @@ export async function getScannerGate(): Promise<ScannerGateState> {
   const gateId = user.gateId;
   if (!gateId) return { multiGate: true, gate: null };
 
-  const gateSnap = await db.collection(paths.gatesCollection).doc(gateId).get();
-  if (!gateSnap.exists) return { multiGate: true, gate: null };
-
-  return {
-    multiGate: true,
-    gate: {
-      id: gateId,
-      name: String(gateSnap.data()?.name ?? gateId),
-    },
-  };
+  try {
+    const gateSnap = await pb.collection(paths.gatesCollection).getOne(gateId);
+    return {
+      multiGate: true,
+      gate: { id: gateId, name: String(gateSnap.name ?? gateId) },
+    };
+  } catch {
+    return { multiGate: true, gate: null };
+  }
 }

@@ -7,8 +7,7 @@
 import { useState, useEffect, useRef } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
-import { signInWithEmailAndPassword, getIdToken, GoogleAuthProvider, signInWithPopup } from "firebase/auth";
-import { auth } from "@/lib/firebase/client";
+import { pb } from "@/lib/pb/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -48,35 +47,22 @@ function LoginForm() {
   const [recoveryCodeInput, setRecoveryCodeInput] = useState("");
   const otpRefs = useRef<(HTMLInputElement | null)[]>([]);
 
+  /** Issue a login request to /api/login. Returns the parsed response. */
+  async function postLogin(payload: Record<string, string>): Promise<{ res: Response; data: { ok?: boolean; status?: string; error?: string; token?: string } }> {
+    const res = await fetch("/api/login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json().catch(() => ({}));
+    return { res, data };
+  }
+
   useEffect(() => {
     if (searchParams.get("reason") === "expired") {
       toast.info("Your session has expired — please sign in again.");
     }
   }, [searchParams]);
-
-  async function handleLoginResult(res: Response, idToken: string) {
-    const data = await res.json().catch(() => ({}));
-
-    if (data.status === "2fa_required") {
-      // Admin needs to enter TOTP code.
-      setPendingToken(idToken);
-      setPending2FA(true);
-      setOtpCode(["", "", "", "", "", ""]);
-      setError("");
-      // Focus first OTP box.
-      setTimeout(() => otpRefs.current[0]?.focus(), 100);
-      return true; // handled
-    }
-
-    if (res.ok) {
-      router.push("/tickets");
-      router.refresh();
-      return true;
-    }
-
-    setError(data.error ?? "Authentication failed.");
-    return false;
-  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -84,32 +70,27 @@ function LoginForm() {
     setLoading(true);
 
     try {
-      const cred = await signInWithEmailAndPassword(auth, email, password);
-      const idToken = await getIdToken(cred.user);
+      const { res, data } = await postLogin({ email, password });
 
-      const res = await fetch("/api/login", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ idToken }),
-      });
-
-      await handleLoginResult(res, idToken);
-    } catch (err) {
-      const code = (err as { code?: string }).code ?? "";
-      const msg = (err as { message?: string }).message ?? "";
-      if (code === "auth/invalid-credential" || code === "auth/wrong-password" || code === "auth/user-not-found") {
-        setError("Invalid email or password.");
-      } else if (code === "auth/unauthorized-domain") {
-        setError("This domain is not authorized for Firebase sign-in. Add it in Firebase Console → Auth → Settings → Authorized domains.");
-      } else if (code === "auth/too-many-requests") {
-        setError("Too many attempts. Try again later.");
-      } else if (code === "auth/network-request-failed" || msg.includes("unexpected response")) {
-        setError("Network error reaching Firebase. Check your connection and try again.");
-      } else if (code === "auth/internal-error") {
-        setError("Firebase Auth service error. Please try again in a moment.");
-      } else {
-        setError(msg || "Authentication failed.");
+      if (data.status === "2fa_required" && data.token) {
+        // Admin needs to enter a TOTP code. Store the pending PB token.
+        setPendingToken(data.token);
+        setPending2FA(true);
+        setOtpCode(["", "", "", "", "", ""]);
+        setError("");
+        setTimeout(() => otpRefs.current[0]?.focus(), 100);
+        return;
       }
+
+      if (res.ok) {
+        router.push("/tickets");
+        router.refresh();
+        return;
+      }
+
+      setError(data.error ?? "Authentication failed.");
+    } catch {
+      setError("Network error. Check your connection and try again.");
     } finally {
       setLoading(false);
     }
@@ -119,26 +100,35 @@ function LoginForm() {
     setError("");
     setLoading(true);
     try {
-      const provider = new GoogleAuthProvider();
-      const cred = await signInWithPopup(auth, provider);
-      const idToken = await getIdToken(cred.user);
+      // Pocketbase OAuth — opens Google sign-in, returns with a token we POST
+      // to /api/login as a continuation. Requires the "google" provider enabled
+      // in PB admin (Auth providers). Falls back to an error if not configured.
+      const authData = await pb().collection("users").authWithOAuth2({ provider: "google" });
+      const token = (pb().authStore.token as string) ?? "";
+      const { res, data } = await postLogin({ token });
 
-      const res = await fetch("/api/login", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ idToken }),
-      });
-
-      await handleLoginResult(res, idToken);
+      if (data.status === "2fa_required" && data.token) {
+        setPendingToken(data.token);
+        setPending2FA(true);
+        setOtpCode(["", "", "", "", "", ""]);
+        setError("");
+        setTimeout(() => otpRefs.current[0]?.focus(), 100);
+        return;
+      }
+      if (res.ok) {
+        router.push("/tickets");
+        router.refresh();
+        return;
+      }
+      setError(data.error ?? "Google sign-in failed.");
     } catch (err) {
-      const code = (err as { code?: string }).code ?? "";
       const msg = (err as { message?: string }).message ?? "";
-      if (code === "auth/popup-closed-by-user") {
+      if (msg.includes("popup") || msg.includes("cancelled")) {
         setError("Sign-in cancelled.");
-      } else if (code === "auth/network-request-failed" || msg.includes("unexpected response")) {
-        setError("Network error reaching Firebase. Check your connection and try again.");
-      } else if (code === "auth/internal-error") {
-        setError("Firebase service error. Try again in a moment.");
+      } else if (msg.includes("network") || msg.includes("fetch")) {
+        setError("Network error. Check your connection and try again.");
+      } else if (msg.includes("provider") || msg.includes("not found")) {
+        setError("Google sign-in is not configured. Ask the admin to enable it.");
       } else {
         setError(msg || "Google sign-in failed.");
       }
@@ -192,13 +182,7 @@ function LoginForm() {
     setLoading(true);
     setError("");
     try {
-      const res = await fetch("/api/login", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ idToken: pendingToken, code: prefilledCode ?? code }),
-      });
-
-      const data = await res.json().catch(() => ({}));
+      const { res, data } = await postLogin({ token: pendingToken, code: prefilledCode ?? code });
       if (res.ok) {
         router.push("/tickets");
         router.refresh();
@@ -217,12 +201,7 @@ function LoginForm() {
     setLoading(true);
     setError("");
     try {
-      const res = await fetch("/api/login", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ idToken: pendingToken, recoveryCode: recoveryCodeInput.trim() }),
-      });
-      const data = await res.json().catch(() => ({}));
+      const { res, data } = await postLogin({ token: pendingToken, recoveryCode: recoveryCodeInput.trim() });
       if (res.ok) {
         router.push("/tickets");
         router.refresh();

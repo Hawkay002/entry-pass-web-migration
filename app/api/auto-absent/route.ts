@@ -1,9 +1,9 @@
 // app/api/auto-absent/route.ts — standalone API endpoint for auto-absent.
-// Called by the Guest List page on mount. This avoids any layout caching issues.
+// Called by the Guest List page on mount.
 
 import { NextResponse } from "next/server";
-import { getAdminDb } from "@/lib/firebase/admin";
-import { getAppUser } from "@/lib/firebase/server-auth";
+import { pbAdmin } from "@/lib/pb/server";
+import { getAppUser } from "@/lib/pb/server-auth";
 import { paths } from "@/lib/paths";
 
 export const dynamic = "force-dynamic";
@@ -24,12 +24,15 @@ export async function POST(req: Request) {
       // Empty body = automatic trigger (respect deadline checks).
     }
 
-    const db = getAdminDb();
+    const pb = await pbAdmin();
 
     if (!force) {
       // Automatic trigger — only act if deadline is set AND has passed.
-      const settingsSnap = await db.doc(paths.settingsDoc).get();
-      const deadline = settingsSnap.data()?.deadline as string | undefined;
+      let deadline: string | undefined;
+      try {
+        const settings = await pb.collection(paths.settingsCollection).getOne(paths.settingsId);
+        deadline = settings.deadline as string | undefined;
+      } catch {}
 
       if (!deadline) {
         return NextResponse.json({ ok: true, count: 0, reason: "no deadline" });
@@ -42,21 +45,20 @@ export async function POST(req: Request) {
     }
 
     // Mark all coming-soon tickets as absent.
-    const snap = await db
-      .collection(paths.ticketsCollection)
-      .where("status", "==", "coming-soon")
-      .get();
+    const snap = await pb.collection(paths.ticketsCollection).getFullList({
+      filter: `status = "coming-soon"`,
+    });
 
-    if (snap.empty) {
+    if (snap.length === 0) {
       return NextResponse.json({ ok: true, count: 0, reason: "none to mark" });
     }
 
-    const batch = db.batch();
-    snap.docs.forEach((d) => batch.update(d.ref, { status: "absent" }));
-    await batch.commit();
+    await Promise.all(
+      snap.map((d) => pb.collection(paths.ticketsCollection).update(d.id, { status: "absent" }))
+    );
 
-    console.log(`[auto-absent] ✅ Marked ${snap.size} ticket(s) as absent`);
-    return NextResponse.json({ ok: true, count: snap.size });
+    console.log(`[auto-absent] ✅ Marked ${snap.length} ticket(s) as absent`);
+    return NextResponse.json({ ok: true, count: snap.length });
   } catch (err) {
     console.error("[auto-absent] ERROR:", err);
     return NextResponse.json(

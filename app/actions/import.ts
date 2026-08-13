@@ -2,12 +2,11 @@
 
 "use server";
 
-import { getAdminDb } from "@/lib/firebase/admin";
+import { pbAdmin } from "@/lib/pb/server";
 import { paths } from "@/lib/paths";
-import { getAppUser } from "@/lib/firebase/server-auth";
-import { logAction } from "@/lib/firebase/log";
+import { getAppUser } from "@/lib/pb/server-auth";
+import { logAction } from "@/lib/pb/log";
 import { parseImportedDate, type ParsedTicket } from "@/lib/import-export";
-import type { Ticket } from "@/lib/types";
 import { revalidatePath } from "next/cache";
 
 export async function importTickets(
@@ -20,7 +19,7 @@ export async function importTickets(
   const user = await getAppUser();
   if (!user) return { ok: false, error: "Not authenticated." };
 
-  const db = getAdminDb();
+  const pb = await pbAdmin();
   // Dedup by composite key: phone + name (so parent + kids with same phone but
   // different names are NOT treated as duplicates).
   const existingSet = new Set(existingKeys);
@@ -40,7 +39,7 @@ export async function importTickets(
       ? (parseImportedDate(record.entryTimeRaw) ?? Date.now())
       : null;
 
-    const ticketData: Omit<Ticket, "id"> = {
+    const ticketData = {
       name: record.name,
       gender: record.gender,
       age: Number(record.age) || 18,
@@ -49,20 +48,20 @@ export async function importTickets(
       status: record.status,
       scanned: scannedState,
       scannedAt: scannedAtTime,
-      scannedBy: scannedState ? "Import" : null,
+      scannedBy: scannedState ? "Import" : "",
       createdBy: user.username,
       createdAt: Date.now(),
-      groupId: record.groupId ?? null,
-      parentName: record.parentName ?? null,
+      gate: "",
+      scannedAtGate: "",
+      groupId: record.groupId ?? "",
+      parentName: record.parentName ?? "",
     };
 
     if (record.id) {
-      await db
-        .collection(paths.ticketsCollection)
-        .doc(String(record.id).trim())
-        .set(ticketData);
+      // Preserve the original id on re-import.
+      await pb.collection(paths.ticketsCollection).create({ ...ticketData, id: String(record.id).trim() });
     } else {
-      await db.collection(paths.ticketsCollection).add(ticketData);
+      await pb.collection(paths.ticketsCollection).create(ticketData);
     }
     imported++;
   }

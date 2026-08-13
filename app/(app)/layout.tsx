@@ -4,9 +4,9 @@
 
 import { redirect } from "next/navigation";
 import { AppShell } from "@/components/layout/app-shell";
-import { getAppUser } from "@/lib/firebase/server-auth";
+import { getAppUser } from "@/lib/pb/server-auth";
 import { isAdmin } from "@/lib/auth";
-import { getAdminDb } from "@/lib/firebase/admin";
+import { pbAdmin } from "@/lib/pb/server";
 import { paths } from "@/lib/paths";
 
 export const dynamic = "force-dynamic";
@@ -20,30 +20,38 @@ export default async function AppLayout({
   if (!user) redirect("/login?reason=expired");
 
   // Auto-absent: check if deadline passed and mark coming-soon tickets.
-  // Runs directly via Admin SDK — no server action dependency.
-  // Intentionally NOT in a try/catch so errors show in Vercel logs.
-  const db = getAdminDb();
-  const settingsSnap = await db.doc(paths.settingsDoc).get();
-  const settingsData = settingsSnap.data();
-  const deadline = settingsData?.deadline as string | undefined;
+  // Runs directly via the admin PB client — no server action dependency.
+  try {
+    const pb = await pbAdmin();
+    let deadline: string | undefined;
+    try {
+      const settings = await pb.collection(paths.settingsCollection).getOne(paths.settingsId);
+      deadline = settings.deadline as string | undefined;
+    } catch {
+      /* settings missing — skip */
+    }
 
-  if (deadline) {
-    const deadlineMs = new Date(deadline).getTime();
-    // eslint-disable-next-line react-hooks/purity -- server component, Date.now() is fine here
-    const now = Date.now();
+    if (deadline) {
+      const deadlineMs = new Date(deadline).getTime();
+      // eslint-disable-next-line react-hooks/purity -- server component, Date.now() is fine here
+      const now = Date.now();
 
-    if (!isNaN(deadlineMs) && now > deadlineMs) {
-      const snap = await db
-        .collection(paths.ticketsCollection)
-        .where("status", "==", "coming-soon")
-        .get();
-
-      if (!snap.empty) {
-        const batch = db.batch();
-        snap.docs.forEach((d) => batch.update(d.ref, { status: "absent" }));
-        await batch.commit();
+      if (!isNaN(deadlineMs) && now > deadlineMs) {
+        const snap = await pb.collection(paths.ticketsCollection).getFullList({
+          filter: `status = "coming-soon"`,
+          fields: "id",
+        });
+        if (snap.length > 0) {
+          await Promise.all(
+            snap.map((d) =>
+              pb.collection(paths.ticketsCollection).update(d.id, { status: "absent" })
+            )
+          );
+        }
       }
     }
+  } catch (err) {
+    console.error("[layout] auto-absent check failed:", err);
   }
 
   return (

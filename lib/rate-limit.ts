@@ -1,18 +1,15 @@
-// lib/rate-limit.ts — small Upstash-Redis-backed rate limiter.
-// Used to throttle brute-force attacks on public endpoints (e.g. /api/kiosk-checkin).
-
-import { Redis } from "@upstash/redis";
-
-function getRedis(): Redis {
-  return new Redis({
-    url: process.env.KV_REST_API_URL!,
-    token: process.env.KV_REST_API_TOKEN!,
-  });
-}
+// lib/rate-limit.ts — in-memory rate limiter (replaces the Upstash Redis version).
+// Throttles brute-force attacks on public endpoints (e.g. /api/kiosk-checkin).
+//
+// NOTE: in-memory state is per-process. Under serverless (Vercel) each instance
+// has its own counter, so the effective limit is multiplied by instance count.
+// For a self-hosted single-process deployment (the PB target) this is exact.
+// If you need cross-instance limits later, swap this for a Redis/Upstash impl
+// with the same exported API.
 
 /**
- * Extract the client IP from a request, trusting Vercel's x-forwarded-for
- * (first hop) and falling back to x-real-ip.
+ * Extract the client IP from a request, trusting x-forwarded-for (first hop)
+ * and falling back to x-real-ip.
  */
 export function getClientIp(request: Request): string {
   const xff = request.headers.get("x-forwarded-for");
@@ -21,41 +18,57 @@ export function getClientIp(request: Request): string {
 }
 
 export interface RateLimitResult {
-  blocked: boolean;       // true once the failure threshold is exceeded
-  remaining: number;      // attempts left in the current window
-  retryAfter: number;     // seconds until the window resets (0 if not blocked)
+  blocked: boolean; // true once the failure threshold is exceeded
+  remaining: number; // attempts left in the current window
+  retryAfter: number; // seconds until the window resets (0 if not blocked)
+}
+
+interface Bucket {
+  count: number;
+  expiresAt: number; // epoch ms
+}
+
+// Module-level map — persists across requests within one process.
+const buckets = new Map<string, Bucket>();
+
+// Garbage-collect expired entries occasionally to avoid unbounded growth.
+let lastGc = 0;
+function gc(now: number) {
+  if (now - lastGc < 60_000) return;
+  lastGc = now;
+  for (const [k, b] of buckets) {
+    if (b.expiresAt <= now) buckets.delete(k);
+  }
 }
 
 /**
  * Record a failed attempt for `key` within a fixed `windowSec` window, capped
- * at `limit`. Returns whether the caller is now blocked from further *guessing*.
+ * at `limit`. Returns whether the caller is now blocked from further guessing.
  *
- * Design note: a correct attempt should call `clearRateLimit(key)` so a
- * legitimate client (with the right PIN) is never DOS-locked by a spammer.
+ * A correct attempt should call `clearRateLimit(key)` so a legitimate client
+ * (with the right PIN) is never DOS-locked by a spammer.
  */
 export async function recordFailure(
   key: string,
   limit: number,
   windowSec: number
 ): Promise<RateLimitResult> {
-  try {
-    const redis = getRedis();
-    const count = Number((await redis.incr(key)) ?? 1);
-    // Set TTL only on the first increment so the window is anchored to the
-    // first failure (not the last).
-    if (count === 1) await redis.expire(key, windowSec);
-    const ttl = Number((await redis.ttl(key)) ?? 0);
-    const blocked = count > limit;
-    return {
-      blocked,
-      remaining: Math.max(0, limit - count),
-      retryAfter: blocked ? Math.max(1, ttl) : 0,
-    };
-  } catch (err) {
-    // If Redis is down, fail open (don't block the event) — but log it.
-    console.error("[rate-limit] recordFailure failed:", err);
-    return { blocked: false, remaining: limit, retryAfter: 0 };
+  const now = Date.now();
+  gc(now);
+  const bucket = buckets.get(key);
+  if (!bucket || bucket.expiresAt <= now) {
+    // First failure (or window expired) — anchor a fresh window.
+    buckets.set(key, { count: 1, expiresAt: now + windowSec * 1000 });
+    return { blocked: false, remaining: Math.max(0, limit - 1), retryAfter: 0 };
   }
+  bucket.count += 1;
+  const blocked = bucket.count > limit;
+  const retryAfterMs = bucket.expiresAt - now;
+  return {
+    blocked,
+    remaining: Math.max(0, limit - bucket.count),
+    retryAfter: blocked ? Math.max(1, Math.ceil(retryAfterMs / 1000)) : 0,
+  };
 }
 
 /** Read the current failure count + TTL without incrementing. */
@@ -63,27 +76,20 @@ export async function getFailureState(
   key: string,
   limit: number
 ): Promise<RateLimitResult> {
-  try {
-    const redis = getRedis();
-    const count = Number((await redis.get(key)) ?? 0);
-    const ttl = Number((await redis.ttl(key)) ?? 0);
-    const blocked = count > limit;
-    return {
-      blocked,
-      remaining: Math.max(0, limit - count),
-      retryAfter: blocked ? Math.max(1, ttl) : 0,
-    };
-  } catch (err) {
-    console.error("[rate-limit] getFailureState failed:", err);
+  const now = Date.now();
+  const bucket = buckets.get(key);
+  if (!bucket || bucket.expiresAt <= now) {
     return { blocked: false, remaining: limit, retryAfter: 0 };
   }
+  const blocked = bucket.count > limit;
+  return {
+    blocked,
+    remaining: Math.max(0, limit - bucket.count),
+    retryAfter: blocked ? Math.max(1, Math.ceil((bucket.expiresAt - now) / 1000)) : 0,
+  };
 }
 
 /** Reset the counter after a successful attempt. */
 export async function clearRateLimit(key: string): Promise<void> {
-  try {
-    await getRedis().del(key);
-  } catch (err) {
-    console.error("[rate-limit] clearRateLimit failed:", err);
-  }
+  buckets.delete(key);
 }

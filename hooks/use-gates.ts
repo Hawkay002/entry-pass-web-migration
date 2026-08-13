@@ -1,49 +1,24 @@
-// hooks/use-gates.ts — realtime subscription to the gates collection.
-// Mirrors the use-settings / use-roles pattern (onSnapshot listener).
-// Returns gates sorted by `order`, and a map of { gateId → gate } for lookups.
+// hooks/use-gates.ts — polled subscription to the gates collection.
+// Replaces the Firestore onSnapshot listener. Returns gates sorted by `order`,
+// and a map of { gateId → gate } for lookups.
 
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { collection, onSnapshot, orderBy, query } from "firebase/firestore";
-import { db } from "@/lib/firebase/client";
-import { paths } from "@/lib/paths";
+import { useMemo } from "react";
+import { usePolledData } from "@/lib/pb/realtime";
+import { fetchGates } from "@/app/actions/gates";
 import type { Gate } from "@/lib/types";
 
 export function useGatesMode() {
-  const [gates, setGates] = useState<Gate[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { data, loading } = usePolledData(
+    async () => {
+      const res = await fetchGates();
+      return res.ok ? res.gates : [];
+    },
+    3000
+  );
 
-  useEffect(() => {
-    const q = query(
-      collection(db, paths.gatesCollection),
-      orderBy("order", "asc")
-    );
-    const unsub = onSnapshot(
-      q,
-      (snap) => {
-        const list: Gate[] = snap.docs.map((d) => {
-          const data = d.data();
-          return {
-            id: d.id,
-            name: String(data.name ?? d.id),
-            category: (data.category as Gate["category"]) ?? "guest-entry",
-            order: Number(data.order ?? 0),
-            active: Boolean(data.active ?? true),
-            createdAt: Number(data.createdAt ?? 0),
-            ticketTypes: Array.isArray(data.ticketTypes) ? data.ticketTypes : [],
-          };
-        });
-        setGates(list);
-        setLoading(false);
-      },
-      (err) => {
-        console.error("[useGates] listener error:", err);
-        setLoading(false);
-      }
-    );
-    return unsub;
-  }, []);
+  const gates = useMemo(() => data ?? [], [data]);
 
   // Lookup map for resolving gate names from ids.
   const gateMap = useMemo(() => {

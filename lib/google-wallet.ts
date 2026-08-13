@@ -1,14 +1,16 @@
 // lib/google-wallet.ts — Google Wallet "Save to Wallet" JWT generation.
 // Creates a generic pass with custom layout (class + object inline).
-// Uses the Firebase service account key for RS256 signing.
+// Signs the JWT with a dedicated Google service account key (RS256).
 //
-// Requires GOOGLE_WALLET_ISSUER_ID env var (your Google Pay & Wallet Console issuer ID).
+// Requires:
+//   GOOGLE_WALLET_ISSUER_ID            — your Google Pay & Wallet Console issuer ID
+//   GOOGLE_WALLET_SERVICE_ACCOUNT_EMAIL — the service account email (the JWT `iss`)
+//   GOOGLE_WALLET_PRIVATE_KEY           — the service account private key (PEM)
 
-import { authConfig } from "@/lib/env";
 import crypto from "crypto";
 
-const ISSUER_ID = String(authConfig.serviceAccount.client_email ?? "");
-const PRIVATE_KEY = String(authConfig.serviceAccount.private_key ?? "");
+const ISSUER_ID = process.env.GOOGLE_WALLET_SERVICE_ACCOUNT_EMAIL ?? "";
+const PRIVATE_KEY = process.env.GOOGLE_WALLET_PRIVATE_KEY?.replace(/\\n/g, "\n") ?? "";
 
 interface PassInput {
   ticketId: string;

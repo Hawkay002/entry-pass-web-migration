@@ -1,49 +1,55 @@
-// hooks/use-staff-check.ts — realtime check: is the current staff still in any role?
+// hooks/use-staff-check.ts — polled check: is the current staff still in any role?
 // If not (admin removed them), immediately sign out and redirect to /login.
-// Uses onSnapshot on the roles collection so it's instant — no polling.
+// Replaces the Firestore onSnapshot on the roles collection with polling.
 
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
-import { collection, onSnapshot, query } from "firebase/firestore";
-import { db } from "@/lib/firebase/client";
-import { paths } from "@/lib/paths";
+import { fetchRoles } from "@/app/actions/roles";
 
 export function useStaffCheck(userEmail: string | null, isAdmin: boolean) {
   const router = useRouter();
+  const kickedRef = useRef(false);
 
   useEffect(() => {
     // Only run for non-admin staff.
     if (!userEmail || isAdmin) return;
 
-    const unsub = onSnapshot(
-      query(collection(db, paths.rolesCollection)),
-      (snap) => {
-        // Check if this email exists in ANY role's staff list.
-        let found = false;
-        snap.docs.forEach((d) => {
-          const staff = (d.data().staff as { email: string }[]) ?? [];
-          if (staff.some((s) => s.email.toLowerCase() === userEmail.toLowerCase())) {
-            found = true;
-          }
-        });
+    let cancelled = false;
+    let timer: ReturnType<typeof setTimeout>;
 
-        if (!found) {
+    const check = async () => {
+      try {
+        const res = await fetchRoles();
+        if (!res.ok || cancelled) {
+          if (!cancelled) timer = setTimeout(check, 4000);
+          return;
+        }
+        const found = res.roles.some((r) =>
+          (r.staff ?? []).some((s) => s.email.toLowerCase() === userEmail!.toLowerCase())
+        );
+        if (!found && !kickedRef.current) {
           // Staff has been removed — kick them out immediately.
+          kickedRef.current = true;
           console.log("[staff-check] User removed from all roles, signing out");
-          // Clear session cookie + redirect
           fetch("/api/logout", { method: "POST" }).then(() => {
             router.push("/login");
             router.refresh();
           });
+          return;
         }
-      },
-      (err) => {
-        console.error("[staff-check] listener error:", err);
+        if (!cancelled) timer = setTimeout(check, 5000);
+      } catch (err) {
+        console.error("[staff-check] check error:", err);
+        if (!cancelled) timer = setTimeout(check, 5000);
       }
-    );
+    };
 
-    return unsub;
+    check();
+    return () => {
+      cancelled = true;
+      if (timer) clearTimeout(timer);
+    };
   }, [userEmail, isAdmin, router]);
 }

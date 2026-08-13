@@ -21,7 +21,7 @@ import { SecurityControl } from "@/components/landing/SecurityControl";
 import { HowItWorks } from "@/components/landing/HowItWorks";
 import { CTA } from "@/components/landing/CTA";
 import { Footer } from "@/components/landing/Footer";
-import { getAdminDb } from "@/lib/firebase/admin";
+import { pbAdmin } from "@/lib/pb/server";
 import { paths } from "@/lib/paths";
 import type { Ticket } from "@/lib/types";
 
@@ -33,27 +33,30 @@ const TIER_ORDER: TierKey[] = ["Gold", "SVIP", "Diamond", "Classic"];
 
 async function getShowcaseData() {
   try {
-    const db = getAdminDb();
+    const pb = await pbAdmin();
 
     // Event settings (name + place) for the ticket face.
-    const settingsSnap = await db.doc(paths.settingsDoc).get();
-    const settings = settingsSnap.data();
-    const event = settings?.name as string | undefined;
-    const place = settings?.place as string | undefined;
+    let event: string | undefined;
+    let place: string | undefined;
+    try {
+      const settings = await pb.collection(paths.settingsCollection).getOne(paths.settingsId);
+      event = settings.name as string | undefined;
+      place = settings.place as string | undefined;
+    } catch {}
 
     // All tickets, newest first. We pick one per tier.
-    const snap = await db
-      .collection(paths.ticketsCollection)
-      .orderBy("createdAt", "desc")
-      .get();
+    const records = await pb.collection(paths.ticketsCollection).getFullList({
+      sort: "-createdAt",
+      fields: "id,name,age,gender,ticketType",
+    });
 
     const byTier: Partial<Record<TierKey, ShowcaseTicket>> = {};
-    for (const doc of snap.docs) {
-      const t = doc.data() as Ticket;
+    for (const r of records) {
+      const t = r as unknown as Ticket;
       if (!t?.ticketType || !t?.name) continue;
       if (TIER_ORDER.includes(t.ticketType) && !byTier[t.ticketType]) {
         byTier[t.ticketType] = {
-          id: doc.id,
+          id: r.id,
           name: t.name,
           age: t.age,
           gender: t.gender,
@@ -64,7 +67,7 @@ async function getShowcaseData() {
 
     return { tickets: byTier, event, venue: place };
   } catch {
-    // Firestore unavailable / no tickets → demo fallback in the component.
+    // DB unavailable / no tickets → demo fallback in the component.
     return { tickets: {}, event: undefined, venue: undefined };
   }
 }

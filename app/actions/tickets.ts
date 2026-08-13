@@ -1,45 +1,77 @@
 // app/actions/tickets.ts — server actions for ticket CRUD + scan validation.
 // All operations are authenticated via the session cookie and authorized
-// server-side (replacing the original client-side-only writes).
+// server-side.
 
 "use server";
 
-import { getAdminDb } from "@/lib/firebase/admin";
+import { pbAdmin } from "@/lib/pb/server";
 import { paths } from "@/lib/paths";
-import { getAppUser } from "@/lib/firebase/server-auth";
-import { logAction } from "@/lib/firebase/log";
-import type { Gender, TicketStatus, TicketType } from "@/lib/types";
+import { getAppUser } from "@/lib/pb/server-auth";
+import { logAction } from "@/lib/pb/log";
+import type { Gender, TicketStatus, TicketType, Ticket } from "@/lib/types";
 import { revalidatePath } from "next/cache";
 import { pickGateForTicket } from "@/app/actions/gates";
 
-/** Short random ID for group tickets (same pattern as generateKioskId in admin.ts). */
+/** Short random ID for group tickets. */
 function generateGroupId(): string {
   return Math.random().toString(36).slice(2, 8);
+}
+
+/** Fetch ALL tickets (authenticated). Used by the useTickets realtime hook.
+ *  Returns the full ticket shape for the Guest List (client-side filter/sort). */
+export async function fetchTickets(): Promise<
+  { ok: true; tickets: Ticket[] } | { ok: false; error: string }
+> {
+  const user = await getAppUser();
+  if (!user) return { ok: false, error: "Not authenticated." };
+
+  const pb = await pbAdmin();
+  const records = await pb.collection(paths.ticketsCollection).getFullList();
+  const tickets: Ticket[] = records.map((d) => ({
+    id: d.id,
+    name: String(d.name ?? ""),
+    gender: (d.gender as Ticket["gender"]) ?? "Other",
+    age: Number(d.age ?? 0),
+    phone: String(d.phone ?? ""),
+    ticketType: (d.ticketType as Ticket["ticketType"]) ?? "Classic",
+    status: (d.status as Ticket["status"]) ?? "coming-soon",
+    scanned: Boolean(d.scanned),
+    scannedAt: d.scannedAt ? Number(d.scannedAt) : null,
+    scannedBy: d.scannedBy ? String(d.scannedBy) : null,
+    createdBy: String(d.createdBy ?? ""),
+    createdAt: Number(d.createdAt ?? 0),
+    gate: d.gate ? String(d.gate) : null,
+    scannedAtGate: d.scannedAtGate ? String(d.scannedAtGate) : null,
+    groupId: d.groupId ? String(d.groupId) : null,
+    parentName: d.parentName ? String(d.parentName) : null,
+  }));
+  return { ok: true, tickets };
 }
 
 /**
  * Fetch the full ticket list for offline-cache warming on the scanner.
  * Returns ONLY the fields the offline validator needs (id/name/status/scanned)
- * — no phone/PII — and is used by a one-shot + interval refresh instead of an
- * always-on realtime listener, which cuts Firestore reads to ~1 query / 5 min.
+ * — no phone/PII.
  */
 export async function getTicketsForOfflineCache(): Promise<
-  { ok: true; tickets: { id: string; name: string; status: TicketStatus; scanned: boolean }[] }
+  { ok: true; tickets: { id: string; name: string; status: TicketStatus; scanned: boolean; gate: string | null }[] }
   | { ok: false; error: string }
 > {
   const user = await getAppUser();
   if (!user) return { ok: false, error: "Not authenticated." };
 
-  const snap = await getAdminDb().collection(paths.ticketsCollection).get();
-  const tickets = snap.docs.map((d) => {
-    const data = d.data() as Record<string, unknown>;
-    const status = String(data.status ?? "coming-soon");
+  const pb = await pbAdmin();
+  const records = await pb.collection(paths.ticketsCollection).getFullList({
+    fields: "id,name,status,scanned,gate",
+  });
+  const tickets = records.map((d) => {
+    const status = String(d.status ?? "coming-soon");
     return {
       id: d.id,
-      name: String(data.name ?? ""),
+      name: String(d.name ?? ""),
       status: (status === "arrived" || status === "absent" ? status : "coming-soon") as TicketStatus,
-      scanned: Boolean(data.scanned),
-      gate: data.gate != null ? String(data.gate) : null,
+      scanned: Boolean(d.scanned),
+      gate: d.gate ? String(d.gate) : null,
     };
   });
   return { ok: true, tickets };
@@ -58,15 +90,15 @@ export async function createTicket(input: {
   const user = await getAppUser();
   if (!user) return { ok: false, error: "Not authenticated." };
 
-  const db = getAdminDb();
+  const pb = await pbAdmin();
   const dial = input.dialCode ?? "+91";
   const now = Date.now();
   const fullPhone = dial + input.phone.replace(/\D/g, "");
 
   // Multi-gate: auto-assign a gate via category match + round-robin (if enabled).
   let assignedGate: string | null = null;
-  const settingsSnap = await db.doc(paths.settingsDoc).get();
-  if (Boolean(settingsSnap.data()?.multiGate)) {
+  const settings = await pb.collection(paths.settingsCollection).getOne(paths.settingsId);
+  if (Boolean(settings.multiGate)) {
     assignedGate = await pickGateForTicket(input.ticketType);
   }
 
@@ -82,22 +114,22 @@ export async function createTicket(input: {
     ticketType: input.ticketType,
     status: "coming-soon" as const,
     scanned: false,
-    scannedAt: null,
-    scannedBy: null,
+    scannedAt: 0,
+    scannedBy: "",
     createdBy: user.username,
     createdAt: now,
-    gate: assignedGate,
-    scannedAtGate: null,
-    groupId,
-    parentName: null,
+    gate: assignedGate ?? "",
+    scannedAtGate: "",
+    groupId: groupId ?? "",
+    parentName: "",
   };
 
-  const ref = await db.collection(paths.ticketsCollection).add(ticket);
+  const rec = await pb.collection(paths.ticketsCollection).create(ticket);
 
   // Create kid tickets — they share the parent's phone + ticketType + gate.
   if (hasKids && groupId) {
     for (const kid of input.kids!) {
-      await db.collection(paths.ticketsCollection).add({
+      await pb.collection(paths.ticketsCollection).create({
         name: kid.name.trim(),
         gender: kid.gender,
         age: kid.age,
@@ -105,12 +137,12 @@ export async function createTicket(input: {
         ticketType: input.ticketType,
         status: "coming-soon" as const,
         scanned: false,
-        scannedAt: null,
-        scannedBy: null,
+        scannedAt: 0,
+        scannedBy: "",
         createdBy: user.username,
         createdAt: now,
-        gate: assignedGate,
-        scannedAtGate: null,
+        gate: assignedGate ?? "",
+        scannedAtGate: "",
         groupId,
         parentName: input.name.trim(),
       });
@@ -119,18 +151,18 @@ export async function createTicket(input: {
     await logAction(
       user,
       "TICKET_CREATE",
-      `Ticket issued for ${ticket.name} + ${input.kids!.length} kid(s) (ID: ${ref.id.slice(0, 6)})`
+      `Ticket issued for ${ticket.name} + ${input.kids!.length} kid(s) (ID: ${rec.id.slice(0, 6)})`
     );
   } else {
     await logAction(
       user,
       "TICKET_CREATE",
-      `Ticket issued for ${ticket.name} (ID: ${ref.id.slice(0, 6)})`
+      `Ticket issued for ${ticket.name} (ID: ${rec.id.slice(0, 6)})`
     );
   }
 
   revalidatePath("/guests");
-  return { ok: true, id: ref.id, gate: assignedGate };
+  return { ok: true, id: rec.id, gate: assignedGate };
 }
 
 /** Mark a ticket as arrived on scan. Returns the outcome for UI feedback. */
@@ -144,30 +176,27 @@ export async function validateTicket(
   const user = await getAppUser();
   if (!user) return { ok: false, error: "Not authenticated." };
 
-  const db = getAdminDb();
-  const ref = db.collection(paths.ticketsCollection).doc(ticketId);
-  const snap = await ref.get();
-
-  if (!snap.exists) {
+  const pb = await pbAdmin();
+  let rec;
+  try {
+    rec = await pb.collection(paths.ticketsCollection).getOne(ticketId);
+  } catch {
     await logAction(user, "SCAN_ENTRY", `Invalid scan: ${ticketId.slice(0, 8)}`);
     return { ok: true, outcome: "invalid", ticket: null };
   }
 
-  const data = snap.data() as Record<string, unknown>;
-  const name = String(data.name ?? "");
-  const status = String(data.status ?? "coming-soon");
-  const scanned = Boolean(data.scanned);
-  const ticketGate = data.gate != null ? String(data.gate) : null;
+  const name = String(rec.name ?? "");
+  const status = String(rec.status ?? "coming-soon");
+  const scanned = Boolean(rec.scanned);
+  const ticketGate = rec.gate ? String(rec.gate) : null;
 
   if (status === "coming-soon" && !scanned) {
-    // Multi-gate enforcement: if the ticket has an assigned gate and this
-    // scanner's gate doesn't match, block entry WITHOUT mutating the ticket.
+    // Multi-gate enforcement: mismatch blocks entry WITHOUT mutating the ticket.
     if (ticketGate && scannerGateId && ticketGate !== scannerGateId) {
-      // Resolve the gate name so the scanner UI shows "Gate A" not the raw id.
       let gateName = ticketGate;
       try {
-        const gateSnap = await db.collection(paths.gatesCollection).doc(ticketGate).get();
-        if (gateSnap.exists) gateName = String(gateSnap.data()?.name ?? ticketGate);
+        const gateRec = await pb.collection(paths.gatesCollection).getOne(ticketGate);
+        gateName = String(gateRec.name ?? ticketGate);
       } catch {}
       await logAction(
         user,
@@ -181,12 +210,12 @@ export async function validateTicket(
       };
     }
 
-    await ref.update({
+    await pb.collection(paths.ticketsCollection).update(ticketId, {
       status: "arrived",
       scanned: true,
       scannedAt: Date.now(),
       scannedBy: user.username,
-      scannedAtGate: scannerGateId ?? null,
+      scannedAtGate: scannerGateId ?? "",
     });
     await logAction(
       user,
@@ -202,10 +231,8 @@ export async function validateTicket(
   }
 
   // Already scanned or in another status — report without mutating.
-  // Include who scanned it and when, to help staff resolve door disputes.
-  const scannedBy = data.scannedBy != null ? String(data.scannedBy) : undefined;
-  const scannedAt =
-    data.scannedAt != null ? Number(data.scannedAt) : undefined;
+  const scannedBy = rec.scannedBy ? String(rec.scannedBy) : undefined;
+  const scannedAt = rec.scannedAt ? Number(rec.scannedAt) : undefined;
   return {
     ok: true,
     outcome: "already",
@@ -215,9 +242,7 @@ export async function validateTicket(
 
 /**
  * Sync offline scans: for each id that is still coming-soon & unscanned,
- * mark it arrived (attributed to the syncing staff member). Idempotent —
- * ids already scanned (e.g. by admin meanwhile) are reported as "already".
- * Returns a per-id outcome map for client reconciliation.
+ * mark it arrived (attributed to the syncing staff member). Idempotent.
  */
 export async function syncOfflineScans(
   ids: string[],
@@ -229,39 +254,37 @@ export async function syncOfflineScans(
   const user = await getAppUser();
   if (!user) return { ok: false, error: "Not authenticated." };
 
-  const db = getAdminDb();
+  const pb = await pbAdmin();
   const results: Record<string, "granted" | "already" | "invalid" | "wrong-gate"> = {};
   let grantedCount = 0;
 
   for (const id of ids) {
-    const snap = await db.collection(paths.ticketsCollection).doc(id).get();
-    if (!snap.exists) {
+    let rec;
+    try {
+      rec = await pb.collection(paths.ticketsCollection).getOne(id);
+    } catch {
       results[id] = "invalid";
       continue;
     }
-    const data = snap.data() as Record<string, unknown>;
-    const status = String(data.status ?? "coming-soon");
-    const scanned = Boolean(data.scanned);
-    const name = String(data.name ?? "");
-    const ticketGate = data.gate != null ? String(data.gate) : null;
+    const status = String(rec.status ?? "coming-soon");
+    const scanned = Boolean(rec.scanned);
+    const ticketGate = rec.gate ? String(rec.gate) : null;
     if (status === "coming-soon" && !scanned) {
-      // Multi-gate check — skip mutation on mismatch.
       if (ticketGate && scannerGateId && ticketGate !== scannerGateId) {
         results[id] = "wrong-gate";
         continue;
       }
-      await snap.ref.update({
+      await pb.collection(paths.ticketsCollection).update(id, {
         status: "arrived",
         scanned: true,
         scannedAt: Date.now(),
         scannedBy: user.username,
-        scannedAtGate: scannerGateId ?? null,
+        scannedAtGate: scannerGateId ?? "",
       });
       results[id] = "granted";
       grantedCount++;
     } else {
       results[id] = "already";
-      void name;
     }
   }
 
@@ -285,12 +308,10 @@ export async function deleteTickets(
   if (user.role !== "admin")
     return { ok: false, error: "Admin role required to delete tickets." };
 
-  const db = getAdminDb();
+  const pb = await pbAdmin();
   let count = 0;
-  // Sequential to match original progress UX; Admin SDK has no client-facing
-  // batch progress, and small N keeps this fast.
   for (const id of ids) {
-    await db.collection(paths.ticketsCollection).doc(id).delete();
+    await pb.collection(paths.ticketsCollection).delete(id);
     count++;
   }
 
@@ -313,12 +334,14 @@ export async function deleteOneTicket(
   if (user.role !== "admin")
     return { ok: false, error: "Admin role required to delete tickets." };
 
-  const db = getAdminDb();
-  // Read the ticket first so the log entry can name the deleted guest.
-  const snap = await db.collection(paths.ticketsCollection).doc(id).get();
-  const name = snap.exists ? String(snap.data()?.name ?? "unknown") : "unknown";
+  const pb = await pbAdmin();
+  let name = "unknown";
+  try {
+    const rec = await pb.collection(paths.ticketsCollection).getOne(id);
+    name = String(rec.name ?? "unknown");
+  } catch {}
 
-  await db.collection(paths.ticketsCollection).doc(id).delete();
+  await pb.collection(paths.ticketsCollection).delete(id);
 
   await logAction(
     user,
@@ -343,13 +366,16 @@ export async function updateGuestName(
   const cleanName = newName.trim();
   if (!cleanName) return { ok: false, error: "Name cannot be empty." };
 
-  const db = getAdminDb();
-  const ref = db.collection(paths.ticketsCollection).doc(ticketId);
-  const snap = await ref.get();
-  if (!snap.exists) return { ok: false, error: "Ticket not found." };
+  const pb = await pbAdmin();
+  let rec;
+  try {
+    rec = await pb.collection(paths.ticketsCollection).getOne(ticketId);
+  } catch {
+    return { ok: false, error: "Ticket not found." };
+  }
 
-  const oldName = String(snap.data()?.name ?? "");
-  await ref.update({ name: cleanName });
+  const oldName = String(rec.name ?? "");
+  await pb.collection(paths.ticketsCollection).update(ticketId, { name: cleanName });
 
   await logAction(
     user,
@@ -364,8 +390,7 @@ export async function updateGuestName(
 
 /**
  * Auto-absent: if the deadline has passed, mark all "coming-soon" tickets
- * as "absent". Mirrors the original performSync logic (script.js:1525-1539).
- * Returns the count of tickets marked absent.
+ * as "absent". Returns the count of tickets marked absent.
  */
 export async function autoMarkAbsent(): Promise<
   { ok: true; count: number; deadline: string | null } | { ok: false; error: string }
@@ -373,12 +398,14 @@ export async function autoMarkAbsent(): Promise<
   const user = await getAppUser();
   if (!user) return { ok: false, error: "Not authenticated." };
 
-  const db = getAdminDb();
+  const pb = await pbAdmin();
 
   // Read the deadline from settings.
-  const settingsSnap = await db.doc(paths.settingsDoc).get();
-  const settingsData = settingsSnap.data();
-  const deadline = settingsData?.deadline as string | undefined;
+  let deadline: string | undefined;
+  try {
+    const settings = await pb.collection(paths.settingsCollection).getOne(paths.settingsId);
+    deadline = settings.deadline as string | undefined;
+  } catch {}
 
   if (!deadline) return { ok: true, count: 0, deadline: null };
 
@@ -390,19 +417,17 @@ export async function autoMarkAbsent(): Promise<
   }
 
   // Deadline has passed — mark all coming-soon tickets as absent.
-  const snap = await db
-    .collection(paths.ticketsCollection)
-    .where("status", "==", "coming-soon")
-    .get();
+  const snap = await pb.collection(paths.ticketsCollection).getFullList({
+    filter: `status = "coming-soon"`,
+  });
 
-  if (snap.empty) return { ok: true, count: 0, deadline };
+  if (snap.length === 0) return { ok: true, count: 0, deadline };
 
-  const batch = db.batch();
-  snap.docs.forEach((d) => batch.update(d.ref, { status: "absent" }));
-  await batch.commit();
+  await Promise.all(
+    snap.map((d) => pb.collection(paths.ticketsCollection).update(d.id, { status: "absent" }))
+  );
 
   revalidatePath("/guests");
-  // Bust the ISR cache for each affected ticket page.
-  snap.docs.forEach((d) => revalidatePath(`/ticket/${d.id}`));
-  return { ok: true, count: snap.size, deadline };
+  snap.forEach((d) => revalidatePath(`/ticket/${d.id}`));
+  return { ok: true, count: snap.length, deadline };
 }

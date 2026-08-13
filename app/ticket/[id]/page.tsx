@@ -4,7 +4,7 @@
 
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
-import { getAdminDb } from "@/lib/firebase/admin";
+import { pbAdmin } from "@/lib/pb/server";
 import { paths } from "@/lib/paths";
 import { TicketView } from "@/components/tickets/ticket-view";
 
@@ -13,41 +13,42 @@ import { TicketView } from "@/components/tickets/ticket-view";
 export const revalidate = 300;
 
 // Dynamic OG metadata for link previews (WhatsApp, social media).
-// OG image is served at /ticket/{id}/og-image — a JPEG snapshot of the exact
-// live shader ticket when one has been captured at creation time, else an SVG.
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
   const { id } = await params;
-  const db = getAdminDb();
-  const [snap, ogSnap] = await Promise.all([
-    db.collection(paths.ticketsCollection).doc(id).get(),
-    db.collection(paths.ogSnapshotsCollection).doc(id).get(),
-  ]);
+  const pb = await pbAdmin();
 
-  if (!snap.exists) {
+  let ticketRec: Record<string, unknown> | null = null;
+  let ogImage = "";
+  try {
+    ticketRec = await pb.collection(paths.ticketsCollection).getOne(id);
+  } catch {
+    ticketRec = null;
+  }
+  try {
+    const og = await pb.collection(paths.ogSnapshotsCollection).getOne(id);
+    ogImage = String(og.image ?? "");
+  } catch {
+    /* no snapshot — SVG fallback */
+  }
+
+  if (!ticketRec) {
     return { title: "Entry Pass", description: "View your interactive event ticket." };
   }
 
-  const data = snap.data() as Record<string, unknown>;
-  const name = String(data.name ?? "Guest");
-  const ticketType = String(data.ticketType ?? "Classic");
+  const name = String(ticketRec.name ?? "Guest");
+  const ticketType = String(ticketRec.ticketType ?? "Classic");
   const typeLabel = ticketType === "Gold" ? "VVIP" : ticketType === "Diamond" ? "VIP" : ticketType === "SVIP" ? "SVIP" : "Classic";
 
-  const settingsSnap = await db.doc(paths.settingsDoc).get();
-  const eventName = String(settingsSnap.data()?.name ?? "Event");
+  let eventName = "Event";
+  try {
+    const settings = await pb.collection(paths.settingsCollection).getOne(paths.settingsId);
+    eventName = String(settings.name ?? "Event");
+  } catch {}
 
-  // JPEG snapshot of the live shader if one exists, else the SVG fallback.
-  const hasSnapshot = Boolean(
-    ogSnap.exists &&
-      String(ogSnap.data()?.image ?? "").startsWith("data:image/jpeg;base64,")
-  );
+  const hasSnapshot = ogImage.startsWith("data:image/jpeg;base64,");
   const imageType = hasSnapshot ? "image/jpeg" : "image/svg+xml";
 
-  const images = [
-    {
-      url: `/ticket/${id}/og-image`,
-      alt: `${name}'s Entry Pass`,
-    },
-  ];
+  const images = [{ url: `/ticket/${id}/og-image`, alt: `${name}'s Entry Pass` }];
 
   return {
     title: `${name}'s Entry Pass — ${typeLabel}`,
@@ -59,9 +60,7 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
       type: "website",
       siteName: "Entry Pass",
     },
-    other: {
-      "og:image:type": imageType,
-    },
+    other: { "og:image:type": imageType },
     twitter: {
       card: "summary_large_image",
       title: `${name}'s Entry Pass — ${typeLabel}`,
@@ -88,52 +87,56 @@ interface SettingsData {
 
 export default async function TicketPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
+  const pb = await pbAdmin();
 
-  // Fetch ticket + settings server-side (Admin SDK bypasses rules).
-  const db = getAdminDb();
-  const [ticketSnap, settingsSnap] = await Promise.all([
-    db.collection(paths.ticketsCollection).doc(id).get(),
-    db.doc(paths.settingsDoc).get(),
-  ]);
-
-  if (!ticketSnap.exists) {
+  let t: Record<string, unknown>;
+  try {
+    t = await pb.collection(paths.ticketsCollection).getOne(id);
+  } catch {
     notFound();
   }
 
-  const t = ticketSnap.data() as Record<string, unknown>;
   const groupId = t.groupId ? String(t.groupId) : null;
 
   // Resolve the gate name if this ticket has an assigned gate.
   let gateName: string | undefined;
-  const ticketGateId = t.gate != null ? String(t.gate) : null;
+  const ticketGateId = t.gate ? String(t.gate) : null;
   if (ticketGateId) {
-    const gateSnap = await db.collection(paths.gatesCollection).doc(ticketGateId).get();
-    if (gateSnap.exists) {
-      gateName = String(gateSnap.data()?.name ?? ticketGateId);
-    }
+    try {
+      const gateRec = await pb.collection(paths.gatesCollection).getOne(ticketGateId);
+      gateName = String(gateRec.name ?? ticketGateId);
+    } catch {}
   }
+
+  let settings: SettingsData = { name: "", place: "" };
+  try {
+    const s = await pb.collection(paths.settingsCollection).getOne(paths.settingsId);
+    settings = { name: String(s.name ?? ""), place: String(s.place ?? "") };
+  } catch {}
 
   // Fetch all family members if this ticket belongs to a group.
   let tickets: TicketData[] = [];
   if (groupId) {
-    const groupSnap = await db
-      .collection(paths.ticketsCollection)
-      .where("groupId", "==", groupId)
-      .get();
+    const groupRecs = await pb.collection(paths.ticketsCollection).getFullList({
+      filter: `groupId = "${groupId}"`,
+    });
 
-    // Resolve gate names for all group members.
     const gateCache = new Map<string, string>();
     tickets = await Promise.all(
-      groupSnap.docs.map(async (doc) => {
-        const d = doc.data();
+      groupRecs.map(async (doc) => {
+        const d = doc as Record<string, unknown>;
         let gName: string | undefined;
-        const gId = d.gate != null ? String(d.gate) : null;
+        const gId = d.gate ? String(d.gate) : null;
         if (gId) {
           if (gateCache.has(gId)) {
             gName = gateCache.get(gId);
           } else {
-            const gs = await db.collection(paths.gatesCollection).doc(gId).get();
-            gName = gs.exists ? String(gs.data()?.name ?? gId) : gId;
+            try {
+              const gs = await pb.collection(paths.gatesCollection).getOne(gId);
+              gName = String(gs.name ?? gId);
+            } catch {
+              gName = gId;
+            }
             gateCache.set(gId, gName!);
           }
         }
@@ -151,14 +154,15 @@ export default async function TicketPage({ params }: { params: Promise<{ id: str
 
     // Sort: parent first (no parentName), then kids by age descending.
     tickets.sort((a, b) => {
-      const aIsParent = !(groupSnap.docs.find((d) => d.id === a.id)?.data()?.parentName);
-      const bIsParent = !(groupSnap.docs.find((d) => d.id === b.id)?.data()?.parentName);
+      const aRec = groupRecs.find((d) => d.id === a.id) as Record<string, unknown> | undefined;
+      const bRec = groupRecs.find((d) => d.id === b.id) as Record<string, unknown> | undefined;
+      const aIsParent = !aRec?.parentName;
+      const bIsParent = !bRec?.parentName;
       if (aIsParent && !bIsParent) return -1;
       if (!aIsParent && bIsParent) return 1;
       return b.age - a.age;
     });
   } else {
-    // Standalone ticket — single-element array.
     tickets = [
       {
         id,
@@ -171,12 +175,6 @@ export default async function TicketPage({ params }: { params: Promise<{ id: str
       },
     ];
   }
-
-  const s = settingsSnap.data();
-  const settings: SettingsData = {
-    name: String(s?.name ?? ""),
-    place: String(s?.place ?? ""),
-  };
 
   return <TicketView tickets={tickets} settings={settings} />;
 }

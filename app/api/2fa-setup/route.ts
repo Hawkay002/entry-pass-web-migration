@@ -3,10 +3,10 @@
 // DELETE: disables 2FA. All admin-only.
 
 import { NextResponse } from "next/server";
-import { getAdminDb } from "@/lib/firebase/admin";
+import { pbAdmin } from "@/lib/pb/server";
 import { paths } from "@/lib/paths";
-import { getAppUser } from "@/lib/firebase/server-auth";
-import { logAction } from "@/lib/firebase/log";
+import { getAppUser } from "@/lib/pb/server-auth";
+import { logAction } from "@/lib/pb/log";
 import {
   generate2FASecret,
   generateQRUrl,
@@ -19,33 +19,34 @@ import {
 
 export const dynamic = "force-dynamic";
 
-const TWO_FACTOR_DOC = "admin_settings/two_factor";
-
 /** Read the admin's 2FA config (or null if not set up). */
 async function readConfig(uid: string): Promise<TwoFactorConfig | null> {
-  const snap = await getAdminDb().doc(TWO_FACTOR_DOC).get();
-  const admins = snap.data()?.admins as Record<string, TwoFactorConfig> | undefined;
-  return admins?.[uid] ?? null;
+  const pb = await pbAdmin();
+  try {
+    const rec = await pb.collection(paths.twoFactorCollection).getOne(paths.twoFactorId);
+    const admins = (rec.admins as Record<string, TwoFactorConfig>) ?? {};
+    return admins[uid] ?? null;
+  } catch {
+    return null;
+  }
 }
 
 /** Write the admin's 2FA config. */
 async function writeConfig(uid: string, config: TwoFactorConfig): Promise<void> {
-  const db = getAdminDb();
-  const ref = db.doc(TWO_FACTOR_DOC);
-  const snap = await ref.get();
-  const admins = (snap.data()?.admins as Record<string, TwoFactorConfig>) ?? {};
+  const pb = await pbAdmin();
+  const rec = await pb.collection(paths.twoFactorCollection).getOne(paths.twoFactorId);
+  const admins = (rec.admins as Record<string, TwoFactorConfig>) ?? {};
   admins[uid] = config;
-  await ref.set({ admins }, { merge: true });
+  await pb.collection(paths.twoFactorCollection).update(paths.twoFactorId, { admins });
 }
 
 /** Remove the admin's 2FA config. */
 async function removeConfig(uid: string): Promise<void> {
-  const db = getAdminDb();
-  const ref = db.doc(TWO_FACTOR_DOC);
-  const snap = await ref.get();
-  const admins = (snap.data()?.admins as Record<string, TwoFactorConfig>) ?? {};
+  const pb = await pbAdmin();
+  const rec = await pb.collection(paths.twoFactorCollection).getOne(paths.twoFactorId);
+  const admins = (rec.admins as Record<string, TwoFactorConfig>) ?? {};
   delete admins[uid];
-  await ref.set({ admins }, { merge: true });
+  await pb.collection(paths.twoFactorCollection).update(paths.twoFactorId, { admins });
 }
 
 // GET — returns QR code + secret for setup (does NOT enable yet).

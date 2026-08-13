@@ -1,13 +1,12 @@
 // app/api/kiosk-checkin/route.ts — public self check-in endpoint.
 // Validates a kiosk PIN + ticket id, marks the ticket arrived.
 // Rate-limited: 5 failed PIN attempts per IP per 5 minutes.
-// Supports multiple kiosks — each identified by kioskId, with its own PIN + gate.
 
 import { NextResponse } from "next/server";
-import { getAdminDb } from "@/lib/firebase/admin";
+import { pbAdmin } from "@/lib/pb/server";
 import { paths } from "@/lib/paths";
 import { getClientIp, recordFailure, clearRateLimit } from "@/lib/rate-limit";
-import { logKioskAction } from "@/lib/redis-log";
+import { logKioskAction } from "@/lib/pb/log";
 import type { KioskConfig } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
@@ -19,10 +18,14 @@ type CheckinResponse =
   | { ok: true; outcome: "granted" | "already" | "invalid" | "wrong-gate"; ticket: { name: string; id: string; status: string; expectedGate?: string | null } | null }
   | { ok: false; error: string };
 
-async function findKiosk(db: ReturnType<typeof getAdminDb>, kioskId: string): Promise<KioskConfig | null> {
-  const snap = await db.doc(paths.adminSecurityDoc).get();
-  const kiosks = Array.isArray(snap.data()?.kiosks) ? (snap.data()!.kiosks as KioskConfig[]) : [];
-  return kiosks.find((k) => k.id === kioskId) ?? null;
+async function findKiosk(pb: Awaited<ReturnType<typeof pbAdmin>>, kioskId: string): Promise<KioskConfig | null> {
+  try {
+    const rec = await pb.collection(paths.kiosksConfigCollection).getOne(paths.kiosksConfigId);
+    const kiosks = Array.isArray(rec.kiosks) ? (rec.kiosks as KioskConfig[]) : [];
+    return kiosks.find((k) => k.id === kioskId) ?? null;
+  } catch {
+    return null;
+  }
 }
 
 export async function POST(request: Request): Promise<Response> {
@@ -47,15 +50,35 @@ export async function POST(request: Request): Promise<Response> {
     );
   }
 
+  // PIN check sentinel — used to validate the PIN without consuming a check-in.
+  if (ticketId === "kiosk-pin-check") {
+    try {
+      const pb = await pbAdmin();
+      const kiosk = await findKiosk(pb, kioskId);
+      if (!kiosk || kiosk.pin.length < 4 || pin !== kiosk.pin) {
+        return NextResponse.json<CheckinResponse>(
+          { ok: false, error: kiosk ? "Incorrect PIN." : "Kiosk not found." },
+          { status: 403 }
+        );
+      }
+      return NextResponse.json<CheckinResponse>({ ok: true, outcome: "granted", ticket: null });
+    } catch {
+      return NextResponse.json<CheckinResponse>(
+        { ok: false, error: "Kiosk not found." },
+        { status: 403 }
+      );
+    }
+  }
+
   try {
-    const db = getAdminDb();
+    const pb = await pbAdmin();
 
     // Rate-limit by IP + kioskId.
     const ip = getClientIp(request);
     const failKey = `kiosk_fail:${kioskId}:${ip}`;
 
     // Find the kiosk config.
-    const kiosk = await findKiosk(db, kioskId);
+    const kiosk = await findKiosk(pb, kioskId);
     if (!kiosk || kiosk.pin.length < 4 || pin !== kiosk.pin) {
       const state = await recordFailure(failKey, FAIL_LIMIT, FAIL_WINDOW_SEC);
       if (state.blocked) {
@@ -73,10 +96,10 @@ export async function POST(request: Request): Promise<Response> {
     await clearRateLimit(failKey);
 
     // Look up the ticket.
-    const ref = db.collection(paths.ticketsCollection).doc(ticketId);
-    const snap = await ref.get();
-
-    if (!snap.exists) {
+    let rec;
+    try {
+      rec = await pb.collection(paths.ticketsCollection).getOne(ticketId);
+    } catch {
       await logKioskAction("SELF_CHECKIN", `Invalid self check-in: ${ticketId.slice(0, 8)}`);
       return NextResponse.json<CheckinResponse>({
         ok: true,
@@ -85,21 +108,19 @@ export async function POST(request: Request): Promise<Response> {
       });
     }
 
-    const data = snap.data() as Record<string, unknown>;
-    const name = String(data.name ?? "");
-    const status = String(data.status ?? "coming-soon");
-    const scanned = Boolean(data.scanned);
-    const ticketGate = data.gate != null ? String(data.gate) : null;
+    const name = String(rec.name ?? "");
+    const status = String(rec.status ?? "coming-soon");
+    const scanned = Boolean(rec.scanned);
+    const ticketGate = rec.gate ? String(rec.gate) : null;
 
     // Idempotent: only grant if still coming-soon & unscanned.
     if (status === "coming-soon" && !scanned) {
       // Multi-gate enforcement.
       if (ticketGate && kiosk.gateId && ticketGate !== kiosk.gateId) {
-        // Resolve gate name so the kiosk UI shows "Gate A" not the raw id.
         let gateName = ticketGate;
         try {
-          const gateSnap = await db.collection(paths.gatesCollection).doc(ticketGate).get();
-          if (gateSnap.exists) gateName = String(gateSnap.data()?.name ?? ticketGate);
+          const gateRec = await pb.collection(paths.gatesCollection).getOne(ticketGate);
+          gateName = String(gateRec.name ?? ticketGate);
         } catch {}
         await logKioskAction(
           "SELF_CHECKIN",
@@ -112,12 +133,12 @@ export async function POST(request: Request): Promise<Response> {
         });
       }
 
-      await ref.update({
+      await pb.collection(paths.ticketsCollection).update(ticketId, {
         status: "arrived",
         scanned: true,
         scannedAt: Date.now(),
         scannedBy: `KIOSK:${kiosk.name}`,
-        scannedAtGate: kiosk.gateId ?? null,
+        scannedAtGate: kiosk.gateId ?? "",
       });
       await logKioskAction(
         "SELF_CHECKIN",

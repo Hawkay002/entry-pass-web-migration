@@ -1,12 +1,12 @@
-// app/actions/contacts.ts — CRUD for the help_contacts collection.
+// app/actions/contacts.ts — CRUD for the contacts collection.
 // Admin can add/edit/delete contacts for the help tray.
 
 "use server";
 
-import { getAdminDb } from "@/lib/firebase/admin";
+import { pbAdmin } from "@/lib/pb/server";
 import { paths } from "@/lib/paths";
-import { getAppUser } from "@/lib/firebase/server-auth";
-import { logAction } from "@/lib/firebase/log";
+import { getAppUser } from "@/lib/pb/server-auth";
+import { logAction } from "@/lib/pb/log";
 import type { HelpContact } from "@/lib/types";
 
 /** Fetch all contacts (any authenticated user). */
@@ -16,23 +16,20 @@ export async function fetchContacts(): Promise<
   const user = await getAppUser();
   if (!user) return { ok: false, error: "Not authenticated." };
 
-  const snap = await getAdminDb()
-    .collection(paths.contactsCollection)
-    .orderBy("createdAt", "asc")
-    .get();
-
-  const contacts: HelpContact[] = snap.docs.map((d) => {
-    const data = d.data();
-    return {
-      id: d.id,
-      role: String(data.role ?? ""),
-      name: String(data.name ?? ""),
-      phone: data.phone ? String(data.phone) : undefined,
-      whatsapp: data.whatsapp ? String(data.whatsapp) : undefined,
-      description: String(data.description ?? ""),
-      createdAt: Number(data.createdAt ?? 0),
-    };
+  const pb = await pbAdmin();
+  const records = await pb.collection(paths.contactsCollection).getFullList({
+    sort: "createdAt",
   });
+
+  const contacts: HelpContact[] = records.map((r) => ({
+    id: r.id,
+    role: String(r.role ?? ""),
+    name: String(r.name ?? ""),
+    phone: r.phone ? String(r.phone) : undefined,
+    whatsapp: r.whatsapp ? String(r.whatsapp) : undefined,
+    description: String(r.description ?? ""),
+    createdAt: Number(r.createdAt ?? 0),
+  }));
 
   return { ok: true, contacts };
 }
@@ -49,11 +46,12 @@ export async function createContact(input: {
   if (!user || user.role !== "admin")
     return { ok: false, error: "Admin role required." };
 
-  await getAdminDb().collection(paths.contactsCollection).add({
+  const pb = await pbAdmin();
+  await pb.collection(paths.contactsCollection).create({
     role: input.role.trim(),
     name: input.name.trim(),
-    phone: input.phone?.trim() || null,
-    whatsapp: input.whatsapp?.trim() || null,
+    phone: input.phone?.trim() || "",
+    whatsapp: input.whatsapp?.trim() || "",
     description: input.description.trim(),
     createdAt: Date.now(),
   });
@@ -77,11 +75,12 @@ export async function updateContact(
   if (!user || user.role !== "admin")
     return { ok: false, error: "Admin role required." };
 
-  await getAdminDb().collection(paths.contactsCollection).doc(contactId).update({
+  const pb = await pbAdmin();
+  await pb.collection(paths.contactsCollection).update(contactId, {
     role: input.role.trim(),
     name: input.name.trim(),
-    phone: input.phone?.trim() || null,
-    whatsapp: input.whatsapp?.trim() || null,
+    phone: input.phone?.trim() || "",
+    whatsapp: input.whatsapp?.trim() || "",
     description: input.description.trim(),
   });
 
@@ -97,7 +96,8 @@ export async function deleteContact(
   if (!user || user.role !== "admin")
     return { ok: false, error: "Admin role required." };
 
-  await getAdminDb().collection(paths.contactsCollection).doc(contactId).delete();
+  const pb = await pbAdmin();
+  await pb.collection(paths.contactsCollection).delete(contactId);
 
   await logAction(user, "CONFIG_CHANGE", `Deleted contact: ${contactId}.`);
   return { ok: true };

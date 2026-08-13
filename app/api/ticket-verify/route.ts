@@ -3,7 +3,7 @@
 // Rate-limited: 5 wrong phone attempts per IP per 5 minutes.
 
 import { NextResponse } from "next/server";
-import { getAdminDb } from "@/lib/firebase/admin";
+import { pbAdmin } from "@/lib/pb/server";
 import { paths } from "@/lib/paths";
 import { getClientIp, recordFailure, clearRateLimit } from "@/lib/rate-limit";
 
@@ -41,11 +41,12 @@ export async function POST(request: Request): Promise<Response> {
   const failKey = `ticket_fail:${ip}`;
 
   try {
-    const db = getAdminDb();
-    const snap = await db.collection(paths.ticketsCollection).doc(ticketId).get();
-
-    if (!snap.exists) {
-      // Don't reveal whether the ticket exists — just say verification failed.
+    const pb = await pbAdmin();
+    let rec;
+    try {
+      rec = await pb.collection(paths.ticketsCollection).getOne(ticketId);
+    } catch {
+      // Don't reveal whether the ticket exists.
       const state = await recordFailure(failKey, FAIL_LIMIT, FAIL_WINDOW_SEC);
       if (state.blocked) {
         return NextResponse.json<VerifyResponse>(
@@ -59,8 +60,7 @@ export async function POST(request: Request): Promise<Response> {
       );
     }
 
-    const data = snap.data() as Record<string, unknown>;
-    const storedPhone = String(data.phone ?? "").replace(/\D/g, "");
+    const storedPhone = String(rec.phone ?? "").replace(/\D/g, "");
 
     // Match the full phone number including country code.
     const phoneMatches = storedPhone === phone;

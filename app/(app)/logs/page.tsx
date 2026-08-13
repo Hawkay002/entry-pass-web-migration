@@ -3,7 +3,7 @@
 // client table for filter/search/select/delete.
 
 import { redirect } from "next/navigation";
-import { getAppUser } from "@/lib/firebase/server-auth";
+import { getAppUser } from "@/lib/pb/server-auth";
 import { fetchActivityLogs } from "@/app/actions/admin";
 import { LogsTable } from "@/components/logs/logs-table";
 

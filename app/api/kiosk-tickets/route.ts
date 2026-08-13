@@ -3,7 +3,7 @@
 // (NO names, phones, or other PII). Validates against a specific kiosk's PIN.
 
 import { NextResponse } from "next/server";
-import { getAdminDb } from "@/lib/firebase/admin";
+import { pbAdmin } from "@/lib/pb/server";
 import { paths } from "@/lib/paths";
 import { getClientIp, recordFailure, clearRateLimit } from "@/lib/rate-limit";
 import type { KioskConfig } from "@/lib/types";
@@ -17,10 +17,14 @@ type TicketsResponse =
   | { ok: true; tickets: { id: string; status: string; scanned: boolean }[] }
   | { ok: false; error: string };
 
-async function findKiosk(db: ReturnType<typeof getAdminDb>, kioskId: string): Promise<KioskConfig | null> {
-  const snap = await db.doc(paths.adminSecurityDoc).get();
-  const kiosks = Array.isArray(snap.data()?.kiosks) ? (snap.data()!.kiosks as KioskConfig[]) : [];
-  return kiosks.find((k) => k.id === kioskId) ?? null;
+async function findKiosk(pb: Awaited<ReturnType<typeof pbAdmin>>, kioskId: string): Promise<KioskConfig | null> {
+  try {
+    const rec = await pb.collection(paths.kiosksConfigCollection).getOne(paths.kiosksConfigId);
+    const kiosks = Array.isArray(rec.kiosks) ? (rec.kiosks as KioskConfig[]) : [];
+    return kiosks.find((k) => k.id === kioskId) ?? null;
+  } catch {
+    return null;
+  }
 }
 
 export async function POST(request: Request): Promise<Response> {
@@ -45,12 +49,12 @@ export async function POST(request: Request): Promise<Response> {
   }
 
   try {
-    const db = getAdminDb();
+    const pb = await pbAdmin();
     const ip = getClientIp(request);
     const failKey = `kiosk_fail:${kioskId}:${ip}`;
 
     // Find the kiosk + validate PIN.
-    const kiosk = await findKiosk(db, kioskId);
+    const kiosk = await findKiosk(pb, kioskId);
     if (!kiosk || kiosk.pin.length < 4 || pin !== kiosk.pin) {
       const state = await recordFailure(failKey, FAIL_LIMIT, FAIL_WINDOW_SEC);
       if (state.blocked) {
@@ -68,15 +72,14 @@ export async function POST(request: Request): Promise<Response> {
     await clearRateLimit(failKey);
 
     // Return ONLY the minimal fields needed for offline validation. No PII.
-    const snap = await db.collection(paths.ticketsCollection).get();
-    const tickets = snap.docs.map((d) => {
-      const data = d.data() as Record<string, unknown>;
-      return {
-        id: d.id,
-        status: String(data.status ?? "coming-soon"),
-        scanned: Boolean(data.scanned),
-      };
+    const snap = await pb.collection(paths.ticketsCollection).getFullList({
+      fields: "id,status,scanned",
     });
+    const tickets = snap.map((d) => ({
+      id: d.id,
+      status: String(d.status ?? "coming-soon"),
+      scanned: Boolean(d.scanned),
+    }));
 
     return NextResponse.json<TicketsResponse>({ ok: true, tickets });
   } catch (err) {

@@ -2,10 +2,9 @@
 // protected routes. Runs on the Edge runtime.
 // (Next 16 renamed the middleware convention to "proxy".)
 //
-// Uses a lightweight cookie check here (presence + decode), because full
-// Firebase session-cookie verification requires the Node runtime (firebase-admin
-// needs crypto/KeyObject APIs not available on the edge). The authoritative
-// verification happens in Server Components / actions via verifySessionCookie().
+// Lightweight cookie presence check here; full Pocketbase token verification
+// (authRefresh validates the JWT signature) needs the Node runtime, so the
+// authoritative check happens in Server Components / actions via getAppUser().
 
 import { NextResponse, type NextRequest } from "next/server";
 import { authConfig } from "@/lib/env";

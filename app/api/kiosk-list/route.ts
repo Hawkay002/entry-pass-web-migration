@@ -2,7 +2,7 @@
 // available kiosks (id + name only — no PINs). Used by the kiosk picker.
 
 import { NextResponse } from "next/server";
-import { getAdminDb } from "@/lib/firebase/admin";
+import { pbAdmin } from "@/lib/pb/server";
 import { paths } from "@/lib/paths";
 import type { KioskConfig } from "@/lib/types";
 
@@ -10,10 +10,9 @@ export const dynamic = "force-dynamic";
 
 export async function GET(): Promise<Response> {
   try {
-    const snap = await getAdminDb().doc(paths.adminSecurityDoc).get();
-    const kiosks = Array.isArray(snap.data()?.kiosks)
-      ? (snap.data()!.kiosks as KioskConfig[])
-      : [];
+    const pb = await pbAdmin();
+    const rec = await pb.collection(paths.kiosksConfigCollection).getOne(paths.kiosksConfigId);
+    const kiosks = Array.isArray(rec.kiosks) ? (rec.kiosks as KioskConfig[]) : [];
 
     // Return only id + name — never the PIN.
     return NextResponse.json({

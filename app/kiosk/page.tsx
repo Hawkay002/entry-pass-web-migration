@@ -7,11 +7,10 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { doc, onSnapshot } from "firebase/firestore";
 import { QrScanner, type ScanOutcome } from "@/components/scanner/qr-scanner";
 import { cn } from "@/lib/utils";
 import { WifiOff, CloudUpload, Delete, ArrowUpRight, LoaderCircle, Eye, EyeOff, TicketX, MessageCircle } from "lucide-react";
-import { db } from "@/lib/firebase/client";
+import { subscribePublicCollection } from "@/lib/pb/realtime";
 import { paths } from "@/lib/paths";
 import {
   cacheKioskTickets,
@@ -61,15 +60,22 @@ export default function KioskPage() {
   // If the kiosk is deleted while active, show 404.
   const [kioskDeleted, setKioskDeleted] = useState(false);
 
-  // Realtime listener on the public kiosk_status doc.
-  // Detects deletion instantly (→ 404) and config edits (→ re-authenticate).
+  // Realtime listener on the public kiosk_status record (SSE).
+  // kiosk_status is public-read, so the unauthenticated kiosk page can
+  // subscribe directly. Detects deletion instantly (→ 404) and config edits
+  // (→ re-authenticate).
   const lastUpdatedAtRef = useRef<number>(0);
   useEffect(() => {
     if (!kioskId) return;
-    const unsub = onSnapshot(
-      doc(db, paths.kioskStatusDoc(kioskId)),
-      (snap) => {
-        if (!snap.exists()) {
+    let unsub: (() => void) | null = null;
+    let cancelled = false;
+
+    subscribePublicCollection(
+      paths.kioskStatusCollection,
+      kioskId,
+      (event, record) => {
+        if (cancelled) return;
+        if (event === "delete" || !record) {
           // Kiosk was deleted (or factory reset) — wipe cache + show 404.
           clearKioskCache();
           sessionStorage.removeItem(SESSION_KEY);
@@ -77,19 +83,30 @@ export default function KioskPage() {
           setKioskDeleted(true);
           return;
         }
-        const newUpdatedAt = snap.data()?.updatedAt ?? 0;
+        const newUpdatedAt = Number(record.updatedAt ?? 0);
         if (lastUpdatedAtRef.current > 0 && newUpdatedAt !== lastUpdatedAtRef.current) {
           // Config changed (name/PIN/gate edit) — force re-authentication.
           sessionStorage.removeItem(SESSION_KEY);
           setStoredPin(null);
         }
         lastUpdatedAtRef.current = newUpdatedAt;
-      },
-      () => {
-        // Permission error or network failure — silently fall back to polling.
       }
-    );
-    return unsub;
+    )
+      .then((fn) => {
+        if (cancelled) {
+          try { fn(); } catch {}
+          return;
+        }
+        unsub = fn;
+      })
+      .catch(() => {
+        // Network failure — silently fall back to the API-driven polling.
+      });
+
+    return () => {
+      cancelled = true;
+      if (unsub) unsub();
+    };
   }, [kioskId]);
 
   // Avoid hydration mismatch — render nothing until client mounts.

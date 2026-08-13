@@ -1,13 +1,12 @@
 // app/actions/admin.ts — server actions for admin-only operations.
 // All authenticated via session cookie + role-checked server-side.
-// Replaces the original app's client-side-only admin writes + plaintext passwords.
 
 "use server";
 
-import { getAdminDb } from "@/lib/firebase/admin";
+import { pbAdmin } from "@/lib/pb/server";
 import { paths } from "@/lib/paths";
-import { getAppUser } from "@/lib/firebase/server-auth";
-import { logAction } from "@/lib/firebase/log";
+import { getAppUser } from "@/lib/pb/server-auth";
+import { logAction, fetchAllLogs, deleteLogs as deleteLogsFromStore } from "@/lib/pb/log";
 import { requireAdmin } from "@/lib/auth";
 import type {
   ActivityLog,
@@ -16,10 +15,9 @@ import type {
   KioskConfig,
 } from "@/lib/types";
 import { revalidatePath } from "next/cache";
-import { fetchAllLogs, deleteLogsFromRedis } from "@/lib/redis-log";
 import { disableMultiGate } from "@/app/actions/gates";
 
-// ---------------- Activity Logs (Redis + Firestore) ----------------
+// ---------------- Activity Logs ----------------
 
 export async function fetchActivityLogs(): Promise<
   { ok: true; logs: ActivityLog[] } | { ok: false; error: string }
@@ -29,7 +27,6 @@ export async function fetchActivityLogs(): Promise<
   if (user.role !== "admin")
     return { ok: false, error: "Admin role required." };
 
-  // Full history: Redis (oldest batch) + Firestore (newer overflow).
   const entries = await fetchAllLogs();
   const logs: ActivityLog[] = entries.map((e) => ({
     id: e.id,
@@ -49,7 +46,7 @@ export async function deleteLogs(
   const user = await getAppUser();
   requireAdmin(user);
 
-  const count = await deleteLogsFromRedis(ids);
+  const count = await deleteLogsFromStore(ids);
   await logAction(user, "LOG_DELETE", `Deleted ${count} log(s).`);
   revalidatePath("/logs");
   return { ok: true, count };
@@ -63,35 +60,32 @@ export async function saveSettings(
   const user = await getAppUser();
   if (!user) return { ok: false, error: "Not authenticated." };
 
-  // multiGate + gateCategories are admin-only — staff can save name/place/
-  // deadline but cannot toggle multi-gate mode or change categories.
-
+  const pb = await pbAdmin();
   // Read current settings to know the existing multiGate value.
-  const db = getAdminDb();
-  const currentSnap = await db.doc(paths.settingsDoc).get();
-  const currentMultiGate = Boolean(currentSnap.data()?.multiGate);
+  let currentMultiGate = false;
+  let currentCategories: string[] = [];
+  try {
+    const current = await pb.collection(paths.settingsCollection).getOne(paths.settingsId);
+    currentMultiGate = Boolean(current.multiGate);
+    currentCategories = Array.isArray(current.gateCategories)
+      ? (current.gateCategories as string[])
+      : [];
+  } catch {}
 
-  // If a non-admin tries to change multi-gate fields, silently keep the
-  // existing value rather than erroring (they can't see the toggle anyway).
   const effectiveMultiGate = user.role === "admin" ? Boolean(settings.multiGate) : currentMultiGate;
   const effectiveCategories =
     user.role === "admin" && Array.isArray(settings.gateCategories)
       ? settings.gateCategories
-      : Array.isArray(currentSnap.data()?.gateCategories)
-        ? currentSnap.data()!.gateCategories
-        : [];
+      : currentCategories;
 
-  await db.doc(paths.settingsDoc).set(
-    {
-      name: settings.name,
-      place: settings.place,
-      deadline: settings.deadline,
-      timezone: settings.timezone ?? "+05:30",
-      multiGate: effectiveMultiGate,
-      gateCategories: effectiveCategories,
-    },
-      { merge: true }
-    );
+  await pb.collection(paths.settingsCollection).update(paths.settingsId, {
+    name: settings.name,
+    place: settings.place,
+    deadline: settings.deadline,
+    timezone: settings.timezone ?? "+05:30",
+    multiGate: effectiveMultiGate,
+    gateCategories: effectiveCategories,
+  });
 
   await logAction(
     user,
@@ -109,25 +103,22 @@ export async function clearSettings(): Promise<{ ok: true } | { ok: false; error
   const user = await getAppUser();
   if (!user) return { ok: false, error: "Not authenticated." };
 
-  const db = getAdminDb();
+  const pb = await pbAdmin();
 
   // Cascade multi-gate off before clearing (deletes gates + clears tickets).
   await disableMultiGate();
 
-  await db.doc(paths.settingsDoc).set(
-    { name: "", place: "", deadline: "", multiGate: false },
-    { merge: true }
-  );
+  await pb.collection(paths.settingsCollection).update(paths.settingsId, {
+    name: "",
+    place: "",
+    deadline: "",
+    multiGate: false,
+  });
 
   await logAction(user, "CONFIG_CHANGE", "Cleared all event settings.");
   return { ok: true };
 }
 
-/**
- * Save (or clear) the kiosk PIN. Empty string disables the public kiosk.
- * Stored in the admin-only security doc (NOT the public settings doc) so
- * regular staff cannot read it via the client SDK.
- */
 // ---------------- Multi-Kiosk ----------------
 
 function normalizePin(pin: string): string {
@@ -139,15 +130,19 @@ function generateKioskId(): string {
 }
 
 async function readKiosks(): Promise<KioskConfig[]> {
-  const snap = await getAdminDb().doc(paths.adminSecurityDoc).get();
-  const arr = snap.data()?.kiosks;
-  return Array.isArray(arr) ? (arr as KioskConfig[]) : [];
+  const pb = await pbAdmin();
+  try {
+    const rec = await pb.collection(paths.kiosksConfigCollection).getOne(paths.kiosksConfigId);
+    const arr = rec.kiosks;
+    return Array.isArray(arr) ? (arr as KioskConfig[]) : [];
+  } catch {
+    return [];
+  }
 }
 
 async function writeKiosks(kiosks: KioskConfig[]): Promise<void> {
-  await getAdminDb()
-    .doc(paths.adminSecurityDoc)
-    .set({ kiosks }, { merge: true });
+  const pb = await pbAdmin();
+  await pb.collection(paths.kiosksConfigCollection).update(paths.kiosksConfigId, { kiosks });
 }
 
 /** Create a new kiosk. Returns its id. */
@@ -170,8 +165,16 @@ export async function createKiosk(
   kiosks.push({ id, name: cleanName, pin: cleanPin, gateId, createdAt: Date.now() });
   await writeKiosks(kiosks);
 
-  // Create the public status doc so the kiosk page can listen via onSnapshot.
-  await getAdminDb().doc(paths.kioskStatusDoc(id)).set({ updatedAt: Date.now() });
+  // Create the public status record so the kiosk page can listen via subscribe.
+  const pb = await pbAdmin();
+  try {
+    await pb.collection(paths.kioskStatusCollection).create({ id, updatedAt: Date.now() });
+  } catch {
+    // already exists — update instead
+    try {
+      await pb.collection(paths.kioskStatusCollection).update(id, { updatedAt: Date.now() });
+    } catch {}
+  }
 
   await logAction(user, "CONFIG_CHANGE", `Kiosk created: ${cleanName}`);
   return { ok: true, id };
@@ -199,8 +202,11 @@ export async function updateKiosk(
   if (patch.gateId !== undefined) kiosks[idx].gateId = patch.gateId;
 
   await writeKiosks(kiosks);
-  // Bump the public status doc so the kiosk page re-authenticates (config changed).
-  await getAdminDb().doc(paths.kioskStatusDoc(id)).set({ updatedAt: Date.now() });
+  // Bump the public status record so the kiosk page re-authenticates.
+  const pb = await pbAdmin();
+  try {
+    await pb.collection(paths.kioskStatusCollection).update(id, { updatedAt: Date.now() });
+  } catch {}
   await logAction(user, "CONFIG_CHANGE", `Kiosk updated: ${kiosks[idx].name}`);
   return { ok: true };
 }
@@ -214,11 +220,14 @@ export async function deleteKiosk(
   if (user.role !== "admin") return { ok: false, error: "Admin role required." };
 
   const kiosks = await readKiosks();
-  const filtered = kiosks.filter((k) => k.id !== id);
+  const filtered = kiosks.filter((k) => k.id === id);
   await writeKiosks(filtered);
 
-  // Delete the public status doc — kiosk page detects this instantly via onSnapshot.
-  await getAdminDb().doc(paths.kioskStatusDoc(id)).delete();
+  // Delete the public status record — kiosk page detects this instantly via subscribe.
+  const pb = await pbAdmin();
+  try {
+    await pb.collection(paths.kioskStatusCollection).delete(id);
+  } catch {}
 
   await logAction(user, "CONFIG_CHANGE", `Kiosk deleted: ${id}`);
   return { ok: true };
@@ -241,6 +250,18 @@ export async function getKiosksList(): Promise<
 
 // ---------------- Remote Lock ----------------
 
+/** Find a lock record by email (case-insensitive). Returns the record or null. */
+async function findLockRecord(pb: Awaited<ReturnType<typeof pbAdmin>>, email: string) {
+  try {
+    const recs = await pb.collection(paths.locksCollection).getFullList({
+      filter: `userEmail = "${email.toLowerCase()}"`,
+    });
+    return recs[0] ?? null;
+  } catch {
+    return null;
+  }
+}
+
 export async function applyRemoteLocks(input: {
   targetEmail: string;
   usernames: string[];
@@ -251,29 +272,36 @@ export async function applyRemoteLocks(input: {
   const user = await getAppUser();
   requireAdmin(user);
 
-  const ref = getAdminDb().collection(paths.locksCollection).doc(input.targetEmail);
+  const pb = await pbAdmin();
   const now = Date.now();
   const meta = { type: input.reason, duration: input.duration, updatedAt: now };
 
-  // Write per-username locks via update() for dot-notation path support.
-  const update: Record<string, unknown> = { updatedAt: now };
-  for (const username of input.usernames) {
-    update[`userSpecificLocks.${username}`] = input.lockedTabs;
-    update[`lockMetadata.${username}`] = meta;
-  }
-
-  const existing = await ref.get();
-  if (!existing.exists) {
-    await ref.set({
+  let existing = await findLockRecord(pb, input.targetEmail);
+  if (!existing) {
+    // Create a new lock record.
+    const rec = await pb.collection(paths.locksCollection).create({
+      userEmail: input.targetEmail.toLowerCase(),
       userSpecificLocks: Object.fromEntries(
         input.usernames.map((u) => [u, input.lockedTabs])
       ),
       lockMetadata: Object.fromEntries(input.usernames.map((u) => [u, meta])),
+      lockedTabs: [],
       updatedAt: now,
     });
+    existing = rec;
   } else {
-    // Use update() — it correctly interprets dot-notation as nested paths.
-    await ref.update(update);
+    // Read-modify-write the JSON fields (PB has no dot-notation field ops).
+    const userLocks = (existing.userSpecificLocks as Record<string, string[]>) ?? {};
+    const lockMeta = (existing.lockMetadata as Record<string, unknown>) ?? {};
+    for (const username of input.usernames) {
+      userLocks[username] = input.lockedTabs;
+      lockMeta[username] = meta;
+    }
+    await pb.collection(paths.locksCollection).update(existing.id, {
+      userSpecificLocks: userLocks,
+      lockMetadata: lockMeta,
+      updatedAt: now,
+    });
   }
 
   await logAction(
@@ -284,7 +312,7 @@ export async function applyRemoteLocks(input: {
   return { ok: true };
 }
 
-/** Unlock staff by deleting their lock entries from the global_locks doc. */
+/** Unlock staff by removing their lock entries from the locks record. */
 export async function unlockStaff(input: {
   targetEmail: string;
   username: string;
@@ -296,18 +324,21 @@ export async function unlockStaff(input: {
       return { ok: false, error: "Admin role required." };
     }
 
-    const ref = getAdminDb().collection(paths.locksCollection).doc(input.targetEmail);
-
-    const snap = await ref.get();
-    if (!snap.exists) {
+    const pb = await pbAdmin();
+    const rec = await findLockRecord(pb, input.targetEmail);
+    if (!rec) {
       console.log("[unlockStaff] doc not found:", input.targetEmail);
       return { ok: true };
     }
 
-    const { FieldValue } = await import("firebase-admin/firestore");
-    await ref.update({
-      [`userSpecificLocks.${input.username}`]: FieldValue.delete(),
-      [`lockMetadata.${input.username}`]: FieldValue.delete(),
+    // Read-modify-write: delete the username keys from both JSON maps.
+    const userLocks = (rec.userSpecificLocks as Record<string, string[]>) ?? {};
+    const lockMeta = (rec.lockMetadata as Record<string, unknown>) ?? {};
+    delete userLocks[input.username];
+    delete lockMeta[input.username];
+    await pb.collection(paths.locksCollection).update(rec.id, {
+      userSpecificLocks: userLocks,
+      lockMetadata: lockMeta,
       updatedAt: Date.now(),
     });
     console.log("[unlockStaff] success:", input.targetEmail, input.username);
@@ -331,19 +362,18 @@ export async function checkAndEndMaintenance(): Promise<
   const user = await getAppUser();
   if (!user) return { ok: false, error: "Not authenticated." };
 
-  const snap = await getAdminDb().collection(paths.locksCollection).get();
+  const pb = await pbAdmin();
+  const snap = await pb.collection(paths.locksCollection).getFullList();
   const now = Date.now();
   let maintenanceFound = false;
   let isOver = false;
 
-  snap.docs.forEach((d) => {
-    const data = d.data();
-    const meta = data.lockMetadata as Record<string, { type?: string; duration?: string; updatedAt?: number }> | undefined;
+  snap.forEach((d) => {
+    const meta = d.lockMetadata as Record<string, { type?: string; duration?: string; updatedAt?: number }> | undefined;
     if (meta) {
       for (const [, m] of Object.entries(meta)) {
         if (m?.type === "maintenance") {
           maintenanceFound = true;
-          // Parse duration string like "2 hr 30 min"
           const dur = m.duration ?? "";
           if (dur && dur !== "Unknown" && m.updatedAt) {
             const hrMatch = dur.match(/(\d+)\s*hr/);
@@ -361,21 +391,26 @@ export async function checkAndEndMaintenance(): Promise<
   });
 
   if (maintenanceFound && isOver) {
-    // Auto-unlock all maintenance locks
-    const { FieldValue } = await import("firebase-admin/firestore");
-    for (const doc of snap.docs) {
-      const data = doc.data();
-      const meta = data.lockMetadata as Record<string, { type?: string }> | undefined;
+    // Auto-unlock all maintenance locks (read-modify-write per record).
+    for (const doc of snap) {
+      const meta = doc.lockMetadata as Record<string, { type?: string }> | undefined;
+      const userLocks = (doc.userSpecificLocks as Record<string, string[]>) ?? {};
+      const lockMeta = (doc.lockMetadata as Record<string, unknown>) ?? {};
+      let changed = false;
       if (meta) {
-        const update: Record<string, unknown> = { updatedAt: now };
         for (const [username, m] of Object.entries(meta)) {
           if (m?.type === "maintenance") {
-            update[`userSpecificLocks.${username}`] = FieldValue.delete();
-            update[`lockMetadata.${username}`] = FieldValue.delete();
+            delete userLocks[username];
+            delete lockMeta[username];
+            changed = true;
           }
         }
-        if (Object.keys(update).length > 1) {
-          await doc.ref.update(update);
+        if (changed) {
+          await pb.collection(paths.locksCollection).update(doc.id, {
+            userSpecificLocks: userLocks,
+            lockMetadata: lockMeta,
+            updatedAt: now,
+          });
         }
       }
     }
@@ -394,17 +429,17 @@ export async function factoryReset(): Promise<
   const user = await getAppUser();
   requireAdmin(user);
 
+  const pb = await pbAdmin();
+
   // 1. Write an audit record to a RESET-PROOF collection BEFORE wiping,
-  //    so the FACTORY_RESET survives (unlike the original which deleted its own log).
-  await getAdminDb()
-    .collection("audit_trail")
-    .add({
-      timestamp: Date.now(),
-      userEmail: user.email ?? "",
-      username: user.username,
-      action: "FACTORY_RESET",
-      details: `Admin (${user.username}) initiated FACTORY RESET. All data wiped.`,
-    });
+  //    so the FACTORY_RESET survives.
+  await pb.collection(paths.auditTrailCollection).create({
+    timestamp: Date.now(),
+    userEmail: user.email ?? "",
+    username: user.username,
+    action: "FACTORY_RESET",
+    details: `Admin (${user.username}) initiated FACTORY RESET. All data wiped.`,
+  });
 
   // 2. Also log to activity_logs (will be wiped below, but kept for parity).
   await logAction(
@@ -413,34 +448,40 @@ export async function factoryReset(): Promise<
     `Admin (${user.username}) initiated FACTORY RESET. All data wiped.`
   );
 
-  const db = getAdminDb();
-
   // 3. Delete tickets.
-  const ticketsSnap = await db.collection(paths.ticketsCollection).get();
-  await Promise.all(ticketsSnap.docs.map((d) => d.ref.delete()));
+  const ticketsSnap = await pb.collection(paths.ticketsCollection).getFullList({ fields: "id" });
+  await Promise.all(ticketsSnap.map((d) => pb.collection(paths.ticketsCollection).delete(d.id)));
 
-  // 4. Delete settings/config.
-  await db.doc(paths.settingsDoc).delete();
+  // 4. Reset settings/config (keep the record, clear values).
+  await pb.collection(paths.settingsCollection).update(paths.settingsId, {
+    name: "",
+    place: "",
+    deadline: "",
+    timezone: "auto",
+    multiGate: false,
+    gateCategories: [],
+  });
 
-  // 4b. Delete all gates (multi-gate system).
-  const gatesSnap = await db.collection(paths.gatesCollection).get();
-  await Promise.all(gatesSnap.docs.map((d) => d.ref.delete()));
+  // 4b. Delete all gates.
+  const gatesSnap = await pb.collection(paths.gatesCollection).getFullList({ fields: "id" });
+  await Promise.all(gatesSnap.map((d) => pb.collection(paths.gatesCollection).delete(d.id)));
 
-  // 5. Delete all global_locks.
-  const locksSnap = await db.collection(paths.locksCollection).get();
-  await Promise.all(locksSnap.docs.map((d) => d.ref.delete()));
+  // 5. Delete all locks.
+  const locksSnap = await pb.collection(paths.locksCollection).getFullList({ fields: "id" });
+  await Promise.all(locksSnap.map((d) => pb.collection(paths.locksCollection).delete(d.id)));
 
-  // 6. Delete admin_settings/security (kiosks config + legacy password doc).
-  //    Also delete all public kiosk_status docs so active kiosks detect reset instantly.
+  // 6. Reset kiosks config + delete all public kiosk_status records.
   const kiosksBeforeReset = await readKiosks();
   await Promise.all(
-    kiosksBeforeReset.map((k) => db.doc(paths.kioskStatusDoc(k.id)).delete())
+    kiosksBeforeReset.map((k) =>
+      pb.collection(paths.kioskStatusCollection).delete(k.id).catch(() => {})
+    )
   );
-  await db.doc(paths.adminSecurityDoc).delete();
+  await pb.collection(paths.kiosksConfigCollection).update(paths.kiosksConfigId, { kiosks: [] });
 
   // 7. Delete all activity_logs.
-  const logsSnap = await db.collection(paths.logsCollection).get();
-  await Promise.all(logsSnap.docs.map((d) => d.ref.delete()));
+  const logsSnap = await pb.collection(paths.logsCollection).getFullList({ fields: "id" });
+  await Promise.all(logsSnap.map((d) => pb.collection(paths.logsCollection).delete(d.id)));
 
   revalidatePath("/guests");
   revalidatePath("/settings");
@@ -448,8 +489,7 @@ export async function factoryReset(): Promise<
   return { ok: true };
 }
 
-/** Combined read of global_locks — returns lock map + maintenance info in ONE read.
- *  Replaces the former pattern of 3 separate full-collection reads. */
+/** Combined read of locks — returns lock map + maintenance info in ONE read. */
 export async function fetchLockDashboard(): Promise<{
   ok: true;
   lockMap: Record<string, string[]>;
@@ -460,18 +500,18 @@ export async function fetchLockDashboard(): Promise<{
   const user = await getAppUser();
   if (!user) return { ok: false, error: "Not authenticated." };
 
-  const snap = await getAdminDb().collection(paths.locksCollection).get();
+  const pb = await pbAdmin();
+  const snap = await pb.collection(paths.locksCollection).getFullList();
   const lockMap: Record<string, string[]> = {};
   let maintActive = false;
   let maintDuration: string | null = null;
   let maintUpdatedAt: number | null = null;
 
-  snap.docs.forEach((d) => {
-    const data = d.data();
-    const email = d.id.toLowerCase();
+  snap.forEach((d) => {
+    const email = String(d.userEmail ?? "").toLowerCase();
 
     // Build lock map
-    const userLocks = data.userSpecificLocks as Record<string, string[]> | undefined;
+    const userLocks = d.userSpecificLocks as Record<string, string[]> | undefined;
     if (userLocks) {
       const allTabs = new Set<string>();
       Object.values(userLocks).forEach((tabs) => {
@@ -479,12 +519,13 @@ export async function fetchLockDashboard(): Promise<{
       });
       if (allTabs.size > 0) lockMap[email] = [...allTabs];
     }
-    if (data.lockedTabs && Array.isArray(data.lockedTabs) && data.lockedTabs.length > 0) {
-      lockMap[email] = data.lockedTabs;
+    const legacyTabs = d.lockedTabs;
+    if (Array.isArray(legacyTabs) && legacyTabs.length > 0) {
+      lockMap[email] = legacyTabs as string[];
     }
 
     // Check for maintenance locks
-    const meta = data.lockMetadata as Record<string, { type?: string; duration?: string; updatedAt?: number }> | undefined;
+    const meta = d.lockMetadata as Record<string, { type?: string; duration?: string; updatedAt?: number }> | undefined;
     if (meta) {
       for (const [, m] of Object.entries(meta)) {
         if (m?.type === "maintenance") {

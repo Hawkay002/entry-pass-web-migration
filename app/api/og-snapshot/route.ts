@@ -2,15 +2,12 @@
 // ticket. Called by the admin browser right after a ticket is created, once
 // the live shader ticket has been captured as a JPEG.
 //
-// Mirrors the /api/ticket-verify structure: request.json() body, getClientIp,
-// recordFailure rate-limiting, Admin SDK Firestore, discriminated-union JSON.
-//
 // Security: validates that the ticket exists (no inventing IDs), caps the
-// image size, and rate-limits by IP. og_snapshots is server-only (Admin SDK),
-// so no client security rules are required.
+// image size, and rate-limits by IP. og_snapshots is server-only (PB rules
+// disabled), so no client can read it via the API.
 
 import { NextResponse } from "next/server";
-import { getAdminDb } from "@/lib/firebase/admin";
+import { pbAdmin } from "@/lib/pb/server";
 import { paths } from "@/lib/paths";
 import { getClientIp, recordFailure } from "@/lib/rate-limit";
 
@@ -18,15 +15,13 @@ export const dynamic = "force-dynamic";
 
 const FAIL_LIMIT = 10;
 const FAIL_WINDOW_SEC = 5 * 60; // 10 writes / IP / 5 min
-const MAX_BYTES = 500_000; // ~500KB decoded — comfortably under Firestore's 1MB
+const MAX_BYTES = 500_000; // ~500KB decoded
 
 type SnapshotResponse =
   | { ok: true }
   | { ok: false; error: string };
 
-export async function POST(
-  request: Request
-): Promise<Response> {
+export async function POST(request: Request): Promise<Response> {
   let body: { id?: unknown; image?: unknown };
   try {
     body = await request.json();
@@ -55,7 +50,7 @@ export async function POST(
     );
   }
 
-  // Decode once to validate size before hitting Firestore.
+  // Decode once to validate size before hitting the DB.
   const base64 = image.slice("data:image/jpeg;base64,".length);
   let decoded: Buffer;
   try {
@@ -73,7 +68,7 @@ export async function POST(
     );
   }
 
-  // Rate-limit by IP (fail-open on Redis errors, same as ticket-verify).
+  // Rate-limit by IP.
   const ip = getClientIp(request);
   const failKey = `og_snap:${ip}`;
   const state = await recordFailure(failKey, FAIL_LIMIT, FAIL_WINDOW_SEC);
@@ -85,28 +80,37 @@ export async function POST(
   }
 
   try {
-    const db = getAdminDb();
+    const pb = await pbAdmin();
 
-    // Confirm the ticket exists. A missing ticket still counts as a failure
-    // (rate-limit churn) but does not reveal existence via a distinct error.
-    const ticketSnap = await db
-      .collection(paths.ticketsCollection)
-      .doc(id)
-      .get();
-    if (!ticketSnap.exists) {
+    // Confirm the ticket exists.
+    let ticketRec;
+    try {
+      ticketRec = await pb.collection(paths.ticketsCollection).getOne(id);
+    } catch {
       return NextResponse.json<SnapshotResponse>(
         { ok: false, error: "Ticket not found." },
         { status: 404 }
       );
     }
 
-    const ticketType = String(ticketSnap.data()?.ticketType ?? "Classic");
+    const ticketType = String(ticketRec.ticketType ?? "Classic");
 
-    await db.collection(paths.ogSnapshotsCollection).doc(id).set({
-      image, // full data URL (stored as-is; small enough)
-      ticketType,
-      updatedAt: Date.now(),
-    });
+    // Upsert the snapshot (create or update by ticket id).
+    try {
+      await pb.collection(paths.ogSnapshotsCollection).getOne(id);
+      await pb.collection(paths.ogSnapshotsCollection).update(id, {
+        image,
+        ticketType,
+        updatedAt: Date.now(),
+      });
+    } catch {
+      await pb.collection(paths.ogSnapshotsCollection).create({
+        id,
+        image,
+        ticketType,
+        updatedAt: Date.now(),
+      });
+    }
 
     return NextResponse.json<SnapshotResponse>({ ok: true });
   } catch (err) {

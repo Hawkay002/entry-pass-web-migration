@@ -3,10 +3,10 @@
 
 "use server";
 
-import { getAdminDb } from "@/lib/firebase/admin";
+import { pbAdmin } from "@/lib/pb/server";
 import { paths } from "@/lib/paths";
-import { getAppUser } from "@/lib/firebase/server-auth";
-import { logAction } from "@/lib/firebase/log";
+import { getAppUser } from "@/lib/pb/server-auth";
+import { logAction } from "@/lib/pb/log";
 import type { StaffMember, StaffRole } from "@/lib/types";
 
 /** Fetch all roles (admin only). */
@@ -18,16 +18,14 @@ export async function fetchRoles(): Promise<
   if (user.role !== "admin")
     return { ok: false, error: "Admin role required." };
 
-  const snap = await getAdminDb().collection(paths.rolesCollection).get();
-  const roles: StaffRole[] = snap.docs.map((d) => {
-    const data = d.data();
-    return {
-      id: d.id,
-      name: String(data.name ?? d.id),
-      staff: (data.staff as StaffMember[]) ?? [],
-      createdAt: Number(data.createdAt ?? 0),
-    };
-  });
+  const pb = await pbAdmin();
+  const records = await pb.collection(paths.rolesCollection).getFullList();
+  const roles: StaffRole[] = records.map((r) => ({
+    id: r.id,
+    name: String(r.name ?? r.id),
+    staff: (r.staff as StaffMember[]) ?? [],
+    createdAt: Number(r.createdAt ?? 0),
+  }));
   return { ok: true, roles };
 }
 
@@ -42,12 +40,14 @@ export async function createRole(
   const name = roleName.trim();
   if (!name) return { ok: false, error: "Role name is required." };
 
-  const ref = getAdminDb().collection(paths.rolesCollection).doc(name);
-  const existing = await ref.get();
-  if (existing.exists)
+  const pb = await pbAdmin();
+  try {
+    await pb.collection(paths.rolesCollection).getOne(name);
     return { ok: false, error: "Role already exists." };
-
-  await ref.set({ name, staff: [], createdAt: Date.now() });
+  } catch {
+    /* not found — good, proceed */
+  }
+  await pb.collection(paths.rolesCollection).create({ id: name, name, staff: [], createdAt: Date.now() });
   await logAction(user, "LOCK_ACTION", `Created role "${name}".`);
   return { ok: true };
 }
@@ -68,18 +68,20 @@ export async function addStaffToRole(
   if (!name || !email)
     return { ok: false, error: "Name and email are required." };
 
-  const ref = getAdminDb().collection(paths.rolesCollection).doc(roleId);
-  const snap = await ref.get();
-  if (!snap.exists) return { ok: false, error: "Role not found." };
+  const pb = await pbAdmin();
+  let rec;
+  try {
+    rec = await pb.collection(paths.rolesCollection).getOne(roleId);
+  } catch {
+    return { ok: false, error: "Role not found." };
+  }
 
-  const data = snap.data();
-  const staff: StaffMember[] = data?.staff ?? [];
-  // Prevent duplicates by email.
+  const staff: StaffMember[] = (rec.staff as StaffMember[]) ?? [];
   if (staff.some((s) => s.email.toLowerCase() === email))
     return { ok: false, error: "Staff member already exists in this role." };
 
   staff.push({ name, email, ...(gateId ? { gateId } : {}) });
-  await ref.update({ staff });
+  await pb.collection(paths.rolesCollection).update(roleId, { staff });
   await logAction(
     user,
     "LOCK_ACTION",
@@ -98,12 +100,15 @@ export async function bulkAddStaffToRole(
   if (!user || user.role !== "admin")
     return { ok: false, error: "Admin role required." };
 
-  const ref = getAdminDb().collection(paths.rolesCollection).doc(roleId);
-  const snap = await ref.get();
-  if (!snap.exists) return { ok: false, error: "Role not found." };
+  const pb = await pbAdmin();
+  let rec;
+  try {
+    rec = await pb.collection(paths.rolesCollection).getOne(roleId);
+  } catch {
+    return { ok: false, error: "Role not found." };
+  }
 
-  const data = snap.data();
-  const staff: StaffMember[] = data?.staff ?? [];
+  const staff: StaffMember[] = (rec.staff as StaffMember[]) ?? [];
   const existingEmails = new Set(staff.map((s) => s.email.toLowerCase()));
 
   let added = 0;
@@ -118,7 +123,7 @@ export async function bulkAddStaffToRole(
     added++;
   }
 
-  if (added > 0) await ref.update({ staff });
+  if (added > 0) await pb.collection(paths.rolesCollection).update(roleId, { staff });
   if (added > 0) {
     await logAction(
       user,
@@ -146,20 +151,22 @@ export async function updateStaffInRole(
   if (!name || !email)
     return { ok: false, error: "Name and email are required." };
 
-  const ref = getAdminDb().collection(paths.rolesCollection).doc(roleId);
-  const snap = await ref.get();
-  if (!snap.exists) return { ok: false, error: "Role not found." };
+  const pb = await pbAdmin();
+  let rec;
+  try {
+    rec = await pb.collection(paths.rolesCollection).getOne(roleId);
+  } catch {
+    return { ok: false, error: "Role not found." };
+  }
 
-  const data = snap.data();
-  const staff: StaffMember[] = data?.staff ?? [];
+  const staff: StaffMember[] = (rec.staff as StaffMember[]) ?? [];
   const idx = staff.findIndex(
     (s) => s.email.toLowerCase() === oldEmail.toLowerCase()
   );
   if (idx === -1) return { ok: false, error: "Staff member not found." };
 
-  // Spread existing fields so gateId (and any future field) survives the edit.
   staff[idx] = { ...staff[idx], name, email, ...(gateId !== undefined ? { gateId } : {}) };
-  await ref.update({ staff });
+  await pb.collection(paths.rolesCollection).update(roleId, { staff });
   await logAction(
     user,
     "LOCK_ACTION",
@@ -169,7 +176,9 @@ export async function updateStaffInRole(
 }
 
 /** Remove a staff member from a role by email.
- *  Also revokes their Firebase Auth session so they're logged out immediately. */
+ *  With Pocketbase, access auto-revokes: getAppUser() rejects any email not in
+ *  the roles collection, so the removed staff is logged out on their next
+ *  request. No explicit token revoke needed. */
 export async function removeStaffFromRole(
   roleId: string,
   staffEmail: string
@@ -178,36 +187,26 @@ export async function removeStaffFromRole(
   if (!user || user.role !== "admin")
     return { ok: false, error: "Admin role required." };
 
-  const ref = getAdminDb().collection(paths.rolesCollection).doc(roleId);
-  const snap = await ref.get();
-  if (!snap.exists) return { ok: false, error: "Role not found." };
+  const pb = await pbAdmin();
+  let rec;
+  try {
+    rec = await pb.collection(paths.rolesCollection).getOne(roleId);
+  } catch {
+    return { ok: false, error: "Role not found." };
+  }
 
-  const data = snap.data();
-  const staff: StaffMember[] = data?.staff ?? [];
+  const staff: StaffMember[] = (rec.staff as StaffMember[]) ?? [];
   const filtered = staff.filter(
     (s) => s.email.toLowerCase() !== staffEmail.toLowerCase()
   );
-  await ref.update({ staff: filtered });
+  await pb.collection(paths.rolesCollection).update(roleId, { staff: filtered });
 
   // Check if this email exists in ANY other role.
-  const allRolesSnap = await getAdminDb().collection(paths.rolesCollection).get();
-  const stillExists = allRolesSnap.docs.some((d) => {
-    const s = (d.data().staff as StaffMember[]) ?? [];
+  const allRoles = await pb.collection(paths.rolesCollection).getFullList({ fields: "staff" });
+  const stillExists = allRoles.some((r) => {
+    const s = (r.staff as StaffMember[]) ?? [];
     return s.some((m) => m.email.toLowerCase() === staffEmail.toLowerCase());
   });
-
-  // If removed from all roles, revoke their Firebase Auth session immediately.
-  if (!stillExists) {
-    try {
-      const { getAdminAuth } = await import("@/lib/firebase/admin");
-      const auth = getAdminAuth();
-      const userRecord = await auth.getUserByEmail(staffEmail);
-      await auth.revokeRefreshTokens(userRecord.uid);
-      console.log(`[removeStaff] Revoked tokens for ${staffEmail} (uid: ${userRecord.uid})`);
-    } catch {
-      // User might not exist in Auth — ignore
-    }
-  }
 
   await logAction(
     user,
@@ -225,7 +224,8 @@ export async function deleteRole(
   if (!user || user.role !== "admin")
     return { ok: false, error: "Admin role required." };
 
-  await getAdminDb().collection(paths.rolesCollection).doc(roleId).delete();
+  const pb = await pbAdmin();
+  await pb.collection(paths.rolesCollection).delete(roleId);
   await logAction(user, "LOCK_ACTION", `Deleted role "${roleId}".`);
   return { ok: true };
 }

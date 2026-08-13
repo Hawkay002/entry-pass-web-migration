@@ -2,7 +2,7 @@
 // Faithful to the original (script.js:2006-2384) with type safety.
 
 import type { Gender, Ticket, TicketStatus, TicketType } from "@/lib/types";
-import type { LogEntry } from "@/lib/redis-log";
+import type { LogEntry } from "@/lib/pb/log";
 
 // ---------------- EXPORT HELPERS ----------------
 

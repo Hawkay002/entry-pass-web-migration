@@ -2,7 +2,7 @@
 // live display). Admin sees the Remote Lock + Staff management panels below.
 // Staff with settings locked see a locked screen instead.
 
-import { getAppUser } from "@/lib/firebase/server-auth";
+import { getAppUser } from "@/lib/pb/server-auth";
 import { SettingsForm } from "@/components/admin/settings-form";
 import { AdminPanels } from "@/components/admin/admin-panels";
 import { SettingsContent } from "@/components/admin/settings-content";

@@ -3,7 +3,7 @@
 // stored in og_snapshots) as a JPEG. Falls back to a hand-rolled SVG for
 // tickets created before the snapshot feature (or whose capture failed).
 
-import { getAdminDb } from "@/lib/firebase/admin";
+import { pbAdmin } from "@/lib/pb/server";
 import { paths } from "@/lib/paths";
 
 export const runtime = "nodejs";
@@ -70,17 +70,25 @@ function buildSvg(name: string, typeLabel: string, eventName: string, bg: string
 
 export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const db = getAdminDb();
+  const pb = await pbAdmin();
 
-  const [snapshotSnap, ticketSnap, settingsSnap] = await Promise.all([
-    db.collection(paths.ogSnapshotsCollection).doc(id).get(),
-    db.collection(paths.ticketsCollection).doc(id).get(),
-    db.doc(paths.settingsDoc).get(),
+  // Fetch snapshot, ticket, settings (tolerate missing).
+  let image = "";
+  let data: Record<string, unknown> = {};
+  let eventName = "Event";
+  await Promise.all([
+    pb.collection(paths.ogSnapshotsCollection).getOne(id)
+      .then((r) => { image = String(r.image ?? ""); })
+      .catch(() => {}),
+    pb.collection(paths.ticketsCollection).getOne(id)
+      .then((r) => { data = r as Record<string, unknown>; })
+      .catch(() => {}),
+    pb.collection(paths.settingsCollection).getOne(paths.settingsId)
+      .then((r) => { eventName = String(r.name ?? "Event"); })
+      .catch(() => {}),
   ]);
 
   // 1) Prefer the pre-captured live shader JPEG.
-  const snapData = snapshotSnap.exists ? snapshotSnap.data() : null;
-  const image = String(snapData?.image ?? "");
   if (image.startsWith("data:image/jpeg;base64,")) {
     const bytes = Buffer.from(image.slice("data:image/jpeg;base64,".length), "base64");
     return new Response(new Uint8Array(bytes), {
@@ -92,10 +100,8 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
   }
 
   // 2) Fallback to the hand-rolled SVG (pre-feature tickets or capture failure).
-  const data = ticketSnap.exists ? (ticketSnap.data() as Record<string, unknown>) : {};
   const name = String(data.name ?? "Guest");
   const ticketType = String(data.ticketType ?? "Classic");
-  const eventName = String(settingsSnap.data()?.name ?? "Event");
 
   const colors = TYPE_COLORS[ticketType] ?? TYPE_COLORS.Classic;
   const typeLabel = TYPE_LABELS[ticketType] ?? "CLASSIC";
