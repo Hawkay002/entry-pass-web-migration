@@ -260,7 +260,7 @@ export function SettingsForm({ isAdmin = false }: { isAdmin?: boolean }) {
                 />
                 <div className="flex items-center gap-2 border-t border-white/8 p-3">
                   <CalendarClockIcon size={14} />
-                  <Label className="text-xs text-muted-foreground">Time</Label>
+                  <Label className="text-xs text-muted-foreground">End Time</Label>
                   <div className="ml-auto flex items-center gap-1">
                     <Input
                       type="text"
