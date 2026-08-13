@@ -4,7 +4,7 @@
 
 import { useState, useEffect } from "react";
 import { toast } from "sonner";
-import { Loader2, Trash2, CalendarIcon, Sparkles, DoorOpen } from "lucide-react";
+import { Loader2, Trash2, CalendarIcon, DoorOpen, ChevronDown } from "lucide-react";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { TimelineEventIcon, Location03Icon, TimeZoneIcon } from "@hugeicons/core-free-icons";
 import { Button } from "@/components/ui/button";
@@ -197,6 +197,16 @@ export function SettingsForm({ isAdmin = false }: { isAdmin?: boolean }) {
         <CardTitle className="text-lg font-semibold">Configuration</CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
+        {/* Event Details — collapsible form */}
+        <details className="group">
+          <summary className="flex cursor-pointer list-none items-center justify-between rounded-lg bg-white/5 px-4 py-3 text-sm font-medium transition-colors hover:bg-white/10">
+            <span className="flex items-center gap-1.5">
+              <HugeiconsIcon icon={TimelineEventIcon} size={14} primaryColor="#3b82f6" />
+              Event Details
+            </span>
+            <ChevronDown className="h-4 w-4 text-muted-foreground transition-transform group-open:rotate-180" />
+          </summary>
+          <div className="space-y-4 pt-4">
         {/* Event Name + Location — 50/50 */}
         <div className="grid grid-cols-2 gap-3">
           <div className="space-y-2">
@@ -402,6 +412,8 @@ export function SettingsForm({ isAdmin = false }: { isAdmin?: boolean }) {
           {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
           Save Configuration
         </Button>
+          </div>
+        </details>
 
         {/* Active Settings — premium card */}
         <div className="relative overflow-hidden rounded-2xl border border-white/8 bg-gradient-to-br from-white/[0.04] to-transparent p-5">
@@ -419,8 +431,7 @@ export function SettingsForm({ isAdmin = false }: { isAdmin?: boolean }) {
           )}
 
           {/* Header */}
-          <div className="mb-4 flex items-center gap-2">
-            <Sparkles className="h-4 w-4 text-accent-secondary" />
+          <div className="mb-4">
             <h4 className="text-sm font-semibold tracking-tight text-white">Active Settings</h4>
           </div>
 
