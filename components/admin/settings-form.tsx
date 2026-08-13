@@ -324,9 +324,24 @@ export function SettingsForm({ isAdmin = false }: { isAdmin?: boolean }) {
                     >
                       {Number(selectedTime.split(":")[0]) >= 12 ? "PM" : "AM"}
                     </Button>
+                    {/* Desktop: Save button inline beside AM/PM */}
+                    <Button
+                      type="button"
+                      size="sm"
+                      className="ml-2 hidden h-8 sm:inline-flex"
+                      disabled={!selectedDate}
+                      onClick={() => {
+                        setDeadline(mergeDateTime(selectedDate, selectedTime));
+                        setEdited(true);
+                        setCalOpen(false);
+                      }}
+                    >
+                      Save
+                    </Button>
                   </div>
                 </div>
-                <div className="-mt-3 flex justify-end px-3 pb-4">
+                {/* Mobile: Save button below the time row */}
+                <div className="flex justify-end px-3 pb-4 sm:hidden">
                   <Button
                     type="button"
                     size="sm"
