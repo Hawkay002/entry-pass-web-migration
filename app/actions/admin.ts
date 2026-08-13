@@ -248,7 +248,7 @@ export async function deleteKiosk(
   if (user.role !== "admin") return { ok: false, error: "Admin role required." };
 
   const kiosks = await readKiosks();
-  const filtered = kiosks.filter((k) => k.id === id);
+  const filtered = kiosks.filter((k) => k.id !== id);
   await writeKiosks(filtered);
 
   // Delete the public status record — kiosk page detects this instantly via subscribe.
