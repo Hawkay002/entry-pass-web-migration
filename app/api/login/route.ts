@@ -75,6 +75,7 @@ export async function POST(req: NextRequest) {
       // 2FA continuation: resume from the token issued in step 1.
       pbToken = body.token;
       const verify = new PocketBase(serverEnv.pbUrl);
+      verify.autoCancellation(false);
       verify.authStore.save(pbToken, null);
       const u = verify.authStore.model as { id: string; email: string } | null;
       if (!u) {
@@ -92,6 +93,7 @@ export async function POST(req: NextRequest) {
       }
 
       const pb = new PocketBase(serverEnv.pbUrl);
+      pb.autoCancellation(false);
       const auth = await pb.collection("users").authWithPassword(emailIn, passwordIn);
       const record = auth.record;
       if (!record) {
