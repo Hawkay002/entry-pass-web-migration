@@ -10,7 +10,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { QrScanner, type ScanOutcome } from "@/components/scanner/qr-scanner";
 import { cn } from "@/lib/utils";
 import { WifiOff, CloudUpload, Delete, ArrowUpRight, LoaderCircle, Eye, EyeOff, TicketX, MessageCircle } from "lucide-react";
-import { subscribePublicCollection } from "@/lib/pb/realtime";
+import { clientEnv } from "@/lib/pb/client";
 import { paths } from "@/lib/paths";
 import {
   cacheKioskTickets,
@@ -60,52 +60,51 @@ export default function KioskPage() {
   // If the kiosk is deleted while active, show 404.
   const [kioskDeleted, setKioskDeleted] = useState(false);
 
-  // Realtime listener on the public kiosk_status record (SSE).
-  // kiosk_status is public-read, so the unauthenticated kiosk page can
-  // subscribe directly. Detects deletion instantly (→ 404) and config edits
-  // (→ re-authenticate).
+  // Poll the public kiosk_status record every 2s. Detects deletion instantly
+  // (record gone → 404) and config edits (updatedAt changes → re-authenticate).
+  // NOTE: we tried SSE subscribe first, but PB does NOT deliver delete/update
+  // events for public collections to unauthenticated clients (verified — only
+  // PB_CONNECT arrives, no data events). Polling is the reliable approach.
   const lastUpdatedAtRef = useRef<number>(0);
   useEffect(() => {
     if (!kioskId) return;
-    let unsub: (() => void) | null = null;
     let cancelled = false;
+    let timer: ReturnType<typeof setTimeout>;
 
-    subscribePublicCollection(
-      paths.kioskStatusCollection,
-      kioskId,
-      (event, record) => {
+    const poll = async () => {
+      if (cancelled) return;
+      try {
+        const res = await fetch(
+          `${clientEnv.pbUrl}/api/collections/${paths.kioskStatusCollection}/records/${kioskId}`
+        );
         if (cancelled) return;
-        if (event === "delete" || !record) {
-          // Kiosk was deleted (or factory reset) — wipe cache + show 404.
+        if (!res.ok) {
+          // Record gone — kiosk was deleted (or factory reset).
           clearKioskCache();
           sessionStorage.removeItem(SESSION_KEY);
           setStoredPin(null);
           setKioskDeleted(true);
-          return;
+          return; // stop polling once deleted
         }
-        const newUpdatedAt = Number(record.updatedAt ?? 0);
+        const data = await res.json();
+        if (cancelled) return;
+        const newUpdatedAt = Number(data.updatedAt ?? 0);
         if (lastUpdatedAtRef.current > 0 && newUpdatedAt !== lastUpdatedAtRef.current) {
           // Config changed (name/PIN/gate edit) — force re-authentication.
           sessionStorage.removeItem(SESSION_KEY);
           setStoredPin(null);
         }
         lastUpdatedAtRef.current = newUpdatedAt;
+      } catch {
+        // Network failure — keep retrying.
       }
-    )
-      .then((fn) => {
-        if (cancelled) {
-          try { fn(); } catch {}
-          return;
-        }
-        unsub = fn;
-      })
-      .catch(() => {
-        // Network failure — silently fall back to the API-driven polling.
-      });
+      if (!cancelled) timer = setTimeout(poll, 2000);
+    };
 
+    poll();
     return () => {
       cancelled = true;
-      if (unsub) unsub();
+      if (timer) clearTimeout(timer);
     };
   }, [kioskId]);
 
