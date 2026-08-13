@@ -255,7 +255,7 @@ export function SettingsForm({ isAdmin = false }: { isAdmin?: boolean }) {
                 <Calendar
                   mode="single"
                   selected={selectedDate}
-                  onSelect={handleDateSelect}
+                  onSelect={(date) => { setSelectedDate(date); setEdited(true); }}
                   captionLayout="dropdown"
                 />
                 <div className="flex items-center gap-2 border-t border-white/8 p-3">
@@ -325,6 +325,20 @@ export function SettingsForm({ isAdmin = false }: { isAdmin?: boolean }) {
                       {Number(selectedTime.split(":")[0]) >= 12 ? "PM" : "AM"}
                     </Button>
                   </div>
+                </div>
+                <div className="flex justify-end p-3 pt-2">
+                  <Button
+                    type="button"
+                    size="sm"
+                    disabled={!selectedDate}
+                    onClick={() => {
+                      setDeadline(mergeDateTime(selectedDate, selectedTime));
+                      setEdited(true);
+                      setCalOpen(false);
+                    }}
+                  >
+                    Save
+                  </Button>
                 </div>
               </PopoverContent>
             </Popover>
