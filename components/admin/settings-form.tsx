@@ -326,7 +326,7 @@ export function SettingsForm({ isAdmin = false }: { isAdmin?: boolean }) {
                     </Button>
                   </div>
                 </div>
-                <div className="flex justify-end p-3 pt-2">
+                <div className="flex justify-end px-3 pb-3">
                   <Button
                     type="button"
                     size="sm"
