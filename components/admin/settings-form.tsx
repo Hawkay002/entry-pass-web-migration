@@ -208,7 +208,7 @@ export function SettingsForm({ isAdmin = false }: { isAdmin?: boolean }) {
         <div className="grid grid-cols-2 gap-3">
           <div className="space-y-2">
             <Label htmlFor="eventName" className="flex items-center gap-1.5">
-              <HugeiconsIcon icon={TimelineEventIcon} size={14} primaryColor="#3b82f6" />
+              <HugeiconsIcon icon={TimelineEventIcon} size={14} primaryColor="#ffffff" />
               Event Name
             </Label>
             <Input
@@ -220,7 +220,7 @@ export function SettingsForm({ isAdmin = false }: { isAdmin?: boolean }) {
           </div>
           <div className="space-y-2">
             <Label htmlFor="eventPlace" className="flex items-center gap-1.5">
-              <HugeiconsIcon icon={Location03Icon} size={14} primaryColor="#3b82f6" />
+              <HugeiconsIcon icon={Location03Icon} size={14} primaryColor="#ffffff" />
               Venue Location
             </Label>
             <Input
@@ -304,7 +304,7 @@ export function SettingsForm({ isAdmin = false }: { isAdmin?: boolean }) {
                         const raw = e.target.value.replace(/\D/g, "").slice(0, 2);
                         setMinuteInput(raw);
                         if (raw === "") return;
-                        const val = String(Math.min(59, Number(raw))).padStart(2, "0");
+                        const val = String(Math.min(59, Number(raw)));
                         const hh = selectedTime.split(":")[0] || "12";
                         handleTimeChange(`${hh}:${val}`);
                       }}
@@ -367,7 +367,7 @@ export function SettingsForm({ isAdmin = false }: { isAdmin?: boolean }) {
           </div>
           <div className="space-y-2">
             <Label className="flex items-center gap-1.5">
-              <HugeiconsIcon icon={TimeZoneIcon} size={14} primaryColor="#3b82f6" />
+              <HugeiconsIcon icon={TimeZoneIcon} size={14} primaryColor="#ffffff" />
               Timezone
             </Label>
             <SearchableSelect
