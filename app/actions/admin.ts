@@ -54,6 +54,34 @@ export async function deleteLogs(
 
 // ---------------- Settings ----------------
 
+/** Fetch the event settings (authenticated). Used by the useSettings hook. */
+export async function fetchSettings(): Promise<
+  { ok: true; settings: EventSettings } | { ok: false; error: string }
+> {
+  const user = await getAppUser();
+  if (!user) return { ok: false, error: "Not authenticated." };
+
+  const pb = await pbAdmin();
+  try {
+    const rec = await pb.collection(paths.settingsCollection).getOne(paths.settingsId);
+    return {
+      ok: true,
+      settings: {
+        name: String(rec.name ?? ""),
+        place: String(rec.place ?? ""),
+        deadline: String(rec.deadline ?? ""),
+        timezone: (rec.timezone as string) ?? "+05:30",
+        multiGate: Boolean(rec.multiGate),
+        gateCategories: Array.isArray(rec.gateCategories)
+          ? (rec.gateCategories as string[])
+          : [],
+      },
+    };
+  } catch {
+    return { ok: true, settings: { name: "", place: "", deadline: "", timezone: "+05:30", multiGate: false, gateCategories: [] } };
+  }
+}
+
 export async function saveSettings(
   settings: EventSettings
 ): Promise<{ ok: true } | { ok: false; error: string }> {
