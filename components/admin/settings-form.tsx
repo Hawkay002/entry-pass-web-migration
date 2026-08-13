@@ -4,7 +4,9 @@
 
 import { useState, useEffect } from "react";
 import { toast } from "sonner";
-import { Loader2, Trash2, CalendarIcon, Clock, MapPin, Sparkles, DoorOpen } from "lucide-react";
+import { Loader2, Trash2, CalendarIcon, Sparkles, DoorOpen } from "lucide-react";
+import { HugeiconsIcon } from "@hugeicons/react";
+import { TimelineEventIcon, Location03Icon, TimeZoneIcon } from "@hugeicons/core-free-icons";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -31,6 +33,19 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
+
+/** Calendar-clock icon (custom SVG — hugeicons calendar-clock-stroke-rounded). */
+function CalendarClockIcon({ size = 16 }: { size?: number }) {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width={size} height={size} fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round">
+      <path d="M15.5 2V6M7.5 2V6" />
+      <path d="M20.3985 8C20.2706 6.69989 19.9816 5.82475 19.3284 5.17157C18.1569 4 16.2712 4 12.5 4H10.5C6.72876 4 4.84315 4 3.67157 5.17157C2.5 6.34315 2.5 8.22876 2.5 12V14C2.5 17.7712 2.5 19.6569 3.67157 20.8284C4.47975 21.6366 5.6277 21.8873 7.5 21.965" />
+      <path d="M2.5 10H7.5" />
+      <path d="M15.5 22C18.8137 22 21.5 19.3137 21.5 16C21.5 12.6863 18.8137 10 15.5 10C12.1863 10 9.5 12.6863 9.5 16C9.5 19.3137 12.1863 22 15.5 22Z" />
+      <path d="M15.5 13V16L17.5 17" />
+    </svg>
+  );
+}
 
 export function SettingsForm({ isAdmin = false }: { isAdmin?: boolean }) {
   const { settings, loading } = useSettings();
@@ -222,7 +237,7 @@ export function SettingsForm({ isAdmin = false }: { isAdmin?: boolean }) {
                   captionLayout="dropdown"
                 />
                 <div className="flex items-center gap-2 border-t border-white/8 p-3">
-                  <Clock className="h-3.5 w-3.5 text-muted-foreground" />
+                  <CalendarClockIcon size={14} />
                   <Label className="text-xs text-muted-foreground">Time</Label>
                   <div className="ml-auto flex items-center gap-1">
                     <Input
@@ -339,27 +354,30 @@ export function SettingsForm({ isAdmin = false }: { isAdmin?: boolean }) {
 
           {/* Event name — the hero */}
           {settings.name && (
-            <p className="mb-4 text-2xl font-bold tracking-tight text-white">
-              {settings.name}
-            </p>
+            <div className="mb-4 flex items-center gap-2">
+              <HugeiconsIcon icon={TimelineEventIcon} size={24} primaryColor="#3b82f6" />
+              <p className="text-2xl font-bold tracking-tight text-white">
+                {settings.name}
+              </p>
+            </div>
           )}
 
           {/* Meta grid */}
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            {/* Venue */}
+            {/* Venue Location */}
             <div className="flex items-center gap-2.5 rounded-xl bg-black/30 p-3">
               <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-accent-secondary/10">
-                <MapPin className="h-4 w-4 text-accent-secondary" />
+                <HugeiconsIcon icon={Location03Icon} size={16} primaryColor="#3b82f6" />
               </div>
               <div className="min-w-0">
-                <p className="text-[0.65rem] uppercase tracking-wide text-muted-foreground">Venue</p>
+                <p className="text-[0.65rem] uppercase tracking-wide text-muted-foreground">Venue Location</p>
                 <p className="truncate text-sm font-medium text-white">{settings.place || "—"}</p>
               </div>
             </div>
             {/* Deadline */}
             <div className="flex items-center gap-2.5 rounded-xl bg-black/30 p-3">
               <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-accent-secondary/10">
-                <Clock className="h-4 w-4 text-accent-secondary" />
+                <CalendarClockIcon size={16} />
               </div>
               <div className="min-w-0">
                 <p className="text-[0.65rem] uppercase tracking-wide text-muted-foreground">Deadline</p>
@@ -377,7 +395,7 @@ export function SettingsForm({ isAdmin = false }: { isAdmin?: boolean }) {
             <div className="mt-3 flex flex-wrap gap-2">
               {settings.timezone && settings.timezone !== "auto" && (
                 <Badge variant="outline" className="gap-1 text-[0.65rem] font-normal text-muted-foreground">
-                  <Clock className="h-2.5 w-2.5" />
+                  <HugeiconsIcon icon={TimeZoneIcon} size={10} primaryColor="#3b82f6" />
                   {getTzLabel(settings.timezone) ?? `UTC${settings.timezone}`}
                 </Badge>
               )}
