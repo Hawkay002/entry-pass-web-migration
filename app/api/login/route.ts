@@ -52,6 +52,8 @@ export async function POST(req: NextRequest) {
     email?: unknown;
     password?: unknown;
     token?: unknown; // PB token from a prior auth (2FA continuation)
+    oauthCode?: unknown; // Google OAuth authorization code (redirect flow)
+    codeVerifier?: unknown; // PKCE verifier from listAuthMethods
     code?: unknown;
     recoveryCode?: unknown;
   };
@@ -71,7 +73,30 @@ export async function POST(req: NextRequest) {
     let userId = "";
     let isAdminLogin = false;
 
-    if (typeof body.token === "string" && body.token) {
+    if (typeof body.oauthCode === "string" && body.oauthCode) {
+      // Google OAuth redirect-flow completion: exchange the authorization code
+      // with Pocketbase server-side. The redirect_uri MUST match the one used
+      // when starting the flow (our /api/oauth/callback on this origin).
+      const codeVerifier = typeof body.codeVerifier === "string" ? body.codeVerifier : "";
+      const redirectUrl = new URL(req.url).origin + "/api/oauth/callback";
+      const pb = new PocketBase(serverEnv.pbUrl);
+      pb.autoCancellation(false);
+      const auth = await pb.collection("users").authWithOAuth2Code(
+        "google",
+        body.oauthCode,
+        codeVerifier,
+        redirectUrl
+      );
+      const record = auth.record as unknown as { id: string; email: string; role?: string } | null;
+      if (!record) {
+        return NextResponse.json({ ok: false, error: "Google sign-in failed." }, { status: 401 });
+      }
+      userId = record.id;
+      email = record.email;
+      pbToken = (pb.authStore.token as string) ?? "";
+      isAdminLogin =
+        ADMIN_EMAILS.includes(email.toLowerCase()) || record.role === "admin";
+    } else if (typeof body.token === "string" && body.token) {
       // Token continuation: either an OAuth-issued token OR a 2FA resume.
       // Verify it authoritatively via authRefresh (validates JWT signature).
       pbToken = body.token;

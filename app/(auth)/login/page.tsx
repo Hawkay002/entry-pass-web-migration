@@ -62,6 +62,55 @@ function LoginForm() {
     if (searchParams.get("reason") === "expired") {
       toast.info("Your session has expired — please sign in again.");
     }
+    const oauthError = searchParams.get("oauth_error");
+    if (oauthError) {
+      setError("Google sign-in was cancelled or failed. Please try again.");
+    }
+  }, [searchParams]);
+
+  // OAuth callback: /api/oauth/callback redirected back here with
+  // ?oauth_code=&state=. Complete the exchange using the PKCE verifier
+  // stashed in sessionStorage before the redirect to Google.
+  useEffect(() => {
+    const code = searchParams.get("oauth_code");
+    const state = searchParams.get("state");
+    if (!code) return;
+    setLoading(true);
+    (async () => {
+      try {
+        const stored = JSON.parse(sessionStorage.getItem("pb_oauth") ?? "null") as
+          | { codeVerifier: string; state: string }
+          | null;
+        if (!stored || stored.state !== state) {
+          setError("Sign-in session expired. Please try again.");
+          sessionStorage.removeItem("pb_oauth");
+          return;
+        }
+        sessionStorage.removeItem("pb_oauth");
+        const { res, data } = await postLogin({
+          oauthCode: code,
+          codeVerifier: stored.codeVerifier,
+        });
+        if (data.status === "2fa_required" && data.token) {
+          setPendingToken(data.token);
+          setPending2FA(true);
+          setOtpCode(["", "", "", "", "", ""]);
+          setError("");
+          setTimeout(() => otpRefs.current[0]?.focus(), 100);
+        } else if (res.ok) {
+          window.history.replaceState({}, "", "/login");
+          router.push("/tickets");
+          router.refresh();
+        } else {
+          setError(data.error ?? "Google sign-in failed.");
+        }
+      } catch {
+        setError("Network error during sign-in. Try again.");
+      } finally {
+        setLoading(false);
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams]);
 
   async function handleSubmit(e: React.FormEvent) {
@@ -99,41 +148,33 @@ function LoginForm() {
   function handleGoogleSignIn() {
     setError("");
     setLoading(true);
-    // Pocketbase OAuth popup flow. The SDK opens a popup, sends the user to
-    // Google, and receives the auth result over a realtime channel.
-    // PB's /api/oauth2-redirect is built for this popup flow (postMessage to
-    // opener), so the SDK manages the whole exchange.
-    const redirectUrl = clientEnv.pbUrl.replace(/\/$/, "") + "/api/oauth2-redirect";
-    pb().collection("users").authWithOAuth2({
-      provider: "google",
-      redirectUrl,
-    }).then(async () => {
-      const token = (pb().authStore.token as string) ?? "";
-      const { res, data } = await postLogin({ token });
-      if (data.status === "2fa_required" && data.token) {
-        setPendingToken(data.token);
-        setPending2FA(true);
-        setOtpCode(["", "", "", "", "", ""]);
-        setError("");
-        setTimeout(() => otpRefs.current[0]?.focus(), 100);
-      } else if (res.ok) {
-        router.push("/tickets");
-        router.refresh();
-      } else {
-        setError(data.error ?? "Google sign-in failed.");
+    // Full-page redirect OAuth flow — no popup, so popup blockers can't break
+    // it. The redirect URI is OUR callback on the app's own origin (stable on
+    // Vercel), not PB's. PKCE verifier is stashed in sessionStorage; the
+    // ?oauth_code effect above completes the exchange after the return.
+    const redirectUri = window.location.origin + "/api/oauth/callback";
+    pb().collection("users").listAuthMethods().then((res) => {
+      const google = (res.oauth2?.providers || []).find((p) => p.name === "google");
+      if (!google) {
+        setError("Google sign-in is not configured. Ask the admin to enable it.");
+        setLoading(false);
+        return;
       }
+      sessionStorage.setItem("pb_oauth", JSON.stringify({
+        codeVerifier: google.codeVerifier,
+        state: google.state,
+      }));
+      // PB leaves redirect_uri empty in listAuthMethods — set our callback.
+      const url = new URL(google.authURL);
+      url.searchParams.set("redirect_uri", redirectUri);
+      window.location.href = url.toString();
     }).catch((err) => {
       const msg = (err as { message?: string }).message ?? "";
-      if (msg.includes("popup") || msg.includes("cancelled")) {
-        setError("Sign-in cancelled or popup was blocked. Allow popups for this site and try again.");
-      } else if (msg.includes("network") || msg.includes("fetch")) {
+      if (msg.includes("network") || msg.includes("fetch")) {
         setError("Network error. Check your connection and try again.");
-      } else if (msg.includes("provider") || msg.includes("not found") || msg.includes("not configured")) {
-        setError("Google sign-in is not configured. Ask the admin to enable it.");
       } else {
-        setError(msg || "Google sign-in failed.");
+        setError(msg || "Could not start Google sign-in.");
       }
-    }).finally(() => {
       setLoading(false);
     });
   }
