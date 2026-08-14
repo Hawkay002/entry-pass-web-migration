@@ -154,7 +154,12 @@ function normalizePin(pin: string): string {
 }
 
 function generateKioskId(): string {
-  return Math.random().toString(36).slice(2, 8);
+  // PB record ids must be ^[a-z0-9]{15}$ — the id doubles as the
+  // kiosk_status record key, so it must satisfy PB validation.
+  const chars = "abcdefghijklmnopqrstuvwxyz0123456789";
+  let id = "";
+  for (let i = 0; i < 15; i++) id += chars[Math.floor(Math.random() * chars.length)];
+  return id;
 }
 
 async function readKiosks(): Promise<KioskConfig[]> {
