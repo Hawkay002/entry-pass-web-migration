@@ -101,9 +101,12 @@ function LoginForm() {
           setError("");
           setTimeout(() => otpRefs.current[0]?.focus(), 100);
         } else if (res.ok) {
-          window.history.replaceState({}, "", "/login");
-          router.push("/tickets");
-          router.refresh();
+          // HARD navigation — full page load. The OAuth return lands on a
+          // service-worker-served page; client-side router navigation can
+          // resolve /tickets from stale router/page cache and bounce back.
+          // A hard load forces a fresh authenticated render.
+          window.location.replace("/tickets");
+          return; // page unloads — skip state updates below
         } else {
           setError(data.error ?? "Google sign-in failed.");
         }
