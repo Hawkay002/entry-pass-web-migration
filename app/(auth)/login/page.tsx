@@ -173,6 +173,9 @@ function LoginForm() {
       // PB leaves redirect_uri empty in listAuthMethods — set our callback.
       const url = new URL(google.authURL);
       url.searchParams.set("redirect_uri", redirectUri);
+      // Always show the account picker — without this, Google auto-selects
+      // the last-used account (prompt=none) and skips the chooser.
+      url.searchParams.set("prompt", "select_account");
       window.location.href = url.toString();
     }).catch((err) => {
       const msg = (err as { message?: string }).message ?? "";
