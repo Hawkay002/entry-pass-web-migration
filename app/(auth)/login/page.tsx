@@ -90,6 +90,9 @@ function LoginForm() {
         const { res, data } = await postLogin({
           oauthCode: code,
           codeVerifier: stored.codeVerifier,
+          // The exact redirect_uri used at the authorize step — the server
+          // MUST send Google a byte-identical one at the token exchange.
+          redirectUri: window.location.origin + "/api/oauth/callback",
         });
         if (data.status === "2fa_required" && data.token) {
           setPendingToken(data.token);

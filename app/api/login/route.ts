@@ -54,6 +54,7 @@ export async function POST(req: NextRequest) {
     token?: unknown; // PB token from a prior auth (2FA continuation)
     oauthCode?: unknown; // Google OAuth authorization code (redirect flow)
     codeVerifier?: unknown; // PKCE verifier from listAuthMethods
+    redirectUri?: unknown; // exact redirect_uri used at the authorize step
     code?: unknown;
     recoveryCode?: unknown;
   };
@@ -78,15 +79,38 @@ export async function POST(req: NextRequest) {
       // with Pocketbase server-side. The redirect_uri MUST match the one used
       // when starting the flow (our /api/oauth/callback on this origin).
       const codeVerifier = typeof body.codeVerifier === "string" ? body.codeVerifier : "";
-      const redirectUrl = new URL(req.url).origin + "/api/oauth/callback";
+      // The client sends the EXACT redirect_uri it used at the authorize step.
+      // Google requires a byte-identical redirect_uri at the token exchange —
+      // deriving it from req.url here is unreliable on serverless (Vercel),
+      // where req.url may not carry the public origin.
+      const redirectUrl =
+        typeof body.redirectUri === "string" && body.redirectUri
+          ? body.redirectUri
+          : new URL(req.url).origin + "/api/oauth/callback";
       const pb = new PocketBase(serverEnv.pbUrl);
       pb.autoCancellation(false);
-      const auth = await pb.collection("users").authWithOAuth2Code(
-        "google",
-        body.oauthCode,
-        codeVerifier,
-        redirectUrl
-      );
+      let auth;
+      try {
+        auth = await pb.collection("users").authWithOAuth2Code(
+          "google",
+          body.oauthCode,
+          codeVerifier,
+          redirectUrl
+        );
+      } catch (ex) {
+        const exErr = ex as { status?: number; message?: string; response?: unknown };
+        console.error("[login][oauth] exchange failed:", {
+          status: exErr.status,
+          message: exErr.message,
+          response: JSON.stringify(exErr.response ?? {}).slice(0, 500),
+          redirectUrl,
+          verifierLen: codeVerifier.length,
+        });
+        return NextResponse.json(
+          { ok: false, error: "Google sign-in failed (code exchange). Please try again." },
+          { status: 401 }
+        );
+      }
       const record = auth.record as unknown as { id: string; email: string; role?: string } | null;
       if (!record) {
         return NextResponse.json({ ok: false, error: "Google sign-in failed." }, { status: 401 });
