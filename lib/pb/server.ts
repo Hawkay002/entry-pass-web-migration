@@ -52,17 +52,62 @@ export function pbForUser(token: string): PocketBase {
 }
 
 /** Verify a user's auth token. Returns the user record on success, null on failure.
- *  Authoritative check — authRefresh validates the JWT signature server-side. */
+ *  Authoritative check — authRefresh validates the JWT signature server-side.
+ *
+ *  Resilience: the PB server may be behind a tunnel with occasional hiccups.
+ *  A single failed roundtrip must NOT log the user out, so:
+ *   - verified tokens are cached briefly (60s) — avoids one tunnel hit per request
+ *   - network-level failures (status 0) are retried once
+ *   - only a definitive auth rejection (401) returns null */
+interface VerifiedUser {
+  id: string;
+  email: string;
+  role: string | null;
+}
+
+const verifiedCache = new Map<string, { user: VerifiedUser; expiresAt: number }>();
+const VERIFY_CACHE_MS = 60_000;
+
+function isNetworkError(err: unknown): boolean {
+  const e = err as { status?: number; isAbort?: boolean };
+  return !e?.status || e.status === 0 || Boolean(e.isAbort);
+}
+
 export async function verifyUserToken(
   token: string
-): Promise<{ id: string; email: string; role: string | null } | null> {
-  try {
-    const pb = pbForUser(token);
-    await pb.collection("users").authRefresh();
-    const u = pb.authStore.model as { id: string; email: string; role?: string } | null;
-    if (!u) return null;
-    return { id: u.id, email: u.email, role: u.role ?? null };
-  } catch {
-    return null;
+): Promise<VerifiedUser | null> {
+  // Recently verified — skip the roundtrip.
+  const cached = verifiedCache.get(token);
+  if (cached && cached.expiresAt > Date.now()) {
+    return cached.user;
   }
+
+  for (let attempt = 1; attempt <= 2; attempt++) {
+    try {
+      const pb = pbForUser(token);
+      await pb.collection("users").authRefresh();
+      const u = pb.authStore.model as { id: string; email: string; role?: string } | null;
+      if (!u) return null; // token structurally invalid
+      const user: VerifiedUser = { id: u.id, email: u.email, role: u.role ?? null };
+      verifiedCache.set(token, { user, expiresAt: Date.now() + VERIFY_CACHE_MS });
+      return user;
+    } catch (err) {
+      const status = (err as { status?: number }).status;
+      if (status === 401 || status === 403) {
+        // Definitive rejection — token genuinely invalid/expired.
+        verifiedCache.delete(token);
+        return null;
+      }
+      // Network-level failure — retry once, then fail OPEN with the last
+      // known-good result if we have one (better than logging out a valid
+      // session over a transient tunnel blip).
+      if (attempt === 2) {
+        const lastGood = verifiedCache.get(token);
+        if (lastGood) return lastGood.user;
+        return null;
+      }
+      await new Promise((r) => setTimeout(r, 250));
+    }
+  }
+  return null;
 }

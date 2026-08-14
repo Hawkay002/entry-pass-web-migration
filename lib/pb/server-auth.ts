@@ -17,6 +17,10 @@ import type { Role, StaffMember } from "@/lib/types";
  *  field isn't set. Matches the old ADMIN_EMAILS override in server-auth.ts. */
 const ADMIN_EMAILS = ["admin.test@gmail.com", "shovith2@gmail.com"];
 
+/** Short-lived cache of staff lookups (email → resolved AppUser). */
+const staffCache = new Map<string, { user: AppUser; expiresAt: number }>();
+const STAFF_CACHE_MS = 60_000;
+
 export async function getAppUser(): Promise<AppUser | null> {
   const cookieStore = await cookies();
   const token = cookieStore.get(authConfig.cookieName)?.value;
@@ -38,7 +42,12 @@ export async function getAppUser(): Promise<AppUser | null> {
   }
 
   // Staff: find their name + gate from the roles collection by email.
+  // Cached briefly — this runs on every request and each lookup is a tunnel
+  // roundtrip; role membership changes are picked up within the cache window.
   try {
+    const cached = staffCache.get(email.toLowerCase());
+    if (cached && cached.expiresAt > Date.now()) return cached.user;
+
     const pb = await pbAdmin();
     const roles = await pb.collection("roles").getFullList({ fields: "name,staff" });
     let foundName = "";
@@ -58,13 +67,15 @@ export async function getAppUser(): Promise<AppUser | null> {
       console.log("[server-auth] staff not in any role, rejecting:", email);
       return null;
     }
-    return {
+    const user = {
       uid: verified.id,
       email,
       username: foundName,
       role: foundRole,
       gateId: foundGateId,
     };
+    staffCache.set(email.toLowerCase(), { user, expiresAt: Date.now() + STAFF_CACHE_MS });
+    return user;
   } catch (err) {
     console.error("[server-auth] roles lookup failed:", err);
     return null;
