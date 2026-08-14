@@ -2,6 +2,7 @@
   "framework": "nextjs",
   "buildCommand": "pnpm build",
   "installCommand": "pnpm install",
+  "regions": ["bom1"],
   "functions": {
     "app/(app)/**": {
       "maxDuration": 30

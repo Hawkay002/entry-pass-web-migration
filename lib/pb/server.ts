@@ -82,7 +82,7 @@ export async function verifyUserToken(
     return cached.user;
   }
 
-  for (let attempt = 1; attempt <= 2; attempt++) {
+  for (let attempt = 1; attempt <= 3; attempt++) {
     try {
       const pb = pbForUser(token);
       await pb.collection("users").authRefresh();
@@ -95,18 +95,24 @@ export async function verifyUserToken(
       const status = (err as { status?: number }).status;
       if (status === 401 || status === 403) {
         // Definitive rejection — token genuinely invalid/expired.
+        console.log("[auth] token definitively rejected (401/403)");
         verifiedCache.delete(token);
         return null;
       }
-      // Network-level failure — retry once, then fail OPEN with the last
-      // known-good result if we have one (better than logging out a valid
-      // session over a transient tunnel blip).
-      if (attempt === 2) {
+      // Network-level failure — retry with backoff, then fail OPEN with the
+      // last known-good result if we have one. A fresh token's FIRST
+      // verification has no fallback, so give the tunnel every chance.
+      console.log(`[auth] verify network failure (attempt ${attempt}/3, status ${status ?? "none"})`);
+      if (attempt === 3) {
         const lastGood = verifiedCache.get(token);
-        if (lastGood) return lastGood.user;
+        if (lastGood) {
+          console.log("[auth] failing OPEN with last-known-good");
+          return lastGood.user;
+        }
+        console.error("[auth] BOUNCE: tunnel unreachable for fresh token — user will be logged out");
         return null;
       }
-      await new Promise((r) => setTimeout(r, 250));
+      await new Promise((r) => setTimeout(r, 400 * attempt));
     }
   }
   return null;

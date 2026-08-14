@@ -24,10 +24,16 @@ const STAFF_CACHE_MS = 60_000;
 export async function getAppUser(): Promise<AppUser | null> {
   const cookieStore = await cookies();
   const token = cookieStore.get(authConfig.cookieName)?.value;
-  if (!token) return null;
+  if (!token) {
+    console.log("[auth] getAppUser: no cookie present");
+    return null;
+  }
 
   const verified = await verifyUserToken(token);
-  if (!verified) return null;
+  if (!verified) {
+    console.log("[auth] getAppUser: token verification failed (cookie present) — bouncing");
+    return null;
+  }
 
   const email = verified.email ?? "";
   const isAdminByEmail = ADMIN_EMAILS.includes(email.toLowerCase());
