@@ -88,18 +88,27 @@ function vercel(args, answers = "") {
 // changes go through the REST API with a token stored in .env.local as
 // VERCEL_TOKEN (created once at https://vercel.com/account/tokens).
 
-/** Get (or create) the env var's id, then PUT the new value. */
+/** True upsert: list env vars, DELETE matching ones, then create fresh. */
 async function apiSetEnv(name, value, targets = ["production"]) {
   const token = getVercelToken();
-  const { project } = JSON.parse(readFileSync(join(ROOT, ".vercel", "project.json"), "utf8"));
+  const { projectName } = JSON.parse(readFileSync(join(ROOT, ".vercel", "project.json"), "utf8"));
   const H = { Authorization: `Bearer ${token}`, "Content-Type": "application/json" };
+  const base = `https://api.vercel.com/v9/projects/${projectName}/env`;
 
-  const listRes = await fetch(`https://api.vercel.com/v9/projects/${project}/env?upsert=true`, {
+  // remove any existing entries for this name (any environment) so the
+  // create can't hit ENV_ALREADY_EXISTS
+  const existing = await (await fetch(`${base}`, { headers: H })).json();
+  const { envs = [] } = existing;
+  for (const e of envs.filter((v) => v.key === name)) {
+    await fetch(`${base}/${e.id}`, { method: "DELETE", headers: H });
+  }
+
+  const res = await fetch(`${base}`, {
     method: "POST", headers: H,
     body: JSON.stringify({ key: name, value, type: "plain", target: targets }),
   });
-  if (!listRes.ok) {
-    throw new Error(`Vercel API could not set ${name}: ${await listRes.text()}`);
+  if (!res.ok) {
+    throw new Error(`Vercel API could not set ${name}: ${await res.text()}`);
   }
 }
 
@@ -235,8 +244,12 @@ Ctrl+C to stop everything.
   // ---------- 4. publish ----------
   step("4/4  Publishing the website");
   const out = await vercel(["--prod"]);
-  const alias = (out.match(/https:\/\/[a-z0-9-]+\.vercel\.app/gi) || []).pop();
-  return finish(tunnel, pbChild, alias);
+  // prefer the stable project alias (LAST 'Aliased' line), not the one-off
+  // deployment URL — the alias is the link staff have.
+  const aliasLines = out.match(/^.*Aliased.*$/gm) || [];
+  const aliasMatch = (aliasLines.join(" ").match(/https:\/\/[a-z0-9-]+\.vercel\.app/gi) || []).pop();
+  const deployMatch = (out.match(/https:\/\/[a-z0-9-]+\.vercel\.app/gi) || []).pop();
+  return finish(tunnel, pbChild, aliasMatch || deployMatch);
 }
 
 function finish(tunnel, pbChild, alias) {
