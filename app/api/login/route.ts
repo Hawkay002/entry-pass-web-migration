@@ -222,7 +222,18 @@ export async function POST(req: NextRequest) {
     };
     await logAction(logUser, "LOGIN", `${username} signed in`).catch(() => {});
 
+    // DEBUG: log the token length per auth path (temporary).
+    console.log("[login] responding ok — tokenLen:", pbToken.length, "| path:",
+      body.oauthCode ? "oauth" : body.token ? "token" : "password", "| email:", email);
+
     const res = NextResponse.json({ ok: true });
+    if (!pbToken) {
+      console.error("[login] EMPTY TOKEN — cookie would be dropped!");
+      return NextResponse.json(
+        { ok: false, error: "Session could not be created. Please try again." },
+        { status: 500 }
+      );
+    }
     res.cookies.set(authConfig.cookieName, pbToken, {
       ...authConfig.cookieSerializeOptions,
       httpOnly: true,
