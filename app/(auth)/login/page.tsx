@@ -99,13 +99,11 @@ function LoginForm() {
   function handleGoogleSignIn() {
     setError("");
     setLoading(true);
-    // The OAuth redirect URL must point to the Pocketbase server's
-    // /api/oauth2-redirect handler (derived from NEXT_PUBLIC_POCKETBASE_URL).
+    // Pocketbase OAuth popup flow. The SDK opens a popup, sends the user to
+    // Google, and receives the auth result over a realtime channel.
+    // PB's /api/oauth2-redirect is built for this popup flow (postMessage to
+    // opener), so the SDK manages the whole exchange.
     const redirectUrl = clientEnv.pbUrl.replace(/\/$/, "") + "/api/oauth2-redirect";
-    // The SDK opens its own popup with Google's consent screen, then delivers
-    // the auth result back over a realtime channel and closes the popup.
-    // NOTE: handleGoogleSignIn is NOT async so the popup isn't blocked by
-    // the browser's popup-guard heuristics (the SDK handles the async work).
     pb().collection("users").authWithOAuth2({
       provider: "google",
       redirectUrl,
@@ -127,7 +125,7 @@ function LoginForm() {
     }).catch((err) => {
       const msg = (err as { message?: string }).message ?? "";
       if (msg.includes("popup") || msg.includes("cancelled")) {
-        setError("Sign-in cancelled.");
+        setError("Sign-in cancelled or popup was blocked. Allow popups for this site and try again.");
       } else if (msg.includes("network") || msg.includes("fetch")) {
         setError("Network error. Check your connection and try again.");
       } else if (msg.includes("provider") || msg.includes("not found") || msg.includes("not configured")) {
