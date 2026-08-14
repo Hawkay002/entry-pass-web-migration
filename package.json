@@ -8,6 +8,7 @@
     "start": "next start",
     "setup": "node scripts/setup.mjs",
     "start:all": "node scripts/start.mjs",
+    "go:live": "node scripts/go-live.mjs",
     "lint": "eslint",
     "typecheck": "tsc --noEmit"
   },

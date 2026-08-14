@@ -27,7 +27,11 @@ import { platform, arch } from "node:os";
 import readline from "node:readline/promises";
 
 const ROOT = process.cwd();
-const PB_DIR = join(ROOT, "pb");
+/** Where Pocketbase lives: repo's pb/ by default, or an existing install
+ *  via PB_HOME (reuses it instead of downloading a second copy). */
+const PB_DIR = process.env.PB_HOME
+  ? process.env.PB_HOME
+  : join(ROOT, "pb");
 const PB_VERSION = "0.39.10";
 const PB_PORT = Number(process.env.PB_PORT ?? 8090);
 const PB_URL = `http://127.0.0.1:${PB_PORT}`;
