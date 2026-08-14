@@ -6,6 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
+    "setup": "node scripts/setup.mjs",
+    "start:all": "node scripts/start.mjs",
     "lint": "eslint",
     "typecheck": "tsc --noEmit"
   },

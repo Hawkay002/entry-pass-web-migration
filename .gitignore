@@ -35,6 +35,9 @@ yarn-error.log*
 # but always keep the example template committed
 !.env.example
 
+# local Pocketbase (binary + database) — installed by `pnpm setup`
+/pb
+
 # vercel
 .vercel
 

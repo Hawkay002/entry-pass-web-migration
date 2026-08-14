@@ -14,8 +14,11 @@ import type { AppUser } from "@/lib/auth";
 import type { Role, StaffMember } from "@/lib/types";
 
 /** Designated admin emails — always get admin access even if their PB `role`
- *  field isn't set. Matches the old ADMIN_EMAILS override in server-auth.ts. */
-const ADMIN_EMAILS = ["admin.test@gmail.com", "shovith2@gmail.com"];
+ *  field isn't set. Set via the ADMIN_EMAILS env var (comma-separated). */
+const ADMIN_EMAILS = (process.env.ADMIN_EMAILS ?? "")
+  .split(",")
+  .map((e) => e.trim().toLowerCase())
+  .filter(Boolean);
 
 /** Short-lived cache of staff lookups (email → resolved AppUser). */
 const staffCache = new Map<string, { user: AppUser; expiresAt: number }>();
@@ -24,16 +27,10 @@ const STAFF_CACHE_MS = 60_000;
 export async function getAppUser(): Promise<AppUser | null> {
   const cookieStore = await cookies();
   const token = cookieStore.get(authConfig.cookieName)?.value;
-  if (!token) {
-    console.log("[auth] getAppUser: no cookie present");
-    return null;
-  }
+  if (!token) return null;
 
   const verified = await verifyUserToken(token);
-  if (!verified) {
-    console.log("[auth] getAppUser: token verification failed (cookie present) — bouncing");
-    return null;
-  }
+  if (!verified) return null;
 
   const email = verified.email ?? "";
   const isAdminByEmail = ADMIN_EMAILS.includes(email.toLowerCase());

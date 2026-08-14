@@ -17,7 +17,10 @@ import type { AppUser } from "@/lib/auth";
 
 /** Designated admin emails — always get admin access even if their PB `role`
  *  field isn't set. Matches the old ADMIN_EMAILS override. */
-const ADMIN_EMAILS = ["admin.test@gmail.com", "shovith2@gmail.com"];
+const ADMIN_EMAILS = (process.env.ADMIN_EMAILS ?? "")
+  .split(",")
+  .map((e) => e.trim().toLowerCase())
+  .filter(Boolean);
 
 /** Read the admin's 2FA config from the two_factor collection. Keyed by user id. */
 async function read2FAConfig(
@@ -222,18 +225,15 @@ export async function POST(req: NextRequest) {
     };
     await logAction(logUser, "LOGIN", `${username} signed in`).catch(() => {});
 
-    // DEBUG: log the token length per auth path (temporary).
-    console.log("[login] responding ok — tokenLen:", pbToken.length, "| path:",
-      body.oauthCode ? "oauth" : body.token ? "token" : "password", "| email:", email);
-
-    const res = NextResponse.json({ ok: true });
     if (!pbToken) {
-      console.error("[login] EMPTY TOKEN — cookie would be dropped!");
+      // Defensive: an empty token would make Next drop the Set-Cookie header
+      // silently — fail loudly instead of returning a fake success.
       return NextResponse.json(
         { ok: false, error: "Session could not be created. Please try again." },
         { status: 500 }
       );
     }
+    const res = NextResponse.json({ ok: true });
     res.cookies.set(authConfig.cookieName, pbToken, {
       ...authConfig.cookieSerializeOptions,
       httpOnly: true,
