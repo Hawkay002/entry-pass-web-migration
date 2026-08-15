@@ -248,12 +248,25 @@ automatic.`
   // ---------- 4. publish ----------
   step("4/4  Publishing the website");
   const out = await vercel(["--prod"]);
-  // prefer the stable project alias (LAST 'Aliased' line), not the one-off
-  // deployment URL — the alias is the link staff have.
-  const aliasLines = out.match(/^.*Aliased.*$/gm) || [];
-  const aliasMatch = (aliasLines.join(" ").match(/https:\/\/[a-z0-9-]+\.vercel\.app/gi) || []).pop();
-  const deployMatch = (out.match(/https:\/\/[a-z0-9-]+\.vercel\.app/gi) || []).pop();
-  return finish(tunnel, pbChild, aliasMatch || deployMatch);
+
+  // The link to share is the project's PERMANENT domain:
+  //   https://<projectName>.vercel.app
+  // (Vercel derives it from the project name; the one-off deployment URL
+  // in the deploy output carries a random hash and Google Sign-In only
+  // trusts the permanent one.) Verify it responds before printing it.
+  const { projectName } = JSON.parse(readFileSync(join(ROOT, ".vercel", "project.json"), "utf8"));
+  const alias = `https://${projectName}.vercel.app`;
+  let publicLink = "";
+  try {
+    const r = await fetch(alias, { redirect: "follow" });
+    if (r.ok) publicLink = alias;
+  } catch { /* alias didn't respond — fall back below */ }
+  if (!publicLink) {
+    const oneOff = (out.replace(/\x1b\[[0-9;]*[A-Za-z]/g, "").match(/https:\/\/[a-z0-9.-]+\.vercel\.app/gi) || []).pop() ?? "";
+    log(`\nNOTE: the permanent link (${alias}) did not respond yet — it can take\na minute after the very first publish. Check it in your browser soon.`);
+    publicLink = oneOff;
+  }
+  return finish(tunnel, pbChild, publicLink);
 }
 
 function finish(tunnel, pbChild, alias) {
