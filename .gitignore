@@ -38,6 +38,9 @@ yarn-error.log*
 # local Pocketbase (binary + database) — installed by `pnpm setup`
 /pb
 
+# data backups made by `pnpm backup`
+/backups
+
 # vercel
 .vercel
 

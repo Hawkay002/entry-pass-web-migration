@@ -27,11 +27,18 @@ import { platform, arch } from "node:os";
 import readline from "node:readline/promises";
 
 const ROOT = process.cwd();
-/** Where Pocketbase lives: repo's pb/ by default, or an existing install
- *  via PB_HOME (reuses it instead of downloading a second copy). */
-const PB_DIR = process.env.PB_HOME
-  ? process.env.PB_HOME
-  : join(ROOT, "pb");
+
+/** Read a key from .env.local (lets double-click .bat users configure
+ *  without a terminal). */
+function envLocalKey(key) {
+  const file = join(ROOT, ".env.local");
+  if (!existsSync(file)) return undefined;
+  const m = readFileSync(file, "utf8").match(new RegExp(`^${key}=(.+)$`, "m"));
+  return m ? m[1].trim() : undefined;
+}
+
+/** Where Pocketbase lives: PB_HOME env var > PB_HOME in .env.local > ./pb */
+const PB_DIR = process.env.PB_HOME ?? envLocalKey("PB_HOME") ?? join(ROOT, "pb");
 const PB_VERSION = "0.39.10";
 const PB_PORT = Number(process.env.PB_PORT ?? 8090);
 const PB_URL = `http://127.0.0.1:${PB_PORT}`;

@@ -9,7 +9,35 @@ This guide explains how to run this app the way it's designed to run:
 - A free **Cloudflare tunnel** connects the two, so Vercel can reach your computer.
 
 No technical background needed — every step is spelled out. First-time setup takes
-about 30 minutes; after that, going live every day is **one command**.
+about 30 minutes; after that, going live every day is **one double-click**.
+
+---
+
+## ⭐ The easy way: double-click files (Windows)
+
+Inside the app folder there are **numbered files**. Run them in order —
+just double-click, no typing:
+
+| File | What it does | When to run it |
+|---|---|---|
+| **`1-INSTALL.bat`** | Installs the app's building blocks | Once, at the very start |
+| **`2-SETUP.bat`** | Prepares the database + your logins (asks simple questions) | Once, right after 1 |
+| **`3-GO-LIVE.bat`** | 🚀 Makes your website public. **Leave its window open** | **Every day / after any reboot** |
+| **`4-BACKUP.bat`** | Saves all your data into a dated zip in the `backups` folder | Whenever you want a safety copy (before events!) |
+| **`5-START-LOCAL-TEST.bat`** | Runs everything on this PC only (nothing public) | Optional — safe testing |
+
+**The golden rule: 1 → 2 once, then 3 every day. 4 before important moments.**
+
+> ⚠️ If Windows shows a "Windows protected your PC" (SmartScreen) blue box when
+> you double-click: click **More info** → **Run anyway**. That warning appears for
+> any new script, not just this one.
+>
+> 💡 If your Pocketbase lives somewhere other than the `pb` folder inside this
+> folder, open `.env.local` in Notepad and add a line:
+> `PB_HOME=C:/path/to/your/pocketbase/folder` — all the scripts will use it.
+
+*(Mac users: the same steps work with the terminal commands listed in each part
+below — `pnpm install`, `pnpm setup`, `pnpm go:live`, `pnpm backup`.)*
 
 ---
 
@@ -190,10 +218,10 @@ website picks it up.
 
 | Situation | What to do |
 |---|---|
-| Morning of the event | Run `pnpm go:live`, leave the window open, share the link |
-| Computer restarted / login suddenly broken | Run `pnpm go:live` again |
-| End of day | Ctrl+C in the go-live window |
-| Back up the data | Copy the `pb` folder to a USB drive / cloud folder |
+| Morning of the event | Double-click **`3-GO-LIVE.bat`**, leave the window open, share the link |
+| Computer restarted / login suddenly broken | Double-click **`3-GO-LIVE.bat`** again — it repairs everything |
+| End of day | Close the go-live window (or Ctrl+C) |
+| Back up the data | Double-click **`4-BACKUP.bat`** → dated zip in `backups` — copy it to a USB drive / cloud folder |
 
 ---
 
@@ -229,18 +257,17 @@ Only people on your Wi-Fi could reach it via the `Network:` address it prints.
 
 ## Quick reference card
 
-```bash
-# ONE TIME
-pnpm install
-pnpm setup
-vercel login
-vercel link
+```
+DOUBLE-CLICK (Windows)          or type in a terminal
+----------------------------    ---------------------------
+1-INSTALL.bat   (once)          pnpm install
+2-SETUP.bat     (once)          pnpm setup
+3-GO-LIVE.bat   (every day)     pnpm go:live     ← keep window open
+4-BACKUP.bat    (safety copy)   pnpm backup
+5-START-LOCAL-TEST.bat (opt.)   pnpm start:all
 
-# EVERY DAY — one command, leave the window open
-pnpm go:live
-
-# OPTIONAL — local testing only
-pnpm start:all
+Plus ONE TIME:  vercel login  +  vercel link  +  VERCEL_TOKEN
+in .env.local (SETUP.md Part 2).
 ```
 
 | Address | What |

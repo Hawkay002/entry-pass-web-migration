@@ -26,11 +26,18 @@ import { join } from "node:path";
 import { platform } from "node:os";
 
 const ROOT = process.cwd();
-/** Pocketbase location: the repo's pb/ folder by default, or any existing
- *  install via PB_HOME (e.g. if you already run Pocketbase elsewhere). */
-const PB_DIR = process.env.PB_HOME
-  ? process.env.PB_HOME
-  : join(ROOT, "pb");
+
+/** Read a key from .env.local (works for double-click .bat users, who edit
+ *  the file in Notepad instead of setting terminal env vars). */
+function envLocalKey(key) {
+  const file = join(ROOT, ".env.local");
+  if (!existsSync(file)) return undefined;
+  const m = readFileSync(file, "utf8").match(new RegExp(`^${key}=(.+)$`, "m"));
+  return m ? m[1].trim() : undefined;
+}
+
+/** Pocketbase location: PB_HOME env var > PB_HOME in .env.local > ./pb */
+const PB_DIR = process.env.PB_HOME ?? envLocalKey("PB_HOME") ?? join(ROOT, "pb");
 const isWin = platform() === "win32";
 const pbExe = join(PB_DIR, isWin ? "pocketbase.exe" : "pocketbase");
 const PB_URL = "http://127.0.0.1:8090";

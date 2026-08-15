@@ -8,12 +8,22 @@
 // Press Ctrl+C in this window to stop both.
 
 import { spawn, execSync } from "node:child_process";
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { platform } from "node:os";
 
 const ROOT = process.cwd();
-const PB_DIR = join(ROOT, "pb");
+
+/** Read a key from .env.local (for double-click .bat users). */
+function envLocalKey(key) {
+  const file = join(ROOT, ".env.local");
+  if (!existsSync(file)) return undefined;
+  const m = readFileSync(file, "utf8").match(new RegExp(`^${key}=(.+)$`, "m"));
+  return m ? m[1].trim() : undefined;
+}
+
+/** Pocketbase location: PB_HOME env var > PB_HOME in .env.local > ./pb */
+const PB_DIR = process.env.PB_HOME ?? envLocalKey("PB_HOME") ?? join(ROOT, "pb");
 const isWin = platform() === "win32";
 const pbExe = join(PB_DIR, isWin ? "pocketbase.exe" : "pocketbase");
 const prod = process.argv.includes("--prod");
