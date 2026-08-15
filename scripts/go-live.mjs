@@ -113,8 +113,9 @@ async function cliSetEnv(name, value, targets = ["production"]) {
   }
   for (const t of targets) {
     // execSync's `input` feeds stdin BEFORE the CLI starts — spawn+write
-    // races the CLI's prompt and hangs.
-    sh(`vercel env add ${name} ${t}`, { input: value + "\n", timeout: 90_000 });
+    // races the CLI's prompt and hangs. Preview asks a SECOND prompt
+    // (git branch — empty = all preview branches), so feed a blank line.
+    sh(`vercel env add ${name} ${t}`, { input: value + "\n\n", timeout: 90_000 });
     log(`  set ${name} for ${t}`);
   }
 }
