@@ -142,23 +142,31 @@ Ctrl+C to stop everything.
     console.error("Pocketbase not found. Run the setup first:  pnpm setup");
     process.exit(1);
   }
+  let loggedIn = false;
   try {
     const who = sh(`vercel whoami`).trim().split("\n").pop();
-    log(`Vercel account: ${who}`);
-  } catch {
-    console.error(
-`Not logged in to Vercel yet — this is the ONE manual step.
+    if (who && !who.includes("vercel login")) {
+      log(`Vercel account: ${who}`);
+      loggedIn = true;
+    }
+  } catch { /* not logged in */ }
+  if (!loggedIn) {
+    log(`Not connected to Vercel yet.
 
-Open a terminal (Windows: Start menu -> type "Git Bash" -> open it),
-then type these two lines, one at a time:
-
-  vercel login
-
-Your browser opens — click Approve / Continue. Then run pnpm go:live
-(or double-click 3-GO-LIVE.bat) again — everything after this is
-automatic.`
-    );
-    process.exit(1);
+Starting the connection now — your browser will
+open a Vercel page: click Approve / Continue
+there, then come back to THIS window.
+(If the browser doesn't open by itself, copy the
+address this window prints into your browser.)`);
+    const okLogin = await new Promise((resolve) => {
+      const p = spawn("vercel", ["login"], { shell: true, stdio: "inherit", cwd: ROOT });
+      p.on("exit", (code) => resolve(code === 0));
+    });
+    if (!okLogin) {
+      console.error("\nLogin did not complete. Run this again (3-GO-LIVE.bat)\nand click Approve in the browser when it opens.");
+      process.exit(1);
+    }
+    log("Connected to Vercel.");
   }
   if (!existsSync(join(ROOT, ".vercel", "project.json"))) {
     log("First run here — connecting this folder to your Vercel account...");

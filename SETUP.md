@@ -74,40 +74,24 @@ Two things to understand:
 
 | What | Where to get it | Cost |
 |---|---|---|
-| GitHub account | https://github.com → Sign up | free |
-| Vercel account | https://vercel.com → Sign up (use "Continue with GitHub") | free |
+| Vercel account | https://vercel.com → Sign up | free |
 | Google account | for Google Sign-In (optional) | free |
-| Node.js | https://nodejs.org → download **LTS**, install | free |
-| pnpm | after Node.js: open a terminal, run `npm install -g pnpm` | free |
-| Vercel CLI | `npm install -g vercel` | free |
-| cloudflared (the tunnel) | https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/downloads/ → download for your system, install | free |
-| The app's code | download this repo as ZIP (and unzip) — or `git clone` | — |
+| Node.js, pnpm, tunnel program, Vercel tool | **installed automatically** by `0b-INSTALL-NEEDED.bat` — you don't download anything yourself | free |
+| The app's code | download this repo as ZIP → right-click → Extract All (or `git clone`) | — |
 
-**What's a terminal?** A window where you type commands instead of clicking.
-- **Windows:** Start menu → type `Git Bash` → open it. (No Git Bash? Install from
-  https://git-scm.com/download/win — click Next through everything.)
-- **Mac:** Cmd+Space → type `terminal` → Enter.
-
-**Opening the app folder in the terminal:** type `cd ` (c, d, space) and DRAG the
-folder from your file explorer into the terminal window, then press Enter.
-Check it worked: run `ls` — you should see `package.json` and `SETUP.md`.
+**You do NOT need a terminal on Windows.** Everything runs by double-clicking
+the numbered files. (Mac/Linux users: the same steps work with `pnpm` commands
+listed in each part.)
 
 ---
 
 ## PART 1 — Prepare the database on your computer (once, ~10 min)
 
-1. Open a terminal in the app folder (see above).
+1. Double-click **`1-INSTALL.bat`** — installs the website's building blocks
+   (a window opens, waits for "DONE", closes).
 
-2. Install the website's building blocks:
-   ```bash
-   pnpm install
-   ```
-
-3. Run the setup wizard:
-   ```bash
-   pnpm setup
-   ```
-   It asks simple questions and does everything else automatically:
+2. Double-click **`2-SETUP.bat`** — the setup wizard. It asks simple questions
+   and does everything else automatically:
    - Downloads Pocketbase into a `pb` folder (once)
    - Creates all the database tables
    - Asks you to create **two different logins** — write them down:
@@ -119,38 +103,38 @@ Check it worked: run `ls` — you should see `package.json` and `SETUP.md`.
 
    - Optionally takes your Google codes (see PART 3 — you can skip now and add later)
 
+   *(Mac/Linux instead: `pnpm install` then `pnpm setup`.)*
+
    When it prints **SETUP COMPLETE**, continue.
 
 ---
 
 ## PART 2 — Put the website on Vercel and go live (once, ~2 min)
 
-1. The ONE manual step — connect this computer to your Vercel account.
-   Open a terminal in the app folder and type:
-   ```bash
-   vercel login
-   ```
-   Your browser opens → click **Approve/Continue**. That's it — this is
-   needed once ever, because only you can approve your own account.
+1. Double-click **`3-GO-LIVE.bat`**. That's the whole step.
 
-2. **Go live** (double-click `3-GO-LIVE.bat`, or):
-   ```bash
-   pnpm go:live
-   ```
-   This one command does everything else automatically:
-   - connects this folder to a new Vercel project (created for you)
+   **First run only:** it notices you're not connected to Vercel yet and
+   starts the connection itself — your browser opens a Vercel page →
+   click **Approve / Continue** → come back to the window. This click is
+   needed once ever, because only you can approve your own account.
+   (If the browser doesn't open by itself, the window prints an address
+   to copy into your browser.)
+
+   The window then does everything else automatically:
+   - creates your Vercel project (named after this folder)
    - starts the database (if not running)
    - starts the tunnel and gets its address
    - points your Vercel website at it (updates the settings, publishes the site)
    - prints your **public link** — e.g. `https://your-project.vercel.app`
+   - prints the one-line Google Sign-In setup (if you use it — see PART 3)
 
-3. Open the public link, log in with your **app login**. Done — you're live. 🎉
+2. Open the public link, log in with your **app login**. Done — you're live. 🎉
 
 **⚠️ Keep the `go:live` window open** (minimize it). It keeps the tunnel alive.
 Closing it = the website can't reach the database.
 **Stop everything:** click that window and press Ctrl+C.
-**Computer restarted?** Just run `pnpm go:live` again — it repairs everything, and
-the public link stays the same.
+**Computer restarted?** Just double-click `3-GO-LIVE.bat` again — it repairs
+everything, and the public link stays the same.
 
 ---
 
