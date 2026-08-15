@@ -233,14 +233,17 @@ automatic.`
 
   log("Updating website settings (takes a minute)...");
   // REST API with upsert — no interactive prompts, deterministic.
-  await cliSetEnv(URL_VAR, tunnelUrl, ["production"]);
+  // All three environments: git pushes trigger Preview builds, which die
+  // at build time without this var. Same value everywhere is fine.
+  await cliSetEnv(URL_VAR, tunnelUrl, ["production", "preview", "development"]);
 
   // first-run safety: make sure the other required settings exist too
   const envLocal = readEnvLocal();
   const ls = await vercel(["env", "ls"]);
   for (const name of ["POCKETBASE_ADMIN_EMAIL", "POCKETBASE_ADMIN_PASSWORD", "AUTH_COOKIE_NAME", "ADMIN_EMAILS"]) {
+    // also all environments, same reasoning (preview builds need them)
     if (!ls.includes(name) && envLocal[name]) {
-      await cliSetEnv(name, envLocal[name], ["production"]);
+      await cliSetEnv(name, envLocal[name], ["production", "preview", "development"]);
       log(`  added missing setting: ${name}`);
     }
   }
