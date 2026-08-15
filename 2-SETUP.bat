@@ -6,8 +6,8 @@ echo ============================================
 echo   STEP 2 of 4: SETUP  (first time only)
 echo ============================================
 echo This asks a few questions and prepares the
-echo database + your logins. WRITE DOWN the two
-email + password pairs it asks for!
+echo database and your logins. WRITE DOWN both
+echo email-and-password pairs it asks for!
 echo.
 echo Tip: to type in the window, click it first.
 echo.

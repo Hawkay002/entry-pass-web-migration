@@ -21,7 +21,7 @@
 //   8. Writes your .env.local settings file
 
 import { execSync, spawn } from "node:child_process";
-import { existsSync, mkdirSync, writeFileSync, copyFileSync, readdirSync, statSync, rmSync } from "node:fs";
+import { existsSync, mkdirSync, writeFileSync, readFileSync, copyFileSync, readdirSync, statSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { platform, arch } from "node:os";
 import readline from "node:readline/promises";
