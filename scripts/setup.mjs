@@ -285,7 +285,18 @@ POCKETBASE_ADMIN_PASSWORD=${dashPass}
 AUTH_COOKIE_NAME=pb_session
 ADMIN_EMAILS=${appEmail.toLowerCase()}
 `;
-  writeFileSync(join(ROOT, ".env.local"), env);
+  // Preserve keys we don't manage (e.g. VERCEL_TOKEN) if the file exists.
+  const envPath = join(ROOT, ".env.local");
+  let extra = "";
+  if (existsSync(envPath)) {
+    for (const line of readFileSync(envPath, "utf8").split(/\r?\n/)) {
+      const m = line.match(/^([A-Z_]+)=(.*)$/);
+      if (m && !/^(NEXT_PUBLIC_POCKETBASE_URL|POCKETBASE_ADMIN_EMAIL|POCKETBASE_ADMIN_PASSWORD|AUTH_COOKIE_NAME|ADMIN_EMAILS)$/.test(m[1])) {
+        extra += `${m[1]}=${m[2]}\n`;
+      }
+    }
+  }
+  writeFileSync(envPath, env + (extra ? `\n${extra}` : ""));
   console.log("Saved.");
 
   // ---------- done ----------
