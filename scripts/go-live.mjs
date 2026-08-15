@@ -18,7 +18,8 @@
 // After a PC reboot the tunnel address changes — just run this again.
 // Your public staff link NEVER changes.
 //
-// First run needs: `vercel login` + `vercel link` done once (see SETUP.md).
+// First run needs ONE manual step: `vercel login` (opens your browser).
+// Project linking + env setup + deploys are all automatic after that.
 
 import { spawn, execSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, rmSync } from "node:fs";
@@ -98,50 +99,24 @@ function vercel(args, answers = "") {
   });
 }
 
-// ---------- Vercel REST API (prompt-free env updates) ----------
-// The CLI's `env add` prompt doesn't accept piped input reliably, so env
-// changes go through the REST API with a token stored in .env.local as
-// VERCEL_TOKEN (created once at https://vercel.com/account/tokens).
+// ---------- env updates via the CLI (piped values) ----------
+// Vercel CLI 59+ accepts piped stdin for `env add`, and `env rm -y` is
+// fully non-interactive — no API token needed. This keeps a lone user's
+// setup entirely inside the scripts (they only ever run `vercel login`).
 
-/** True upsert: list env vars, DELETE matching ones, then create fresh. */
-async function apiSetEnv(name, value, targets = ["production"]) {
-  const token = getVercelToken();
-  const { projectName } = JSON.parse(readFileSync(join(ROOT, ".vercel", "project.json"), "utf8"));
-  const H = { Authorization: `Bearer ${token}`, "Content-Type": "application/json" };
-  const base = `https://api.vercel.com/v9/projects/${projectName}/env`;
-
-  // remove any existing entries for this name (any environment) so the
-  // create can't hit ENV_ALREADY_EXISTS
-  const existing = await (await fetch(`${base}`, { headers: H })).json();
-  const { envs = [] } = existing;
-  for (const e of envs.filter((v) => v.key === name)) {
-    await fetch(`${base}/${e.id}`, { method: "DELETE", headers: H });
+/** True upsert via the CLI: remove existing, then add with fed stdin. */
+async function cliSetEnv(name, value, targets = ["production"]) {
+  for (const t of targets) {
+    try {
+      await vercel(["env", "rm", name, t, "-y"]);
+    } catch { /* didn't exist — fine */ }
   }
-
-  const res = await fetch(`${base}`, {
-    method: "POST", headers: H,
-    body: JSON.stringify({ key: name, value, type: "plain", target: targets }),
-  });
-  if (!res.ok) {
-    throw new Error(`Vercel API could not set ${name}: ${await res.text()}`);
+  for (const t of targets) {
+    // execSync's `input` feeds stdin BEFORE the CLI starts — spawn+write
+    // races the CLI's prompt and hangs.
+    sh(`vercel env add ${name} ${t}`, { input: value + "\n", timeout: 90_000 });
+    log(`  set ${name} for ${t}`);
   }
-}
-
-function getVercelToken() {
-  const env = readEnvLocal();
-  if (env.VERCEL_TOKEN) return env.VERCEL_TOKEN;
-  console.error(`
-One-time step — create a Vercel token:
-  1. Open  https://vercel.com/account/tokens
-  2. Click "Create" — name it anything, scope: your account
-  3. Copy the token, then add this line to the .env.local file
-     in this folder (create the file if missing):
-
-       VERCEL_TOKEN=paste-the-token-here
-
-  4. Save the file and run  pnpm go:live  again.
-`);
-  process.exit(1);
 }
 
 async function pbHealthy() {
@@ -164,23 +139,38 @@ Ctrl+C to stop everything.
     console.error("Pocketbase not found. Run the setup first:  pnpm setup");
     process.exit(1);
   }
-  if (!existsSync(join(ROOT, ".vercel", "project.json"))) {
-    console.error("This folder isn't linked to your Vercel project yet. Run this ONCE:\n  vercel login\n  vercel link\nThen run pnpm go:live again.");
-    process.exit(1);
-  }
   try {
     const who = sh(`vercel whoami`).trim().split("\n").pop();
     log(`Vercel account: ${who}`);
   } catch {
-    console.error("Not logged in to Vercel. Run:  vercel login\nThen run pnpm go:live again.");
+    console.error(
+`Not logged in to Vercel yet — this is the ONE manual step.
+
+Open a terminal (Windows: Start menu -> type "Git Bash" -> open it),
+then type these two lines, one at a time:
+
+  vercel login
+
+Your browser opens — click Approve / Continue. Then run pnpm go:live
+(or double-click 3-GO-LIVE.bat) again — everything after this is
+automatic.`
+    );
     process.exit(1);
+  }
+  if (!existsSync(join(ROOT, ".vercel", "project.json"))) {
+    log("First run here — connecting this folder to your Vercel account...");
+    try {
+      await vercel(["link", "--yes"]);
+      log("Connected (a new Vercel project was created for you).");
+    } catch (e) {
+      console.error("Could not connect to Vercel automatically:\n" + e.message);
+      process.exit(1);
+    }
   }
   try { sh(`"${CLOUDFLARED}" --version`); } catch {
     console.error("cloudflared (the tunnel program) isn't installed.\nFix: open the 0-CHECK-FIRST folder and double-click 0b-INSTALL-NEEDED.bat\n(or install manually: https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/downloads/)\nThen run pnpm go:live again.");
     process.exit(1);
   }
-  // fail fast if the Vercel API token isn't set up yet (one-time)
-  getVercelToken();
 
   // ---------- 1. database ----------
   step("1/4  Starting the database (if needed)");
@@ -243,14 +233,14 @@ Ctrl+C to stop everything.
 
   log("Updating website settings (takes a minute)...");
   // REST API with upsert — no interactive prompts, deterministic.
-  await apiSetEnv(URL_VAR, tunnelUrl, ["production"]);
+  await cliSetEnv(URL_VAR, tunnelUrl, ["production"]);
 
   // first-run safety: make sure the other required settings exist too
   const envLocal = readEnvLocal();
   const ls = await vercel(["env", "ls"]);
   for (const name of ["POCKETBASE_ADMIN_EMAIL", "POCKETBASE_ADMIN_PASSWORD", "AUTH_COOKIE_NAME", "ADMIN_EMAILS"]) {
     if (!ls.includes(name) && envLocal[name]) {
-      await apiSetEnv(name, envLocal[name], ["production"]);
+      await cliSetEnv(name, envLocal[name], ["production"]);
       log(`  added missing setting: ${name}`);
     }
   }

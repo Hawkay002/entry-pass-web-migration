@@ -123,37 +123,28 @@ Check it worked: run `ls` — you should see `package.json` and `SETUP.md`.
 
 ---
 
-## PART 2 — Put the website on Vercel and go live (once, ~5 min)
+## PART 2 — Put the website on Vercel and go live (once, ~2 min)
 
-1. Connect this computer to your Vercel account (one time):
+1. The ONE manual step — connect this computer to your Vercel account.
+   Open a terminal in the app folder and type:
    ```bash
-   vercel login        # opens your browser, click Approve
-   vercel link         # connect this folder to a Vercel project — accept the defaults
+   vercel login
    ```
+   Your browser opens → click **Approve/Continue**. That's it — this is
+   needed once ever, because only you can approve your own account.
 
-2. Create a Vercel access token (one time) — this lets the go-live command
-   update your website's settings automatically:
-   - Open **https://vercel.com/account/tokens** → click **Create**
-   - Name it anything (e.g. `entry-pass`), scope: your account → **Create**
-   - Copy the token shown
-   - Open the `.env.local` file (in this folder, any text editor) and add a line:
-     ```
-     VERCEL_TOKEN=paste-the-token-here
-     ```
-   - Save the file. (`.env.local` already exists if you ran `pnpm setup`;
-     create it if not. It's private — never share it.)
-
-3. **Go live:**
+2. **Go live** (double-click `3-GO-LIVE.bat`, or):
    ```bash
    pnpm go:live
    ```
-   This one command:
+   This one command does everything else automatically:
+   - connects this folder to a new Vercel project (created for you)
    - starts the database (if not running)
    - starts the tunnel and gets its address
    - points your Vercel website at it (updates the settings, publishes the site)
-   - prints your **public link** — e.g. `https://entry-pass-web-migration.vercel.app`
+   - prints your **public link** — e.g. `https://your-project.vercel.app`
 
-4. Open the public link, log in with your **app login**. Done — you're live. 🎉
+3. Open the public link, log in with your **app login**. Done — you're live. 🎉
 
 **⚠️ Keep the `go:live` window open** (minimize it). It keeps the tunnel alive.
 Closing it = the website can't reach the database.
@@ -274,8 +265,8 @@ DOUBLE-CLICK (Windows)                  or type in a terminal
 4-BACKUP.bat    (safety copy)           pnpm backup
 5-START-LOCAL-TEST.bat (optional)       pnpm start:all
 
-Plus ONE TIME:  vercel login  +  vercel link  +  VERCEL_TOKEN
-in .env.local (SETUP.md Part 2).
+Plus ONE TIME:  vercel login   (one command + one click
+in your browser — SETUP.md Part 2)
 ```
 
 | Address | What |

@@ -5,10 +5,11 @@ echo.
 echo ============================================
 echo   STEP 3 of 4: GO LIVE  (every day)
 echo ============================================
-echo One-time first: run  vercel login  and
-echo  vercel link  in a terminal, and put your
-echo VERCEL_TOKEN in the .env.local file
-echo (see SETUP.md Part 2 if you haven't).
+echo First time only: if you have never run
+echo "vercel login" before, the window below
+echo will tell you exactly how (one command,
+echo one click in your browser). Everything
+else is automatic.
 echo.
 echo KEEP THIS WINDOW OPEN while the app is in
 echo use - it keeps the connection alive.
