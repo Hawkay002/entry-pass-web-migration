@@ -283,6 +283,21 @@ alive. Minimize it; don't close it.
 
 Stop everything: click here and press Ctrl+C.
 After a PC reboot, just run:  pnpm go:live
+${alias ? `
+------------------------------------------
+GOOGLE SIGN-IN (one-time setup — skip if you
+don't use the "Sign in with Google" button):
+
+1. Open  console.cloud.google.com → Credentials
+2. Your OAuth client → Authorized redirect URIs
+3. Paste this EXACTLY as one new line:
+
+   ${alias}/api/oauth/callback
+
+(Local testing too? also add:
+   http://localhost:3000/api/oauth/callback )
+Done — the Google button now works.
+------------------------------------------` : ""}
 `);
   const stop = () => {
     try { tunnel.kill(); } catch {}
