@@ -1,0 +1,11 @@
+# Windows batch files MUST have CRLF endings — cmd.exe's goto/call parsing
+# breaks with LF-only files, and GitHub ZIP downloads extract exactly what's
+# stored here (no git conversion). -text = store as-is, never normalize.
+*.bat -text
+*.cmd -text
+
+# Everything else: normal cross-platform text handling.
+* text=auto
+*.sh text eol=lf
+*.mjs text eol=lf
+*.ps1 text eol=crlf
