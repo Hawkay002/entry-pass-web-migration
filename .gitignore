@@ -41,6 +41,9 @@ yarn-error.log*
 # data backups made by `pnpm backup`
 /backups
 
+# tools downloaded by 0-CHECK-FIRST/0b (e.g. cloudflared.exe)
+/tools
+
 # vercel
 .vercel
 

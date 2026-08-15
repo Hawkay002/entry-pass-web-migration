@@ -44,6 +44,14 @@ const PB_URL = "http://127.0.0.1:8090";
 const TUNNEL_TARGET = "http://localhost:8090";
 const URL_VAR = "NEXT_PUBLIC_POCKETBASE_URL";
 
+/** Resolve cloudflared: PATH first, then the copy 0b-INSTALL downloads. */
+function findCloudflared() {
+  const local = join(ROOT, "tools", isWin ? "cloudflared.exe" : "cloudflared");
+  if (existsSync(local)) return local;
+  return "cloudflared";
+}
+const CLOUDFLARED = findCloudflared();
+
 const log = (m = "") => console.log(m);
 const step = (m) => console.log(`\n=== ${m} ===`);
 
@@ -167,8 +175,8 @@ Ctrl+C to stop everything.
     console.error("Not logged in to Vercel. Run:  vercel login\nThen run pnpm go:live again.");
     process.exit(1);
   }
-  try { sh(`cloudflared --version`); } catch {
-    console.error("cloudflared (the tunnel program) isn't installed.\nInstall it from:\n  https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/downloads/\nThen run pnpm go:live again.");
+  try { sh(`"${CLOUDFLARED}" --version`); } catch {
+    console.error("cloudflared (the tunnel program) isn't installed.\nFix: open the 0-CHECK-FIRST folder and double-click 0b-INSTALL-NEEDED.bat\n(or install manually: https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/downloads/)\nThen run pnpm go:live again.");
     process.exit(1);
   }
   // fail fast if the Vercel API token isn't set up yet (one-time)
@@ -194,8 +202,7 @@ Ctrl+C to stop everything.
 
   // ---------- 2. tunnel ----------
   step("2/4  Starting the tunnel (gets a public address for your database)");
-  const tunnel = spawn(isWin ? "cloudflared" : "cloudflared",
-    ["tunnel", "--url", TUNNEL_TARGET], { shell: true });
+  const tunnel = spawn(`"${CLOUDFLARED}" tunnel --url ${TUNNEL_TARGET}`, { shell: true });
   let tunnelUrl = "";
   tunnel.stderr.on("data", (d) => {
     const s = d.toString();

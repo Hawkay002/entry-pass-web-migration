@@ -20,13 +20,19 @@ just double-click, no typing:
 
 | File | What it does | When to run it |
 |---|---|---|
-| **`1-INSTALL.bat`** | Installs the app's building blocks | Once, at the very start |
+| **`0-CHECK-FIRST\0a-CHECK-SYSTEM.bat`** | 🔍 Checks what this computer has ([OK] / [MISSING] list) | Always the very first file |
+| **`0-CHECK-FIRST\0b-INSTALL-NEEDED.bat`** | 🧰 Installs whatever 0a showed as MISSING — downloads Node.js, pnpm, the tunnel program, the Vercel tool automatically | Only if 0a showed any [MISSING] |
+| **`1-INSTALL.bat`** | Installs the app's building blocks | Once, right after the 0 folder |
 | **`2-SETUP.bat`** | Prepares the database + your logins (asks simple questions) | Once, right after 1 |
 | **`3-GO-LIVE.bat`** | 🚀 Makes your website public. **Leave its window open** | **Every day / after any reboot** |
 | **`4-BACKUP.bat`** | Saves all your data into a dated zip in the `backups` folder | Whenever you want a safety copy (before events!) |
 | **`5-START-LOCAL-TEST.bat`** | Runs everything on this PC only (nothing public) | Optional — safe testing |
 
-**The golden rule: 1 → 2 once, then 3 every day. 4 before important moments.**
+**The golden rule: 0 → 1 → 2 once, then 3 every day. 4 before important moments.**
+
+> **Brand-new computer?** You can skip 0a and go straight to `0b-INSTALL-NEEDED.bat`
+> — it only installs what's missing, so it's safe either way. When 0b says
+> ALL INSTALLED, continue with `1-INSTALL.bat`.
 
 > ⚠️ If Windows shows a "Windows protected your PC" (SmartScreen) blue box when
 > you double-click: click **More info** → **Run anyway**. That warning appears for
@@ -258,13 +264,15 @@ Only people on your Wi-Fi could reach it via the `Network:` address it prints.
 ## Quick reference card
 
 ```
-DOUBLE-CLICK (Windows)          or type in a terminal
-----------------------------    ---------------------------
-1-INSTALL.bat   (once)          pnpm install
-2-SETUP.bat     (once)          pnpm setup
-3-GO-LIVE.bat   (every day)     pnpm go:live     ← keep window open
-4-BACKUP.bat    (safety copy)   pnpm backup
-5-START-LOCAL-TEST.bat (opt.)   pnpm start:all
+DOUBLE-CLICK (Windows)                  or type in a terminal
+------------------------------------    ---------------------------
+0-CHECK-FIRST\0a-CHECK-SYSTEM.bat       (checks everything)
+0-CHECK-FIRST\0b-INSTALL-NEEDED.bat     (installs anything missing)
+1-INSTALL.bat   (once)                  pnpm install
+2-SETUP.bat     (once)                  pnpm setup
+3-GO-LIVE.bat   (every day)             pnpm go:live   ← keep open
+4-BACKUP.bat    (safety copy)           pnpm backup
+5-START-LOCAL-TEST.bat (optional)       pnpm start:all
 
 Plus ONE TIME:  vercel login  +  vercel link  +  VERCEL_TOKEN
 in .env.local (SETUP.md Part 2).
