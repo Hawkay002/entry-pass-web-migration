@@ -194,11 +194,15 @@ window at any time to stop and start over.
       cwd: PB_DIR, detached: true, stdio: "ignore",
     });
     child.unref();
-    process.on("exit", () => { try { process.kill(-child.pid); } catch {} });
+    // Clean up ONLY on failure — a normal setup exit must leave the
+    // database running (the old kill-on-any-exit handler stopped the
+    // database setup had just finished building).
+    const killPb = () => { try { process.kill(-child.pid); } catch {} };
     console.log("Starting (a few seconds)...");
     if (!(await waitHealthy())) {
       console.error("Pocketbase did not start. Run it manually to see the error:");
       console.error(`  cd pb && ${isWin ? "pocketbase.exe" : "./pocketbase"} serve`);
+      killPb();
       process.exit(1);
     }
     console.log("Running.");

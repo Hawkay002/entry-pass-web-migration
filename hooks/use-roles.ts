@@ -14,7 +14,7 @@ export function useRoles() {
       const res = await fetchRoles();
       return res.ok ? res.roles : [];
     },
-    3000
+    12000
   );
 
   const roles = useMemo(() => data ?? [], [data]);

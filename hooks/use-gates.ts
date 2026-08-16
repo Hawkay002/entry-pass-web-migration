@@ -15,7 +15,7 @@ export function useGatesMode() {
       const res = await fetchGates();
       return res.ok ? res.gates : [];
     },
-    3000
+    12000
   );
 
   const gates = useMemo(() => data ?? [], [data]);

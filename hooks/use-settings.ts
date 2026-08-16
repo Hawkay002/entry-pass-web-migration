@@ -17,7 +17,7 @@ export function useSettings() {
       const res = await fetchSettings();
       return res.ok ? res.settings : EMPTY;
     },
-    3000
+    12000
   );
 
   const settings = useMemo(() => data ?? EMPTY, [data]);

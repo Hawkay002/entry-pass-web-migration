@@ -104,20 +104,12 @@ function vercel(args, answers = "") {
 // fully non-interactive — no API token needed. This keeps a lone user's
 // setup entirely inside the scripts (they only ever run `vercel login`).
 
-/** True upsert via the CLI: remove existing, then add with fed stdin. */
-async function cliSetEnv(name, value, targets = ["production"]) {
+/** Clean idempotent upsert: --value + --force overwrites in place (no
+ *  stdin, no prompts, no remove/recreate churn, no duplicate entries).
+ *  Works for all environments incl. preview (with -y). */
+async function cliSetEnv(name, value, targets = ["production", "preview", "development"]) {
   for (const t of targets) {
-    try {
-      await vercel(["env", "rm", name, t, "-y"]);
-    } catch { /* didn't exist — fine */ }
-  }
-  for (const t of targets) {
-    // execSync's `input` feeds stdin BEFORE the CLI starts (spawn+write
-    // races the prompt). Preview asks an extra git-branch question — an
-    // EMPTY 4th arg pre-answers it (applies to all preview branches).
-    // Multi-newline input breaks the value read, so never add blank lines.
-    const branchArg = t === "preview" ? ' ""' : "";
-    sh(`vercel env add ${name} ${t}${branchArg}`, { input: value + "\n", timeout: 90_000 });
+    sh(`vercel env add ${name} ${t} --value ${JSON.stringify(value)} --force -y`, { timeout: 90_000 });
     log(`  set ${name} for ${t}`);
   }
 }
@@ -230,32 +222,20 @@ address this window prints into your browser.)`);
 
   // ---------- 3. point Vercel at the tunnel ----------
   step("3/4  Pointing your website at the database");
-  try {
-    const current = sh(`vercel env pull "${join(ROOT, ".vercel", "env-check")}" --environment=production`, { stdio: "pipe" });
-    const pulled = readFileSync(join(ROOT, ".vercel", "env-check"), "utf8");
-    const m = pulled.match(new RegExp(`${URL_VAR}=(\\S+)`));
-    if (m && m[1] === tunnelUrl) {
-      log("Website already points at this address — no update needed.");
-      rmSync(join(ROOT, ".vercel", "env-check"), { force: true });
-      return finish(tunnel, pbChild, null);
-    }
-  } catch { /* couldn't compare — just update */ }
-  try { rmSync(join(ROOT, ".vercel", "env-check"), { force: true }); } catch {}
-
+  // Always sync every var (--force is idempotent) — never skip on a
+  // same-URL shortcut, which previously let stale/missing vars drift.
   log("Updating website settings (takes a minute)...");
-  // REST API with upsert — no interactive prompts, deterministic.
-  // All three environments: git pushes trigger Preview builds, which die
-  // at build time without this var. Same value everywhere is fine.
-  await cliSetEnv(URL_VAR, tunnelUrl, ["production", "preview", "development"]);
+  // Every var goes to ALL environments: git pushes trigger Preview builds
+  // that die without them, and --force makes each set an idempotent
+  // overwrite (no duplicate entries accumulating).
+  await cliSetEnv(URL_VAR, tunnelUrl);
 
-  // first-run safety: make sure the other required settings exist too
+  // keep the other required settings in sync from .env.local every run —
+  // idempotent, fixes any that are missing/stale in any environment
   const envLocal = readEnvLocal();
-  const ls = await vercel(["env", "ls"]);
   for (const name of ["POCKETBASE_ADMIN_EMAIL", "POCKETBASE_ADMIN_PASSWORD", "AUTH_COOKIE_NAME", "ADMIN_EMAILS"]) {
-    // also all environments, same reasoning (preview builds need them)
-    if (!ls.includes(name) && envLocal[name]) {
-      await cliSetEnv(name, envLocal[name], ["production", "preview", "development"]);
-      log(`  added missing setting: ${name}`);
+    if (envLocal[name]) {
+      await cliSetEnv(name, envLocal[name]);
     }
   }
 

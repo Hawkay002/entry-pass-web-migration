@@ -1,18 +1,15 @@
-// lib/pb/realtime.ts — client-side realtime + polling helper.
+// lib/pb/realtime.ts — client-side polling helper.
 //
-// IMPORTANT ARCHITECTURE NOTE:
-// Our auth token is httpOnly (browser JS can't read it), so the Pocketbase JS
-// SDK's authStore is empty on the client. SSE `subscribe()` only delivers change
-// events for collections the client can READ — auth-gated collections therefore
-// get NO change events when unauthenticated (verified empirically).
+// ARCHITECTURE NOTE: our auth token is httpOnly (browser JS can't read it),
+// so the Pocketbase SDK's authStore is empty on the client and SSE subscribe
+// delivers no change events for auth-gated collections (verified empirically
+// — only PB_CONNECT arrives). All realtime needs are therefore met by polling
+// server actions (pbAdmin server-side, rules don't block them).
 //
-// Strategy:
-//   - Auth-gated data: poll via server actions on an interval (near-realtime,
-//     ~2.5s). The actions use pbAdmin server-side, so rules don't block them.
-//   - PUBLIC collections (kiosk_status): subscribe directly via SSE — instant.
-//
-// `usePolledData` handles the polling case (the common one). `subscribePublic`
-// handles the public-SSE case (kiosk only).
+// Intervals are tiered by how fast data changes at an event:
+//   tickets/remote-locks ~2.5s (scan-sensitive),
+//   contacts 5s, staff-check 5s,
+//   settings/gates/kiosks/roles 12s (rarely change mid-event).
 
 "use client";
 
@@ -64,33 +61,4 @@ export function usePolledData<T>(
   }, [intervalMs, enabled]);
 
   return { data, loading, refresh: () => fetcherRef.current().then(setData) };
-}
-
-// ---------------- Public SSE subscribe (kiosk_status only) ----------------
-
-import { pb } from "@/lib/pb/client";
-
-export type RealtimeEvent = "create" | "update" | "delete";
-
-/**
- * Subscribe to changes on a PUBLIC-read collection via SSE.
- * Returns an unsubscribe function. Only works for collections with a public
- * list/view rule (e.g. kiosk_status). The callback receives the full record.
- */
-export async function subscribePublicCollection(
-  collection: string,
-  recordId: string | "*",
-  onChange: (event: RealtimeEvent, record: Record<string, unknown> | null) => void
-): Promise<() => void> {
-  const client = pb();
-  await client.collection(collection).subscribe(recordId, (e) => {
-    onChange((e.action as RealtimeEvent) ?? "update", (e.record as Record<string, unknown>) ?? null);
-  });
-  return () => {
-    try {
-      client.collection(collection).unsubscribe(recordId);
-    } catch {
-      /* ignore */
-    }
-  };
 }

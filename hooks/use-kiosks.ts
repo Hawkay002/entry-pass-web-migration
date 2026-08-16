@@ -20,7 +20,7 @@ export function useKiosks() {
       const res = await getKiosksList();
       return res.ok ? (res.kiosks as KioskListItem[]) : [];
     },
-    3000
+    12000
   );
 
   const kiosks = useMemo(() => data ?? [], [data]);
