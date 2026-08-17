@@ -20,7 +20,9 @@ function generateGroupId(): string {
 
 /** Fill the ticketUrl / whatsappUrl columns shown in the PB dashboard.
  *  Base = PB settings appURL (go-live keeps it = the public link), so the
- *  URLs are absolute and copy-pasteable from the dashboard. Non-fatal. */
+ *  URLs are absolute and copy-pasteable from the dashboard.
+ *  The WhatsApp URL mirrors the Guest List share EXACTLY: addressed to the
+ *  guest's phone (wa.me/<digits>) with the same personalized message. */
 export async function fillShareUrls(pb: Awaited<ReturnType<typeof pbAdmin>>, ticketId: string): Promise<void> {
   try {
     const st = await fetch(serverEnv.pbUrl + "/api/settings", {
@@ -28,13 +30,20 @@ export async function fillShareUrls(pb: Awaited<ReturnType<typeof pbAdmin>>, tic
     }).then((r) => r.json());
     const base = String(st?.meta?.appURL ?? "").replace(/\/$/, "");
     if (!base) return;
+
+    const t = await pb.collection(paths.ticketsCollection).getOne(ticketId);
     const ticketUrl = `${base}/ticket/${ticketId}`;
-    const waText = encodeURIComponent(
-      `Here is your event ticket. Open the link and verify with your phone number to view it.\n${ticketUrl}`
-    );
+    const digits = String(t.phone ?? "").replace(/\D/g, "");
+    const message =
+      `Hello ${t.name}, here is your Entry Pass 🎫 (shader disabled for preview images)\n` +
+      `*Keep this QR code ready at the entrance.*\n\n` +
+      `View your interactive ticket:\n${ticketUrl}\n` +
+      `_This link will expire after the event ends._\n\n` +
+      `Enter your full phone number with country code (e.g. ${t.phone}) to unlock your ticket.`;
+
     await pb.collection(paths.ticketsCollection).update(ticketId, {
       ticketUrl,
-      whatsappUrl: `https://wa.me/?text=${waText}`,
+      whatsappUrl: `https://wa.me/${digits}?text=${encodeURIComponent(message)}`,
     });
   } catch { /* non-fatal */ }
 }
