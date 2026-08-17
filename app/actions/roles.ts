@@ -210,6 +210,20 @@ export async function removeStaffFromRole(
     return s.some((m) => m.email.toLowerCase() === staffEmail.toLowerCase());
   });
 
+  // If they're in no other role, clean up their remote-lock record too —
+  // otherwise a stale lock lingers forever and the Role Management panel
+  // shows a "locked" badge for a staff member who no longer exists.
+  if (!stillExists) {
+    try {
+      const stale = await pb.collection(paths.locksCollection).getFullList({
+        filter: `userEmail = "${staffEmail.toLowerCase()}"`,
+      });
+      for (const l of stale) {
+        await pb.collection(paths.locksCollection).delete(l.id);
+      }
+    } catch { /* non-fatal */ }
+  }
+
   await logAction(
     user,
     "LOCK_ACTION",
@@ -227,6 +241,35 @@ export async function deleteRole(
     return { ok: false, error: "Admin role required." };
 
   const pb = await pbAdmin();
+
+  // Clean up lock records for staff who belonged ONLY to this role —
+  // same stale-lock prevention as removeStaffFromRole.
+  const rec = await pb.collection(paths.rolesCollection).getOne(roleId).catch(() => null);
+  if (rec) {
+    const otherRoles = await pb
+      .collection(paths.rolesCollection)
+      .getFullList({ fields: "staff" })
+      .then((all) => all.filter((r) => r.id !== roleId));
+    const emailIn = (email: string) =>
+      otherRoles.some((r) =>
+        ((r.staff as StaffMember[]) ?? []).some(
+          (m) => m.email.toLowerCase() === email.toLowerCase()
+        )
+      );
+    for (const member of (rec.staff as StaffMember[]) ?? []) {
+      if (!emailIn(member.email)) {
+        try {
+          const stale = await pb.collection(paths.locksCollection).getFullList({
+            filter: `userEmail = "${member.email.toLowerCase()}"`,
+          });
+          for (const l of stale) {
+            await pb.collection(paths.locksCollection).delete(l.id);
+          }
+        } catch { /* non-fatal */ }
+      }
+    }
+  }
+
   await pb.collection(paths.rolesCollection).delete(roleId);
   await logAction(user, "LOCK_ACTION", `Deleted role "${roleId}".`);
   return { ok: true };
