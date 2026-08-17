@@ -13,6 +13,54 @@ about 30 minutes; after that, going live every day is **one double-click**.
 
 ---
 
+## 🙋 THE BIG QUESTIONS — read before touching anything
+
+**Q: Do I have to deploy the website to Vercel myself?**
+**No.** You never open Vercel's dashboard to deploy, never click "Deploy",
+never upload anything. The `3-GO-LIVE.bat` file publishes the website for
+you automatically (it creates your project AND publishes it). The only
+moment Vercel needs *you* is one **Approve** click when first connecting
+your account — and even that opens in your browser automatically.
+
+**Q: Do I have to set environment variables (settings) anywhere?**
+**No.** All settings are handled by the scripts — `2-SETUP.bat` writes
+your local settings file, `3-GO-LIVE.bat` pushes them to your website.
+You never edit settings by hand. (The ONE optional exception: adding
+another admin's email — explained in PART 4.)
+
+**Q: Do I need a copy of the app on my PC? Where does it go?**
+**Yes — one folder on your PC is the whole system on your side.**
+Download the ZIP from GitHub (green **Code** button → **Download ZIP** —
+no GitHub account needed), right-click it → **Extract All** → put the
+folder **anywhere you like**: Desktop, Documents, anywhere.
+That folder becomes permanent — it holds the scripts, your database
+(`pb` folder), and your backups (`backups` folder). It doesn't "install"
+anywhere or move; it just lives wherever you put it. **Don't delete it.**
+
+**Q: Do I need a GitHub account?**
+**No.** Downloading the ZIP needs no account. Nothing in the setup uses
+GitHub login.
+
+**Q: What exactly lives where?**
+
+| Where | What lives there | Who manages it |
+|---|---|---|
+| **Your PC** (the app folder) | database, tickets, staff, backups, all scripts | you (automatically) |
+| **Vercel** (the cloud, free) | the website itself — the pages people open | `3-GO-LIVE.bat` |
+| **The tunnel** (a bridge) | lets Vercel reach your PC's database | created fresh daily by the script |
+
+**Q: Does my PC need to stay on?**
+**While staff are using the app — yes** (the database is on your PC).
+The public link always opens, but logins/tickets need your computer on
+and the `3-GO-LIVE` window left open. Turn the PC on before the event;
+at day's end, close the window.
+
+**Q: What happens after a restart / tomorrow?**
+Double-click `3-GO-LIVE.bat` again. It repairs everything and your public
+link stays the same. That's the entire daily routine.
+
+---
+
 ## ⭐ The easy way: double-click files (Windows)
 
 Inside the app folder there are **numbered files**. Run them in order —
