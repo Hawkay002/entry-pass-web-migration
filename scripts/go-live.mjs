@@ -243,6 +243,26 @@ address this window prints into your browser.)`);
   step("4/4  Publishing the website");
   const out = await vercel(["--prod"]);
 
+  // Tell Pocketbase the public link — ticket rows use it to build the
+  // ticketUrl/whatsappUrl columns shown in the PB dashboard.
+  try {
+    const { projectName: pn } = JSON.parse(readFileSync(join(ROOT, ".vercel", "project.json"), "utf8"));
+    const token = await fetch(`${PB_URL}/api/collections/_superusers/auth-with-password`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ identity: envLocalKey("POCKETBASE_ADMIN_EMAIL"), password: envLocalKey("POCKETBASE_ADMIN_PASSWORD") }),
+    }).then((r) => r.json());
+    const cur = await fetch(`${PB_URL}/api/settings`, {
+      headers: { Authorization: `Bearer ${token.token}` },
+    }).then((r) => r.json());
+    await fetch(`${PB_URL}/api/settings`, {
+      method: "PATCH",
+      headers: { Authorization: `Bearer ${token.token}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ meta: { ...cur.meta, appURL: `https://${pn}.vercel.app` } }),
+    });
+    log("Pocketbase told the public link (ticket share columns will use it).");
+  } catch { /* non-fatal — columns just stay relative */ }
+
   // The link to share is the project's PERMANENT domain:
   //   https://<projectName>.vercel.app
   // (Vercel derives it from the project name; the one-off deployment URL

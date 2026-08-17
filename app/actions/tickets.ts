@@ -5,6 +5,7 @@
 "use server";
 
 import { pbAdmin } from "@/lib/pb/server";
+import { serverEnv } from "@/lib/env";
 import { paths } from "@/lib/paths";
 import { getAppUser } from "@/lib/pb/server-auth";
 import { logAction } from "@/lib/pb/log";
@@ -15,6 +16,27 @@ import { pickGateForTicket } from "@/app/actions/gates";
 /** Short random ID for group tickets. */
 function generateGroupId(): string {
   return Math.random().toString(36).slice(2, 8);
+}
+
+/** Fill the ticketUrl / whatsappUrl columns shown in the PB dashboard.
+ *  Base = PB settings appURL (go-live keeps it = the public link), so the
+ *  URLs are absolute and copy-pasteable from the dashboard. Non-fatal. */
+export async function fillShareUrls(pb: Awaited<ReturnType<typeof pbAdmin>>, ticketId: string): Promise<void> {
+  try {
+    const st = await fetch(serverEnv.pbUrl + "/api/settings", {
+      headers: { Authorization: pb.authStore.token },
+    }).then((r) => r.json());
+    const base = String(st?.meta?.appURL ?? "").replace(/\/$/, "");
+    if (!base) return;
+    const ticketUrl = `${base}/ticket/${ticketId}`;
+    const waText = encodeURIComponent(
+      `Here is your event ticket. Open the link and verify with your phone number to view it.\n${ticketUrl}`
+    );
+    await pb.collection(paths.ticketsCollection).update(ticketId, {
+      ticketUrl,
+      whatsappUrl: `https://wa.me/?text=${waText}`,
+    });
+  } catch { /* non-fatal */ }
 }
 
 /** Fetch ALL tickets (authenticated). Used by the useTickets realtime hook.
@@ -125,11 +147,12 @@ export async function createTicket(input: {
   };
 
   const rec = await pb.collection(paths.ticketsCollection).create(ticket);
+  await fillShareUrls(pb, rec.id);
 
   // Create kid tickets — they share the parent's phone + ticketType + gate.
   if (hasKids && groupId) {
     for (const kid of input.kids!) {
-      await pb.collection(paths.ticketsCollection).create({
+      const kidRec = await pb.collection(paths.ticketsCollection).create({
         name: kid.name.trim(),
         gender: kid.gender,
         age: kid.age,
@@ -146,6 +169,7 @@ export async function createTicket(input: {
         groupId,
         parentName: input.name.trim(),
       });
+      await fillShareUrls(pb, kidRec.id);
     }
 
     await logAction(
