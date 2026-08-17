@@ -535,12 +535,25 @@ export async function fetchLockDashboard(): Promise<{
 
   const pb = await pbAdmin();
   const snap = await pb.collection(paths.locksCollection).getFullList();
+  // Staff emails across all roles — locks for anyone else (removed staff,
+  // edited-away emails) are orphans and must not count toward badges.
+  const rolesSnap = await pb.collection(paths.rolesCollection).getFullList({ fields: "staff" });
+  const staffEmails = new Set<string>();
+  rolesSnap.forEach((r) => {
+    ((r.staff as { email: string }[]) ?? []).forEach((m) =>
+      staffEmails.add(m.email.toLowerCase())
+    );
+  });
+
   const lockMap: Record<string, string[]> = {};
   let maintActive = false;
   let maintDuration: string | null = null;
   let maintUpdatedAt: number | null = null;
 
   snap.forEach((d) => {
+    // Skip orphan locks entirely — stale records for people who are no
+    // longer staff in any role (removed, edited, or their role deleted).
+    if (!staffEmails.has(String(d.userEmail ?? "").toLowerCase())) return;
     const email = String(d.userEmail ?? "").toLowerCase();
 
     // Build lock map
