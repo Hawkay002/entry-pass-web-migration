@@ -266,6 +266,59 @@ Only people on your Wi-Fi could reach it via the `Network:` address it prints.
 
 ---
 
+## PART 7 — Extra protection for the database dashboard (optional, ~10 min)
+
+By default the dashboard (`http://127.0.0.1:8090/_/`) opens with just your
+dashboard password. You can add a **second lock**: after the password,
+Pocketbase emails you a one-time code, and you type it to get in.
+Even someone who steals your password can't get in without your email.
+
+**How it works:** login = password → a code arrives in your email → type
+the code → you're in. Adds ~10 seconds per login.
+
+### Step 1 — Let Pocketbase send email (Gmail, free)
+
+1. Go to **https://myaccount.google.com/security** — make sure
+   **2-Step Verification** is ON for your Google account
+   (it must be, for the next step to exist).
+2. Open **https://myaccount.google.com/apppasswords** → name it
+   `pocketbase` → **Create** → copy the **16-character password** shown.
+3. Database dashboard → **Settings → SMTP**, fill:
+   - Sender address: `yourname@gmail.com`
+   - SMTP host: `smtp.gmail.com` · Port: `587`
+   - Username: `yourname@gmail.com`
+   - Password: **the 16-character app password** (not your normal one!)
+   - Enable SMTP: ON → Save
+
+   Sending Gmail→Gmail is instant and never lands in spam.
+
+### Step 2 — Turn on the two toggles
+
+1. Dashboard → **Collections → `_superusers` → Edit collection → Auth tab**
+2. Enable **OTP** and enable **MFA** (defaults are fine)
+3. Log out, log back in: password → code arrives in Gmail → you're in.
+
+### If email ever breaks (emergency unlock)
+
+If codes stop arriving and you're locked out of the dashboard, the
+command line still works — no email needed. In the app folder's `pb`
+folder, run:
+
+```bash
+cd pb
+pocketbase.exe superuser upsert your@email.com ANewStrongPassword123
+```
+
+(Mac/Linux: `./pocketbase ...`). This resets your dashboard login so you
+can sign in with the new password. You can then fix SMTP in Settings, or
+turn OTP/MFA off the same Auth tab you enabled them on.
+
+> Note: Google can auto-retire app passwords (e.g. after you change your
+> Google password). If codes stop arriving someday, generate a fresh app
+> password at the same link and update Settings → SMTP — 2-minute fix.
+
+---
+
 ## Troubleshooting — in plain words
 
 | What you see | What it means | Fix |
