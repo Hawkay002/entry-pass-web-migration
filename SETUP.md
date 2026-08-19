@@ -298,20 +298,26 @@ the code → you're in. Adds ~10 seconds per login.
 2. Enable **OTP** and enable **MFA** (defaults are fine)
 3. Log out, log back in: password → code arrives in Gmail → you're in.
 
-### If email ever breaks (emergency unlock)
+### If you get locked out (emergency unlock)
 
-If codes stop arriving and you're locked out of the dashboard, the
-command line still works — no email needed. In the app folder's `pb`
-folder, run:
+**Forgot the password, email still works** → double-click
+**`6-DASHBOARD-UNLOCK.bat`**. It resets the dashboard password to a
+temporary one (shown in its window) and restarts the database. Sign in
+with it + the emailed code, then set your own password.
 
-```bash
-cd pb
-pocketbase.exe superuser upsert your@email.com ANewStrongPassword123
-```
+**Email codes broken (Gmail/app password problem)** → the email code
+cannot be bypassed — that's the security doing its job. Recover from
+your latest backup instead:
+1. Close the go-live window (stops the database)
+2. Unzip your newest `backups\entry-pass-*.zip`
+3. Replace the `pb\pb_data` folder with the one from the zip
+4. Run `3-GO-LIVE.bat` — sign in with the password that was valid at
+   backup time
+5. Fix Settings → SMTP (fresh Gmail app password) before re-enabling
+   anything
 
-(Mac/Linux: `./pocketbase ...`). This resets your dashboard login so you
-can sign in with the new password. You can then fix SMTP in Settings, or
-turn OTP/MFA off the same Auth tab you enabled them on.
+> This is also why `4-BACKUP.bat` before enabling protection is a good
+> habit: the backup is your no-email way back in.
 
 > Note: Google can auto-retire app passwords (e.g. after you change your
 > Google password). If codes stop arriving someday, generate a fresh app
