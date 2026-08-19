@@ -83,7 +83,7 @@ Full plain-English walkthrough (including Google Sign-In and staff roles):
 
 | Piece | Where | Notes |
 |---|---|---|
-| Next.js website | Vercel (free) | `3-GO-LIVE.bat` / `pnpm go:live` publishes it |
+| Next.js website | Vercel (free) | `STRESS FREE INSTALLATION/2-EVERYDAY/3-GO-LIVE.bat` / `pnpm go:live` publishes it |
 | Pocketbase | your PC, `pb/` folder | database + auth + file storage; SQLite under the hood |
 | Cloudflare tunnel | your PC, while go-live runs | bridges Vercel → your PC; address rotates on reboot, go-live repairs it |
 | Staff devices | any browser | just the public link — nothing to install |
@@ -123,7 +123,7 @@ go-live). For reference: `NEXT_PUBLIC_POCKETBASE_URL`,
 
 ## Backup & restore
 
-`4-BACKUP.bat` / `pnpm backup` zips the full database into `backups/` with a
+`STRESS FREE INSTALLATION/3-OPTIONAL/4-BACKUP.bat` / `pnpm backup` zips the full database into `backups/` with a
 date stamp. Restore = unzip + drop `pb_data` next to `pocketbase.exe` +
 go live. **The backup is your data — copy it off the machine.**
 
