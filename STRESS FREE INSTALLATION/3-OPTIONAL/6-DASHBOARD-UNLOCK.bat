@@ -1,6 +1,6 @@
 @echo off
 title Entry Pass - Emergency dashboard unlock
-cd /d "%~dp0"
+cd /d "%~dp0..\.."
 echo.
 echo ============================================
 echo   EMERGENCY DASHBOARD UNLOCK
@@ -18,6 +18,6 @@ echo The new password is shown at the end -
 edge WRITE IT DOWN before closing.
 echo.
 pause
-call node scripts\dashboard-unlock.mjs
+call node "scripts\dashboard-unlock.mjs"
 echo.
 pause

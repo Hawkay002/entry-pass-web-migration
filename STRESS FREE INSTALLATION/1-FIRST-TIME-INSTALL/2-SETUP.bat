@@ -1,6 +1,6 @@
 @echo off
 title Entry Pass - 2 of 4 - Setup database and logins (first time only)
-cd /d "%~dp0"
+cd /d "%~dp0..\.."
 echo.
 echo ============================================
 echo   STEP 2 of 4: SETUP  (first time only)
@@ -12,6 +12,6 @@ echo.
 echo Tip: to type in the window, click it first.
 echo.
 pause
-call node scripts\setup.mjs
+call node "scripts\setup.mjs"
 echo.
 pause

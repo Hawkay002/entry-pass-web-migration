@@ -1,6 +1,6 @@
 @echo off
 title Step 0a - Check what this computer has
-cd /d "%~dp0.."
+cd /d "%~dp0..\.."
 echo.
 echo ==========================================
 echo   CHECK: what this computer already has

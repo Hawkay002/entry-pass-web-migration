@@ -63,24 +63,26 @@ link stays the same. That's the entire daily routine.
 
 ## ⭐ The easy way: double-click files (Windows)
 
-Inside the app folder there are **numbered files**. Run them in order —
-just double-click, no typing:
+Everything lives in the **`STRESS FREE INSTALLATION`** folder inside the app
+folder. Open it — you'll see four numbered subfolders. Run the files in
+order, just double-click, no typing:
 
-| File | What it does | When to run it |
+| File (inside `STRESS FREE INSTALLATION`) | What it does | When to run it |
 |---|---|---|
 | **`0-CHECK-FIRST\0a-CHECK-SYSTEM.bat`** | 🔍 Checks what this computer has ([OK] / [MISSING] list) | Always the very first file |
 | **`0-CHECK-FIRST\0b-INSTALL-NEEDED.bat`** | 🧰 Installs whatever 0a showed as MISSING — downloads Node.js, pnpm, the tunnel program, the Vercel tool automatically | Only if 0a showed any [MISSING] |
-| **`1-INSTALL.bat`** | Installs the app's building blocks | Once, right after the 0 folder |
-| **`2-SETUP.bat`** | Prepares the database + your logins (asks simple questions) | Once, right after 1 |
-| **`3-GO-LIVE.bat`** | 🚀 Makes your website public. **Leave its window open** | **Every day / after any reboot** |
-| **`4-BACKUP.bat`** | Saves all your data into a dated zip in the `backups` folder | Whenever you want a safety copy (before events!) |
-| **`5-START-LOCAL-TEST.bat`** | Runs everything on this PC only (nothing public) | Optional — safe testing |
+| **`1-FIRST-TIME-INSTALL\1-INSTALL.bat`** | Installs the app's building blocks | Once, right after the 0 folder |
+| **`1-FIRST-TIME-INSTALL\2-SETUP.bat`** | Prepares the database + your logins (asks simple questions) | Once, right after 1 |
+| **`2-EVERYDAY\3-GO-LIVE.bat`** | 🚀 Makes your website public. **Leave its window open** | **Every day / after any reboot** |
+| **`3-OPTIONAL\4-BACKUP.bat`** | Saves all your data into a dated zip in the `backups` folder | Whenever you want a safety copy (before events!) |
+| **`3-OPTIONAL\5-START-LOCAL-TEST.bat`** | Runs everything on this PC only (nothing public) | Optional — safe testing |
+| **`3-OPTIONAL\6-DASHBOARD-UNLOCK.bat`** | Emergency unlock for the database dashboard | Only if locked out (PART 7) |
 
 **The golden rule: 0 → 1 → 2 once, then 3 every day. 4 before important moments.**
 
 > **Brand-new computer?** You can skip 0a and go straight to `0b-INSTALL-NEEDED.bat`
 > — it only installs what's missing, so it's safe either way. When 0b says
-> ALL INSTALLED, continue with `1-INSTALL.bat`.
+> ALL INSTALLED, continue with `1-FIRST-TIME-INSTALL\1-INSTALL.bat`.
 
 > ⚠️ If Windows shows a "Windows protected your PC" (SmartScreen) blue box when
 > you double-click: click **More info** → **Run anyway**. That warning appears for
@@ -135,10 +137,10 @@ listed in each part.)
 
 ## PART 1 — Prepare the database on your computer (once, ~10 min)
 
-1. Double-click **`1-INSTALL.bat`** — installs the website's building blocks
+1. Double-click **`STRESS FREE INSTALLATION\\1-FIRST-TIME-INSTALL\\1-INSTALL.bat`** — installs the website's building blocks
    (a window opens, waits for "DONE", closes).
 
-2. Double-click **`2-SETUP.bat`** — the setup wizard. It asks simple questions
+2. Double-click **`STRESS FREE INSTALLATION\\1-FIRST-TIME-INSTALL\\2-SETUP.bat`** — the setup wizard. It asks simple questions
    and does everything else automatically:
    - Downloads Pocketbase into a `pb` folder (once)
    - Creates all the database tables
@@ -159,7 +161,7 @@ listed in each part.)
 
 ## PART 2 — Put the website on Vercel and go live (once, ~2 min)
 
-1. Double-click **`3-GO-LIVE.bat`**. That's the whole step.
+1. Open **`STRESS FREE INSTALLATION\\2-EVERYDAY`** and double-click **`3-GO-LIVE.bat`**. That's the whole step.
 
    **First run only:** it notices you're not connected to Vercel yet and
    starts the connection itself — your browser opens a Vercel page →
@@ -181,7 +183,7 @@ listed in each part.)
 **⚠️ Keep the `go:live` window open** (minimize it). It keeps the tunnel alive.
 Closing it = the website can't reach the database.
 **Stop everything:** click that window and press Ctrl+C.
-**Computer restarted?** Just double-click `3-GO-LIVE.bat` again — it repairs
+**Computer restarted?** Just double-click `STRESS FREE INSTALLATION\\2-EVERYDAY\\3-GO-LIVE.bat` again — it repairs
 everything, and the public link stays the same.
 
 ---
@@ -247,10 +249,10 @@ website picks it up.
 
 | Situation | What to do |
 |---|---|
-| Morning of the event | Double-click **`3-GO-LIVE.bat`**, leave the window open, share the link |
-| Computer restarted / login suddenly broken | Double-click **`3-GO-LIVE.bat`** again — it repairs everything |
+| Morning of the event | Double-click **`STRESS FREE INSTALLATION\\2-EVERYDAY\\3-GO-LIVE.bat`**, leave the window open, share the link |
+| Computer restarted / login suddenly broken | Double-click **`STRESS FREE INSTALLATION\\2-EVERYDAY\\3-GO-LIVE.bat`** again — it repairs everything |
 | End of day | Close the go-live window (or Ctrl+C) |
-| Back up the data | Double-click **`4-BACKUP.bat`** → dated zip in `backups` — copy it to a USB drive / cloud folder |
+| Back up the data | Double-click **`STRESS FREE INSTALLATION\\3-OPTIONAL\\4-BACKUP.bat`** → dated zip in `backups` — copy it to a USB drive / cloud folder |
 
 ---
 
@@ -301,7 +303,7 @@ the code → you're in. Adds ~10 seconds per login.
 ### If you get locked out (emergency unlock)
 
 **Forgot the password, email still works** → double-click
-**`6-DASHBOARD-UNLOCK.bat`**. It resets the dashboard password to a
+**`STRESS FREE INSTALLATION\\3-OPTIONAL\\6-DASHBOARD-UNLOCK.bat`**. It resets the dashboard password to a
 temporary one (shown in its window) and restarts the database. Sign in
 with it + the emailed code, then set your own password.
 
@@ -311,12 +313,12 @@ your latest backup instead:
 1. Close the go-live window (stops the database)
 2. Unzip your newest `backups\entry-pass-*.zip`
 3. Replace the `pb\pb_data` folder with the one from the zip
-4. Run `3-GO-LIVE.bat` — sign in with the password that was valid at
+4. Run `STRESS FREE INSTALLATION\\2-EVERYDAY\\3-GO-LIVE.bat` — sign in with the password that was valid at
    backup time
 5. Fix Settings → SMTP (fresh Gmail app password) before re-enabling
    anything
 
-> This is also why `4-BACKUP.bat` before enabling protection is a good
+> This is also why `STRESS FREE INSTALLATION\\3-OPTIONAL\\4-BACKUP.bat` before enabling protection is a good
 > habit: the backup is your no-email way back in.
 
 > Note: Google can auto-retire app passwords (e.g. after you change your
@@ -350,11 +352,11 @@ DOUBLE-CLICK (Windows)                  or type in a terminal
 ------------------------------------    ---------------------------
 0-CHECK-FIRST\0a-CHECK-SYSTEM.bat       (checks everything)
 0-CHECK-FIRST\0b-INSTALL-NEEDED.bat     (installs anything missing)
-1-INSTALL.bat   (once)                  pnpm install
-2-SETUP.bat     (once)                  pnpm setup
-3-GO-LIVE.bat   (every day)             pnpm go:live   ← keep open
-4-BACKUP.bat    (safety copy)           pnpm backup
-5-START-LOCAL-TEST.bat (optional)       pnpm start:all
+1-FIRST-TIME\1-INSTALL.bat    (once)     pnpm install
+1-FIRST-TIME\2-SETUP.bat      (once)     pnpm setup
+2-EVERYDAY\3-GO-LIVE.bat      (daily)    pnpm go:live   ← keep open
+3-OPTIONAL\4-BACKUP.bat       (safety)   pnpm backup
+3-OPTIONAL\5-START-LOCAL-TEST (optional) pnpm start:all
 
 Plus ONE TIME:  vercel login   (one command + one click
 in your browser — SETUP.md Part 2)

@@ -1,6 +1,6 @@
 @echo off
 title Step 0b - Install what is missing
-cd /d "%~dp0.."
+cd /d "%~dp0..\.."
 echo.
 echo ==========================================
 echo   INSTALL: everything this app needs

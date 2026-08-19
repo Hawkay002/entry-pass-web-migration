@@ -23,16 +23,18 @@ on **your own computer**.
 
 ## Quick start (the short version)
 
-Windows: download this repo as ZIP → extract anywhere → double-click, in order:
+Windows: download this repo as ZIP → extract anywhere → open the
+**`STRESS FREE INSTALLATION`** folder → double-click, in order:
 
 ```
-0-CHECK-FIRST\0a-CHECK-SYSTEM.bat     check what your PC has
-0-CHECK-FIRST\0b-INSTALL-NEEDED.bat   install anything missing (automatic)
-1-INSTALL.bat                         install the app's building blocks
-2-SETUP.bat                           create the database + your logins
-3-GO-LIVE.bat                         🚀 publish — leave its window open
-4-BACKUP.bat                          safety copies of your data, any time
-5-START-LOCAL-TEST.bat                optional: test with nothing public
+0-CHECK-FIRST\0a-CHECK-SYSTEM.bat       check what your PC has
+0-CHECK-FIRST\0b-INSTALL-NEEDED.bat     install anything missing (automatic)
+1-FIRST-TIME-INSTALL\1-INSTALL.bat      install the app's building blocks
+1-FIRST-TIME-INSTALL\2-SETUP.bat        create the database + your logins
+2-EVERYDAY\3-GO-LIVE.bat                🚀 publish — leave its window open
+3-OPTIONAL\4-BACKUP.bat                 safety copies of your data, any time
+3-OPTIONAL\5-START-LOCAL-TEST.bat       optional: test with nothing public
+3-OPTIONAL\6-DASHBOARD-UNLOCK.bat       emergency dashboard unlock
 ```
 
 Mac/Linux equivalents: `pnpm install` · `pnpm setup` · `pnpm go:live` ·
@@ -102,7 +104,7 @@ Key design points:
 
 ```
 0-CHECK-FIRST/    system check + auto-installer (Windows)
-*.bat             numbered double-click entry points
+*.bat             double-click entry points (in STRESS FREE INSTALLATION/)
 scripts/          setup / go-live / start / backup (cross-platform)
 pb_migrations/    database schema (applied automatically)
 app/              the website (Next.js App Router)
