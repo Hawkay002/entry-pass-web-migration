@@ -1,10 +1,10 @@
 // components/click-spark-wrapper.tsx — site-wide click sparks (React Bits
-// ClickSpark), DESKTOP ONLY. Pass-through on mobile/touch devices.
+// ClickSpark, adapted), DESKTOP ONLY. Pass-through on mobile/touch devices.
 //
-// LAYOUT NOTE: the wrapper carries the layout classes the body used to apply
-// to its direct child (flex min-h-full flex-col), so pages render
-// identically whether or not the spark layer is active — and the canvas
-// covers the full page height instead of collapsing to 0.
+// The ClickSpark renders a fixed full-viewport canvas overlay (above all
+// content, pointer-transparent) and listens at document level — so this
+// wrapper no longer needs any layout classes; children render exactly as
+// they would straight inside <body>.
 
 "use client";
 
@@ -25,9 +25,7 @@ export default function ClickSparkWrapper({ children }: { children: ReactNode })
     return () => window.removeEventListener("resize", check);
   }, []);
 
-  if (!isDesktop) {
-    return <div className="flex min-h-full flex-col">{children}</div>;
-  }
+  if (!isDesktop) return <>{children}</>;
 
   return (
     <ClickSpark
@@ -36,7 +34,7 @@ export default function ClickSparkWrapper({ children }: { children: ReactNode })
       sparkRadius={18}
       sparkCount={8}
     >
-      <div className="flex min-h-full flex-col">{children}</div>
+      {children}
     </ClickSpark>
   );
 }

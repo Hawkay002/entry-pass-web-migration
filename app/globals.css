@@ -172,6 +172,11 @@ html.lenis body { height: auto; }
   * { @apply border-border outline-ring/50; }
   body { @apply bg-background text-foreground; -webkit-font-smoothing: antialiased; }
   html { @apply font-sans; color-scheme: dark; }
+  /* No horizontal scroll, ever — the landing has wide decorative layers
+     (starfield, marquee canvas, glow halos) that must clip, not pan.
+     clip on both keeps sticky/absolute positioning intact. */
+  html { overflow-x: clip; }
+  body { overflow-x: clip; max-width: 100vw; }
 }
 
 @utility glass-panel {
