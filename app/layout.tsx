@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono, Outfit } from "next/font/google";
 import { Toaster } from "sonner";
 import { RegisterSw } from "@/components/layout/register-sw";
+import ClickSparkWrapper from "@/components/click-spark-wrapper";
 import "flag-icons/css/flag-icons.min.css";
 import "./globals.css";
 
@@ -66,7 +67,9 @@ export default function RootLayout({
         <link rel="preload" href="/fonts/gotham-nights-bold.otf" as="font" type="font/otf" crossOrigin="anonymous" />
       </head>
       <body className="min-h-full flex flex-col">
-        {children}
+        <ClickSparkWrapper>
+          {children}
+        </ClickSparkWrapper>
         <RegisterSw />
         <Toaster theme="dark" position="top-right" richColors />
       </body>

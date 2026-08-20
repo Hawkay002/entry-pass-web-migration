@@ -3,6 +3,7 @@
 import { Reveal } from "./Reveal";
 import { SECURITY_POINTS } from "./data";
 import { Lock } from "lucide-react";
+import BorderGlow from "@/components/BorderGlow";
 
 export function SecurityControl() {
   return (
@@ -50,7 +51,7 @@ function StaffAccessMock() {
     { name: "S. Rao", role: "Kiosk Admin · GATE-D", active: true },
   ];
   return (
-    <div className="glass-panel mx-auto w-full max-w-sm rounded-2xl">
+    <BorderGlow className="mx-auto w-full max-w-sm" backgroundColor="#141414" borderRadius={16}>
       <div className="flex items-center justify-between border-b border-white/8 px-6 py-4">
         <span className="text-sm font-semibold text-foreground">
           Staff Access
@@ -84,6 +85,6 @@ function StaffAccessMock() {
           </div>
         ))}
       </div>
-    </div>
+    </BorderGlow>
   );
 }

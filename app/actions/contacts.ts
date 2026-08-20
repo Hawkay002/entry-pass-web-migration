@@ -17,8 +17,18 @@ export async function fetchContacts(): Promise<
   if (!user) return { ok: false, error: "Not authenticated." };
 
   const pb = await pbAdmin();
-  const records = await pb.collection(paths.contactsCollection).getFullList({
-    sort: "createdAt",
+  // Insertion order ("first added stays first"): sort by createdAt epoch,
+  // ties broken by PB record id — Pocketbase ids start with a random-ish
+  // 4-char sequence BUT the remaining 11 chars are a monotonically increasing
+  // counter, so id comparison is a stable creation tiebreak. This is what
+  // makes rapid adds (same millisecond) keep their true order, and deletions
+  // never reshuffle the survivors.
+  const records = await pb.collection(paths.contactsCollection).getFullList();
+  records.sort((a, b) => {
+    const ta = Number(a.createdAt ?? 0);
+    const tb = Number(b.createdAt ?? 0);
+    if (ta !== tb) return ta - tb;
+    return String(a.id).localeCompare(String(b.id));
   });
 
   const contacts: HelpContact[] = records.map((r) => ({

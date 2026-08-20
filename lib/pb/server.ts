@@ -20,14 +20,31 @@ let _adminAuthedAt = 0;
 // not on every call (avoids the autoCancel deadlock under concurrency).
 const REAUTH_INTERVAL_MS = 60 * 60 * 1000;
 
-/** Create a fresh admin client and authenticate it as superuser. */
+/** Create a fresh admin client and authenticate it as superuser.
+ *  NOTE: _superusers MUST NOT have OTP/MFA enabled — this is a headless
+ *  password-only API login; an MFA challenge here breaks every request
+ *  ("Could not create session"). Dashboard-level MFA is incompatible with
+ *  this app's architecture; the dashboard is instead protected by being
+ *  reachable only from this machine. */
 async function createAdminClient(): Promise<PocketBase> {
   const pb = new PocketBase(serverEnv.pbUrl);
   pb.autoCancellation(false); // critical for concurrent server use
-  await pb.collection("_superusers").authWithPassword(
-    serverEnv.pbAdminEmail,
-    serverEnv.pbAdminPassword
-  );
+  try {
+    await pb.collection("_superusers").authWithPassword(
+      serverEnv.pbAdminEmail,
+      serverEnv.pbAdminPassword
+    );
+  } catch (err) {
+    const resp = (err as { response?: { data?: { mfaId?: string } } }).response;
+    if (resp?.data?.mfaId) {
+      throw new Error(
+        "Pocketbase dashboard OTP/MFA is ON — it blocks the app's server login. " +
+        "Turn OFF OTP and MFA on the _superusers collection (dashboard → Collections → _superusers → Auth), " +
+        "or run 6-DASHBOARD-UNLOCK.bat. The dashboard is already protected by being local-only."
+      );
+    }
+    throw err;
+  }
   return pb;
 }
 

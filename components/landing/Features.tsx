@@ -4,7 +4,7 @@
 
 import { FEATURES } from "./data";
 import { Reveal } from "./Reveal";
-import { Card, CardCanvas } from "@/components/ui/animated-glow-card";
+import BorderGlow from "@/components/BorderGlow";
 
 export function Features() {
   const [lead, ...rest] = FEATURES;
@@ -24,11 +24,9 @@ export function Features() {
         {/* Lead feature — full-width glow card */}
         <Reveal delay={80}>
           <div className="mt-14 md:mt-16">
-            <CardCanvas className="block w-full">
-              <Card className="w-full">
-                <LeadFeature feature={lead} />
-              </Card>
-            </CardCanvas>
+            <BorderGlow className="w-full" backgroundColor="#141414" borderRadius={24}>
+              <LeadFeature feature={lead} />
+            </BorderGlow>
           </div>
         </Reveal>
 
@@ -38,30 +36,28 @@ export function Features() {
             const Icon = feature.icon;
             return (
               <Reveal key={feature.title} delay={(i % 2) * 80}>
-                <CardCanvas className="block h-full w-full">
-                  <Card className="h-full w-full">
-                    <div className="p-7 md:p-8">
-                      <div className="flex items-start gap-4">
-                        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-accent-secondary/15 text-accent-secondary ring-1 ring-accent-secondary/25">
-                          <Icon className="h-5 w-5" />
-                        </span>
-                        <div className="min-w-0">
-                          <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-                            <h3 className="text-lg font-semibold text-foreground">
-                              {feature.title}
-                            </h3>
-                            <span className="text-xs font-medium text-accent-secondary">
-                              {feature.metric}
-                            </span>
-                          </div>
-                          <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
-                            {feature.description}
-                          </p>
+                <BorderGlow className="h-full w-full" backgroundColor="#141414" borderRadius={20}>
+                  <div className="p-7 md:p-8">
+                    <div className="flex items-start gap-4">
+                      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-accent-secondary/15 text-accent-secondary ring-1 ring-accent-secondary/25">
+                        <Icon className="h-5 w-5" />
+                      </span>
+                      <div className="min-w-0">
+                        <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+                          <h3 className="text-lg font-semibold text-foreground">
+                            {feature.title}
+                          </h3>
+                          <span className="text-xs font-medium text-accent-secondary">
+                            {feature.metric}
+                          </span>
                         </div>
+                        <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
+                          {feature.description}
+                        </p>
                       </div>
                     </div>
-                  </Card>
-                </CardCanvas>
+                  </div>
+                </BorderGlow>
               </Reveal>
             );
           })}

@@ -2,7 +2,7 @@
 
 import { USE_CASES } from "./data";
 import { Reveal } from "./Reveal";
-import { Card, CardCanvas } from "@/components/ui/animated-glow-card";
+import BorderGlow from "@/components/BorderGlow";
 
 export function UseCases() {
   return (
@@ -19,9 +19,8 @@ export function UseCases() {
         <div className="mt-14 grid grid-cols-1 gap-6 md:mt-16 md:grid-cols-3">
           {USE_CASES.map((useCase, i) => (
             <Reveal key={useCase.title} delay={i * 90} className="h-full">
-              <CardCanvas className="h-full w-full">
-                <Card className="h-full w-full">
-                  <div className="p-7 md:p-8">
+              <BorderGlow className="h-full w-full" backgroundColor="#141414" borderRadius={20}>
+                <div className="p-7 md:p-8">
                     <h3 className="text-2xl font-semibold tracking-tight text-foreground">
                       {useCase.title}
                     </h3>
@@ -39,9 +38,8 @@ export function UseCases() {
                         </li>
                       ))}
                     </ul>
-                  </div>
-                </Card>
-              </CardCanvas>
+                </div>
+              </BorderGlow>
             </Reveal>
           ))}
         </div>
