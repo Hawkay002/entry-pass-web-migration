@@ -1,7 +1,10 @@
 // components/click-spark-wrapper.tsx — site-wide click sparks (React Bits
-// ClickSpark), DESKTOP ONLY. Rendered as a plain pass-through div on mobile /
-// touch devices so nothing changes there (taps don't produce desktop-style
-// sparks, and the extra canvas layer is skipped entirely).
+// ClickSpark), DESKTOP ONLY. Pass-through on mobile/touch devices.
+//
+// LAYOUT NOTE: the wrapper carries the layout classes the body used to apply
+// to its direct child (flex min-h-full flex-col), so pages render
+// identically whether or not the spark layer is active — and the canvas
+// covers the full page height instead of collapsing to 0.
 
 "use client";
 
@@ -13,8 +16,6 @@ export default function ClickSparkWrapper({ children }: { children: ReactNode })
 
   useEffect(() => {
     const check = () => {
-      // hover-capable pointer + desktop width — mirrors the (hover:hover)
-      // media query but readable in JS, with a live resize listener.
       const fine = window.matchMedia("(pointer: fine)").matches;
       const wide = window.innerWidth >= 768;
       setIsDesktop(fine && wide);
@@ -24,7 +25,9 @@ export default function ClickSparkWrapper({ children }: { children: ReactNode })
     return () => window.removeEventListener("resize", check);
   }, []);
 
-  if (!isDesktop) return <>{children}</>;
+  if (!isDesktop) {
+    return <div className="flex min-h-full flex-col">{children}</div>;
+  }
 
   return (
     <ClickSpark
@@ -33,7 +36,7 @@ export default function ClickSparkWrapper({ children }: { children: ReactNode })
       sparkRadius={18}
       sparkCount={8}
     >
-      {children}
+      <div className="flex min-h-full flex-col">{children}</div>
     </ClickSpark>
   );
 }
