@@ -11,6 +11,7 @@ export function Stats() {
       <div className="mx-auto max-w-6xl px-6 md:px-10">
         <Reveal>
           <BorderGlow className="w-full" backgroundColor="#141414" borderRadius={24}>
+            <div className="px-8 py-10 md:px-12 md:py-12">
             <p className="text-balance text-xl leading-snug tracking-tight text-foreground sm:text-2xl md:text-3xl">
               Built for events that don't get second chances. Verified
               <span className="text-accent-secondary"> under a second</span>,
@@ -30,6 +31,7 @@ export function Stats() {
                   </span>
                 </div>
               ))}
+            </div>
             </div>
           </BorderGlow>
         </Reveal>

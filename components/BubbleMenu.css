@@ -129,6 +129,8 @@
   justify-content: center;
   pointer-events: none;
   z-index: 98;
+  /* full-screen white backdrop behind the pill bubbles */
+  background: #ffffff;
 }
 
 .bubble-menu-items.fixed {

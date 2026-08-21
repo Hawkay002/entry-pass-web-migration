@@ -12,7 +12,7 @@ import { TRUST_ITEMS } from "./data";
 
 export function TrustMarquee() {
   return (
-    <div className="relative h-36 overflow-hidden md:h-48">
+    <div className="relative h-44 overflow-hidden md:h-48">
       {/* canvas is w-full (SVG 1200x520 aspect). Its centre sits at 50% of its
           own height; to align the wave line (canvas centre) with this box's
           centre: top 50% of box, minus 50% of the canvas. Left edge anchored
@@ -32,7 +32,7 @@ export function TrustMarquee() {
           color="#f4f2ee"
           ribbon
           ribbonColor="rgba(82, 39, 255, 0.16)"
-          ribbonWidth={64}
+          ribbonWidth={78}
           pauseOnHover
         />
       </div>
