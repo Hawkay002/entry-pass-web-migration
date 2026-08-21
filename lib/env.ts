@@ -21,6 +21,12 @@ export const serverEnv = {
   pbUrl: process.env.NEXT_PUBLIC_POCKETBASE_URL ?? "http://127.0.0.1:8090",
   pbAdminEmail: required("POCKETBASE_ADMIN_EMAIL", process.env.POCKETBASE_ADMIN_EMAIL),
   pbAdminPassword: required("POCKETBASE_ADMIN_PASSWORD", process.env.POCKETBASE_ADMIN_PASSWORD),
+  /** Service account (a `users` record with role=admin) — the app's server
+   *  client authenticates with THIS, not the superuser, so OTP/MFA can guard
+   *  the dashboard (_superusers) without breaking headless app logins.
+   *  Falls back to the superuser creds when unset (pre-refactor installs). */
+  pbServiceEmail: process.env.POCKETBASE_SERVICE_EMAIL ?? process.env.POCKETBASE_ADMIN_EMAIL ?? "",
+  pbServicePassword: process.env.POCKETBASE_SERVICE_PASSWORD ?? process.env.POCKETBASE_ADMIN_PASSWORD ?? "",
 } as const;
 
 /**

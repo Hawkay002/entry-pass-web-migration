@@ -24,6 +24,7 @@ import { execSync, spawn } from "node:child_process";
 import { existsSync, mkdirSync, writeFileSync, readFileSync, copyFileSync, readdirSync, statSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { platform, arch } from "node:os";
+import { randomBytes } from "node:crypto";
 import readline from "node:readline/promises";
 
 const ROOT = process.cwd();
@@ -281,11 +282,39 @@ window at any time to stop and start over.
     console.log("Google Sign-In connected.");
   }
 
+  // Service account — the WEBSITE's headless login (a users record with
+  // role=admin, never a superuser). Keeps the site independent of the
+  // dashboard's _superusers collection, so OTP/MFA on the dashboard can
+  // never break the app.
+  const svcEmail = "service@entrypass.local";
+  const svcPass = arg("service-pass", "") || randomBytes(18).toString("base64url");
+  const svcList = await (await fetch(`${PB_URL}/api/collections/users/records?perPage=200`, { headers: H })).json();
+  const svc = (svcList.items ?? []).find((u) => u.email === svcEmail);
+  if (svc) {
+    await fetch(`${PB_URL}/api/collections/users/records/${svc.id}`, {
+      method: "PATCH", headers: H,
+      body: JSON.stringify({ password: svcPass, passwordConfirm: svcPass, role: "admin", verified: true }),
+    });
+    console.log("Service account ready (password rotated).");
+  } else {
+    const r = await fetch(`${PB_URL}/api/collections/users/records`, {
+      method: "POST", headers: H,
+      body: JSON.stringify({
+        email: svcEmail, password: svcPass, passwordConfirm: svcPass,
+        emailVisibility: false, role: "admin", verified: true,
+      }),
+    });
+    if (!r.ok) { console.error("Could not create the service account:", await r.text()); process.exit(1); }
+    console.log("Service account created (the website's own login).");
+  }
+
   // ---------- 6. .env.local ----------
   step("Step 6 of 6: Writing your settings file (.env.local)");
   const env = `NEXT_PUBLIC_POCKETBASE_URL=${PB_URL}
 POCKETBASE_ADMIN_EMAIL=${dashEmail}
 POCKETBASE_ADMIN_PASSWORD=${dashPass}
+POCKETBASE_SERVICE_EMAIL=${svcEmail}
+POCKETBASE_SERVICE_PASSWORD=${svcPass}
 AUTH_COOKIE_NAME=pb_session
 ADMIN_EMAILS=${appEmail.toLowerCase()}
 `;
@@ -295,7 +324,7 @@ ADMIN_EMAILS=${appEmail.toLowerCase()}
   if (existsSync(envPath)) {
     for (const line of readFileSync(envPath, "utf8").split(/\r?\n/)) {
       const m = line.match(/^([A-Z_]+)=(.*)$/);
-      if (m && !/^(NEXT_PUBLIC_POCKETBASE_URL|POCKETBASE_ADMIN_EMAIL|POCKETBASE_ADMIN_PASSWORD|AUTH_COOKIE_NAME|ADMIN_EMAILS)$/.test(m[1])) {
+      if (m && !/^(NEXT_PUBLIC_POCKETBASE_URL|POCKETBASE_ADMIN_EMAIL|POCKETBASE_ADMIN_PASSWORD|POCKETBASE_SERVICE_EMAIL|POCKETBASE_SERVICE_PASSWORD|AUTH_COOKIE_NAME|ADMIN_EMAILS)$/.test(m[1])) {
         extra += `${m[1]}=${m[2]}\n`;
       }
     }

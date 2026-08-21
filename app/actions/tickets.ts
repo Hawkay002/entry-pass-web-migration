@@ -5,7 +5,6 @@
 "use server";
 
 import { pbAdmin } from "@/lib/pb/server";
-import { serverEnv } from "@/lib/env";
 import { paths } from "@/lib/paths";
 import { getAppUser } from "@/lib/pb/server-auth";
 import { logAction } from "@/lib/pb/log";
@@ -19,16 +18,17 @@ function generateGroupId(): string {
 }
 
 /** Fill the ticketUrl / whatsappUrl columns shown in the PB dashboard.
- *  Base = PB settings appURL (go-live keeps it = the public link), so the
- *  URLs are absolute and copy-pasteable from the dashboard.
+ *  Base = the appUrl field on the settings record (go-live keeps it = the
+ *  public link), so the URLs are absolute and copy-pasteable from the
+ *  dashboard. Reading the record — not PB's superuser-only /api/settings —
+ *  means this works with the rules-gated service account, and keeps working
+ *  when OTP/MFA guards _superusers.
  *  The WhatsApp URL mirrors the Guest List share EXACTLY: addressed to the
  *  guest's phone (wa.me/<digits>) with the same personalized message. */
 export async function fillShareUrls(pb: Awaited<ReturnType<typeof pbAdmin>>, ticketId: string): Promise<void> {
   try {
-    const st = await fetch(serverEnv.pbUrl + "/api/settings", {
-      headers: { Authorization: pb.authStore.token },
-    }).then((r) => r.json());
-    const base = String(st?.meta?.appURL ?? "").replace(/\/$/, "");
+    const st = await pb.collection(paths.settingsCollection).getOne(paths.settingsId);
+    const base = String(st?.appUrl ?? "").replace(/\/$/, "");
     if (!base) return;
 
     const t = await pb.collection(paths.ticketsCollection).getOne(ticketId);

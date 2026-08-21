@@ -233,7 +233,11 @@ address this window prints into your browser.)`);
   // keep the other required settings in sync from .env.local every run —
   // idempotent, fixes any that are missing/stale in any environment
   const envLocal = readEnvLocal();
-  for (const name of ["POCKETBASE_ADMIN_EMAIL", "POCKETBASE_ADMIN_PASSWORD", "AUTH_COOKIE_NAME", "ADMIN_EMAILS"]) {
+  for (const name of [
+    "POCKETBASE_ADMIN_EMAIL", "POCKETBASE_ADMIN_PASSWORD",
+    "POCKETBASE_SERVICE_EMAIL", "POCKETBASE_SERVICE_PASSWORD",
+    "AUTH_COOKIE_NAME", "ADMIN_EMAILS",
+  ]) {
     if (envLocal[name]) {
       await cliSetEnv(name, envLocal[name]);
     }
@@ -244,23 +248,42 @@ address this window prints into your browser.)`);
   const out = await vercel(["--prod"]);
 
   // Tell Pocketbase the public link — ticket rows use it to build the
-  // ticketUrl/whatsappUrl columns shown in the PB dashboard.
+  // ticketUrl/whatsappUrl columns shown in the PB dashboard. Stored on the
+  // app-level settings record (NOT PB's superuser-only settings API), so it
+  // works through the rules-gated service account and survives OTP/MFA being
+  // enabled on the dashboard's _superusers login.
   try {
     const { projectName: pn } = JSON.parse(readFileSync(join(ROOT, ".vercel", "project.json"), "utf8"));
-    const token = await fetch(`${PB_URL}/api/collections/_superusers/auth-with-password`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ identity: envLocalKey("POCKETBASE_ADMIN_EMAIL"), password: envLocalKey("POCKETBASE_ADMIN_PASSWORD") }),
-    }).then((r) => r.json());
-    const cur = await fetch(`${PB_URL}/api/settings`, {
-      headers: { Authorization: `Bearer ${token.token}` },
-    }).then((r) => r.json());
-    await fetch(`${PB_URL}/api/settings`, {
-      method: "PATCH",
-      headers: { Authorization: `Bearer ${token.token}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ meta: { ...cur.meta, appURL: `https://${pn}.vercel.app` } }),
-    });
-    log("Pocketbase told the public link (ticket share columns will use it).");
+    const alias = `https://${pn}.vercel.app`;
+    // Service account first (the intended writer); fall back to superuser
+    // creds for pre-refactor installs where no service account exists yet.
+    let token = "";
+    const svcEmail = envLocalKey("POCKETBASE_SERVICE_EMAIL");
+    const svcPass = envLocalKey("POCKETBASE_SERVICE_PASSWORD");
+    if (svcEmail && svcPass) {
+      const r = await fetch(`${PB_URL}/api/collections/users/auth-with-password`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ identity: svcEmail, password: svcPass }),
+      }).then((r) => r.json());
+      if (r.token) token = r.token;
+    }
+    if (!token) {
+      const r = await fetch(`${PB_URL}/api/collections/_superusers/auth-with-password`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ identity: envLocalKey("POCKETBASE_ADMIN_EMAIL"), password: envLocalKey("POCKETBASE_ADMIN_PASSWORD") }),
+      }).then((r) => r.json());
+      if (r.token) token = r.token;
+    }
+    if (token) {
+      await fetch(`${PB_URL}/api/collections/settings/records/config000000000`, {
+        method: "PATCH",
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ appUrl: alias }),
+      });
+      log("Pocketbase told the public link (ticket share columns will use it).");
+    }
   } catch { /* non-fatal — columns just stay relative */ }
 
   // The link to share is the project's PERMANENT domain:
