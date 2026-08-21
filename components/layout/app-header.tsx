@@ -70,7 +70,7 @@ export function AppHeader({
       size="sm"
       data-sfx-own=""
       onMouseEnter={() => playSfx("hover")}
-      onClick={() => { playSfx("select"); handleSignOut(); }}
+      onClick={() => { playSfx("disconnect"); handleSignOut(); }}
       className="text-muted-foreground hover:text-white"
     >
       <LogOut className="mr-1.5 h-4 w-4" />
@@ -113,7 +113,7 @@ export function AppHeader({
               size="sm"
               data-sfx-own=""
               onMouseEnter={() => playSfx("hover")}
-              onClick={() => { playSfx("select"); handleSignOut(); }}
+              onClick={() => { playSfx("disconnect"); handleSignOut(); }}
               className="h-7 px-2 text-muted-foreground hover:text-white"
             >
               <LogOut className="mr-1 h-3.5 w-3.5" />
