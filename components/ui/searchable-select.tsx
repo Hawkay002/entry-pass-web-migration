@@ -7,6 +7,7 @@
 import { useEffect, useRef, useState } from "react";
 import { ChevronDown, Search } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { playSfx } from "@/lib/sfx";
 
 export interface SearchableOption {
   value: string;
@@ -89,7 +90,9 @@ export function SearchableSelect({
     <div ref={ref} className={cn("relative", className)}>
       <button
         type="button"
-        onClick={() => setOpen((o) => !o)}
+        data-sfx-own=""
+        onMouseEnter={() => playSfx("hover")}
+        onClick={() => { playSfx("select"); setOpen((o) => !o); }}
         className="flex h-8 w-full items-center justify-between gap-1.5 rounded-lg border border-input bg-transparent px-2.5 py-2 text-sm whitespace-nowrap transition-colors outline-none hover:bg-input/80 dark:bg-input/60 dark:hover:bg-input/80"
       >
         <span className={cn("flex min-w-0 items-center gap-1.5", !selected && "text-muted-foreground")}>
@@ -133,7 +136,9 @@ export function SearchableSelect({
                 <button
                   key={opt.key ?? opt.value + '-' + opt.flag}
                   type="button"
+                  data-sfx-own=""
                   onClick={() => {
+                    playSfx("select");
                     onChange(opt.value);
                     setOpen(false);
                     setQuery("");

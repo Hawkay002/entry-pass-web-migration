@@ -9,6 +9,7 @@ import { Lock, BadgePlus, ScanQrCode, ClipboardClock } from "lucide-react";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { UserListIcon, Settings05Icon } from "@hugeicons/core-free-icons";
 import { cn } from "@/lib/utils";
+import { playSfx } from "@/lib/sfx";
 import type { TabName } from "@/lib/types";
 import type { ReactNode } from "react";
 
@@ -76,8 +77,15 @@ export function AppNav({
         key={tab.href}
         href={locked ? "#" : tab.href}
         aria-disabled={locked || undefined}
+        data-sfx-own=""
+        onMouseEnter={() => playSfx("hover")}
         onClick={(e) => {
-          if (locked) e.preventDefault();
+          if (locked) {
+            e.preventDefault();
+            playSfx("blocked");
+            return;
+          }
+          playSfx("select");
           if (typeof window !== "undefined") localStorage.setItem("lastTab", tab.href);
         }}
         className={cn(

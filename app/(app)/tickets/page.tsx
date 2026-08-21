@@ -34,6 +34,7 @@ import { SearchableSelect } from "@/components/ui/searchable-select";
 import { TicketCard } from "@/components/tickets/ticket-card";
 import { BadgeCheck } from "@/components/animate-ui/icons/badge-check";
 import { captureTicketAsJpeg } from "@/lib/capture-ticket";
+import { playSfx, playToastSfx, startProcessingSfx, stopProcessingSfx } from "@/lib/sfx";
 import type { Gender, Ticket, TicketType } from "@/lib/types";
 
 // Custom calendar-date-1 inline SVG (age icon).
@@ -162,6 +163,7 @@ export default function TicketsPage() {
           .map((k) => ({ name: k.name.trim(), gender: k.gender, age: Number(k.age) }))
       : [];
 
+    startProcessingSfx();
     const res = await createTicket({
       name: values.name,
       gender: values.gender,
@@ -172,6 +174,8 @@ export default function TicketsPage() {
       kids: validKids.length > 0 ? validKids : undefined,
     });
     if (res.ok) {
+      stopProcessingSfx();
+      playSfx("complete");
       setPreview({
         id: res.id,
         name: values.name,
@@ -181,6 +185,7 @@ export default function TicketsPage() {
         ticketType: values.ticketType,
         gate: res.gate ?? null,
       });
+      playToastSfx();
       toast.success(
         "Pass generated",
         { description: validKids.length > 0 ? `${values.name} + ${validKids.length} kid(s)` : values.name }
@@ -191,6 +196,9 @@ export default function TicketsPage() {
       setHasKids(false);
       setKids([]);
     } else {
+      stopProcessingSfx();
+      playSfx("error");
+      playToastSfx();
       toast.error("Could not issue pass", { description: res.error });
     }
   }
@@ -347,13 +355,17 @@ export default function TicketsPage() {
                 <Label htmlFor="has-kids" className="flex items-center gap-1.5 text-sm">
                   <Baby className="h-3.5 w-3.5" /> Has Kids?
                 </Label>
-                <Switch checked={hasKids} onCheckedChange={(v) => {
-                  setHasKids(v);
-                  if (v && kids.length === 0) {
-                    setKids([{ name: "", gender: "Male", age: "" }]);
-                  }
-                  if (!v) setKids([]);
-                }} />
+                <Switch
+                  checked={hasKids}
+                  onCheckedChange={(v) => {
+                    playSfx(v ? "toggle-on" : "toggle-off");
+                    setHasKids(v);
+                    if (v && kids.length === 0) {
+                      setKids([{ name: "", gender: "Male", age: "" }]);
+                    }
+                    if (!v) setKids([]);
+                  }}
+                />
               </div>
 
               {hasKids && (
@@ -372,7 +384,9 @@ export default function TicketsPage() {
                         </div>
                         <button
                           type="button"
-                          onClick={() => setKids((prev) => prev.filter((_, i) => i !== idx))}
+                          data-sfx-own=""
+                          onMouseEnter={() => playSfx("hover")}
+                          onClick={() => { playSfx("cancel"); setKids((prev) => prev.filter((_, i) => i !== idx)); }}
                           className="mb-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
                           title="Remove kid"
                         >
@@ -424,7 +438,14 @@ export default function TicketsPage() {
               )}
             </div>
 
-            <Button type="submit" className="w-full" disabled={isSubmitting}>
+            <Button
+              type="submit"
+              data-sfx-own=""
+              onMouseEnter={() => playSfx("hover")}
+              onClick={() => playSfx("select")}
+              className="w-full"
+              disabled={isSubmitting}
+            >
               {isSubmitting ? (
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
               ) : (
@@ -549,6 +570,9 @@ function ConfirmationPanel({
           href={`${typeof window !== "undefined" ? window.location.origin : ""}/ticket/${ticket.id}`}
           target="_blank"
           rel="noopener noreferrer"
+          data-sfx-own=""
+          onMouseEnter={() => playSfx("hover")}
+          onClick={() => playSfx("select")}
           className="flex w-full items-center justify-center gap-2 rounded-xl border border-white/15 bg-white/5 py-3 text-sm font-medium text-white transition-colors hover:bg-white/10"
         >
           <ExternalLink className="h-4 w-4" />
@@ -557,16 +581,24 @@ function ConfirmationPanel({
 
         {/* Issue Another (left) + Share via WhatsApp (right) on the same row. */}
         <div className="flex w-full gap-3">
-          <Button variant="outline" className="flex-1 shrink-0" onClick={onIssueAnother}>
+          <Button
+            variant="outline"
+            data-sfx-own=""
+            className="flex-1 shrink-0"
+            onMouseEnter={() => playSfx("hover")}
+            onClick={() => { playSfx("select"); onIssueAnother(); }}
+          >
             Issue Another
           </Button>
           {/* WhatsApp button doubles as the share-preview status: shows a loader
               + "Preparing share preview…" until the snapshot is captured, then
               becomes the normal Share via WhatsApp button. */}
           <Button
+            data-sfx-own=""
             className="flex-1 bg-[#25D366] text-white hover:bg-[#1faa54]"
             disabled={isSharing || captured === null}
-            onClick={onShare}
+            onMouseEnter={() => { if (!isSharing && captured !== null) playSfx("hover"); }}
+            onClick={() => { if (!isSharing && captured !== null) { playSfx("send"); onShare(); } }}
           >
             {isSharing || captured === null ? (
               <Loader2 className="mr-2 h-4 w-4 shrink-0 animate-spin" />

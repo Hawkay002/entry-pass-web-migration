@@ -17,6 +17,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
+import { playSfx } from "@/lib/sfx";
 import { BACKGROUND_PRESETS, useBackground } from "@/hooks/use-background";
 
 export function BackgroundPickerButton() {
@@ -25,7 +26,9 @@ export function BackgroundPickerButton() {
     <>
       <button
         type="button"
-        onClick={() => setOpen(true)}
+        data-sfx-own=""
+        onMouseEnter={() => playSfx("hover")}
+        onClick={() => { playSfx("select"); setOpen(true); }}
         title="Change background"
         className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-white/10 hover:text-white"
       >
@@ -74,7 +77,9 @@ function BackgroundPickerDialog({
           {BACKGROUND_PRESETS.map((preset) => (
             <button
               key={preset.id}
-              onClick={() => setSelected(preset.id)}
+              data-sfx-own=""
+              onMouseEnter={() => playSfx("hover")}
+              onClick={() => { playSfx("select"); setSelected(preset.id); }}
               className={cn(
                 "group relative h-24 w-full shrink-0 overflow-hidden rounded-lg border-2 transition-all",
                 selected === preset.id

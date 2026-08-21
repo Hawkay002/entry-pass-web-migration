@@ -10,6 +10,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { BackgroundPickerButton } from "./background-picker";
 import { AppNav } from "./app-nav";
+import { playSfx } from "@/lib/sfx";
 import type { TabName } from "@/lib/types";
 
 export function AppHeader({
@@ -67,7 +68,9 @@ export function AppHeader({
     <Button
       variant="ghost"
       size="sm"
-      onClick={handleSignOut}
+      data-sfx-own=""
+      onMouseEnter={() => playSfx("hover")}
+      onClick={() => { playSfx("select"); handleSignOut(); }}
       className="text-muted-foreground hover:text-white"
     >
       <LogOut className="mr-1.5 h-4 w-4" />
@@ -108,7 +111,9 @@ export function AppHeader({
             <Button
               variant="ghost"
               size="sm"
-              onClick={handleSignOut}
+              data-sfx-own=""
+              onMouseEnter={() => playSfx("hover")}
+              onClick={() => { playSfx("select"); handleSignOut(); }}
               className="h-7 px-2 text-muted-foreground hover:text-white"
             >
               <LogOut className="mr-1 h-3.5 w-3.5" />
