@@ -57,6 +57,16 @@ export function playToastSfx() {
   playSfx("notification");
 }
 
+/** Try to unlock audio outside a gesture — e.g. returning from an OAuth
+ *  redirect, where the earlier click's activation may or may not have
+ *  carried over the navigation. No-op if already unlocked; silently
+ *  still-blocked on browsers that demand a fresh gesture. */
+export function unlockSfx() {
+  try {
+    sfx().unlock().catch(() => {});
+  } catch {}
+}
+
 /** Start the shared processing loop (loading states). Stops any previous. */
 export function startProcessingSfx() {
   stopProcessingSfx();

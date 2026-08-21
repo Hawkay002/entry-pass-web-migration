@@ -21,7 +21,7 @@ import { Suspense } from "react";
 import { Starfield } from "@/components/layout/starfield";
 import { Loader2, ShieldCheck, Eye, EyeOff, KeyRound, Check } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { ensureSfxUnlock, playSfx, playToastSfx, startProcessingSfx, stopProcessingSfx } from "@/lib/sfx";
+import { ensureSfxUnlock, playSfx, playToastSfx, startProcessingSfx, stopProcessingSfx, unlockSfx } from "@/lib/sfx";
 
 export default function LoginPage() {
   return (
@@ -37,8 +37,19 @@ function LoginForm() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [authed, setAuthed] = useState(false);
+  // Landing back from Google's account picker (?oauth_code=...) must START
+  // in the Authenticating state — initializing from the URL means no idle
+  // form flashes before the exchange effect kicks in.
+  const isOauthReturn = () =>
+    typeof window !== "undefined" &&
+    new URLSearchParams(window.location.search).has("oauth_code");
+  const [loading, setLoading] = useState(isOauthReturn);
+  // Which button gets the green ✓ Authenticated state after success.
+  const [authedVia, setAuthedVia] = useState<"password" | "google" | null>(null);
+  // True while the GOOGLE flow is the active one (initiating or the return
+  // exchange) — puts the spinner on the Google button, not Authenticate.
+  const [googleBusy, setGoogleBusy] = useState(isOauthReturn);
+  const authed = authedVia !== null;
   const [showPw, setShowPw] = useState(false);
 
   // Audio must be unlocked from a real user gesture (mobile requirement).
@@ -53,6 +64,8 @@ function LoginForm() {
   const [recoveryMode, setRecoveryMode] = useState(false);
   const [recoveryCodeInput, setRecoveryCodeInput] = useState("");
   const otpRefs = useRef<(HTMLInputElement | null)[]>([]);
+  // Guards the OAuth-return exchange against ever running twice.
+  const oauthHandledRef = useRef(false);
 
   /** Issue a login request to /api/login. Returns the parsed response. */
   async function postLogin(payload: Record<string, string>): Promise<{ res: Response; data: { ok?: boolean; status?: string; error?: string; token?: string } }> {
@@ -83,10 +96,22 @@ function LoginForm() {
   useEffect(() => {
     const code = searchParams.get("oauth_code");
     const state = searchParams.get("state");
-    if (!code) return;
+    if (!code || oauthHandledRef.current) return;
+    oauthHandledRef.current = true;
     setLoading(true);
+    setGoogleBusy(true);
+    // Fresh page load after the Google redirect — the audio unlock from the
+    // pre-Google click may not carry over the navigation, so try again here
+    // (no-op if already unlocked; silent where still blocked).
+    unlockSfx();
     startProcessingSfx();
+    // Guarantee the Authenticating state is perceptible even when the token
+    // exchange is near-instant: keep the spinner at least 600ms total.
+    const startedAt = Date.now();
+    const holdSpinner = () =>
+      new Promise((r) => setTimeout(r, Math.max(0, 600 - (Date.now() - startedAt))));
     (async () => {
+      let success = false;
       try {
         const stored = JSON.parse(sessionStorage.getItem("pb_oauth") ?? "null") as
           | { codeVerifier: string; state: string }
@@ -115,8 +140,14 @@ function LoginForm() {
           setError("");
           setTimeout(() => otpRefs.current[0]?.focus(), 100);
         } else if (res.ok) {
+          await holdSpinner();
           stopProcessingSfx();
           playSfx("complete");
+          // Green ✓ Authenticated state — held a full second so it is
+          // clearly seen and heard before the page navigates away.
+          setAuthedVia("google");
+          await new Promise((r) => setTimeout(r, 1000));
+          success = true;
           // HARD navigation — full page load. The OAuth return lands on a
           // service-worker-served page; client-side router navigation can
           // resolve /tickets from stale router/page cache and bounce back.
@@ -133,7 +164,12 @@ function LoginForm() {
         playSfx("error");
         setError("Network error during sign-in. Try again.");
       } finally {
-        setLoading(false);
+        // Only stand the buttons back up when the exchange did NOT succeed —
+        // on success the ✓ state must persist through the navigation.
+        if (!success) {
+          setLoading(false);
+          setGoogleBusy(false);
+        }
       }
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -165,8 +201,8 @@ function LoginForm() {
         // so the success lands perceptibly, then navigate.
         stopProcessingSfx();
         playSfx("complete");
-        setAuthed(true);
-        await new Promise((r) => setTimeout(r, 700));
+        setAuthedVia("password");
+        await new Promise((r) => setTimeout(r, 1000));
         router.push("/tickets");
         router.refresh();
         return;
@@ -186,9 +222,10 @@ function LoginForm() {
 
   function handleGoogleSignIn() {
     setError("");
-    setLoading(true);
     playSfx("select");
-    startProcessingSfx();
+    // NO busy/authenticating state here — the user is going to Google's
+    // account picker. "Authenticating…" begins only AFTER they pick an
+    // account and land back on /login?oauth_code=... (the return effect).
     // Full-page redirect OAuth flow — no popup, so popup blockers can't break
     // it. The redirect URI is OUR callback on the app's own origin (stable on
     // Vercel), not PB's. PKCE verifier is stashed in sessionStorage; the
@@ -201,10 +238,8 @@ function LoginForm() {
     pb().collection("users").listAuthMethods().then((res) => {
       const google = (res.oauth2?.providers || []).find((p) => p.name === "google");
       if (!google) {
-        stopProcessingSfx();
         playSfx("error");
         setError("Google sign-in is not configured. Ask the admin to enable it.");
-        setLoading(false);
         return;
       }
       sessionStorage.setItem("pb_oauth", JSON.stringify({
@@ -219,7 +254,6 @@ function LoginForm() {
       url.searchParams.set("prompt", "select_account");
       window.location.href = url.toString();
     }).catch((err) => {
-      stopProcessingSfx();
       playSfx("error");
       const msg = (err as { message?: string }).message ?? "";
       if (msg.includes("network") || msg.includes("fetch")) {
@@ -227,7 +261,6 @@ function LoginForm() {
       } else {
         setError(msg || "Could not start Google sign-in.");
       }
-      setLoading(false);
     });
   }
 
@@ -281,8 +314,8 @@ function LoginForm() {
       if (res.ok) {
         stopProcessingSfx();
         playSfx("complete");
-        setAuthed(true);
-        await new Promise((r) => setTimeout(r, 700));
+        setAuthedVia("password");
+        await new Promise((r) => setTimeout(r, 1000));
         router.push("/tickets");
         router.refresh();
       } else {
@@ -309,8 +342,8 @@ function LoginForm() {
       if (res.ok) {
         stopProcessingSfx();
         playSfx("complete");
-        setAuthed(true);
-        await new Promise((r) => setTimeout(r, 700));
+        setAuthedVia("password");
+        await new Promise((r) => setTimeout(r, 1000));
         router.push("/tickets");
         router.refresh();
       } else {
@@ -386,7 +419,7 @@ function LoginForm() {
                 <Button
                   className={cn(
                     "mt-6 w-full",
-                    authed &&
+                    authedVia === "password" &&
                       "border border-success-green/60 bg-success-green/15 text-success-green hover:bg-success-green/20"
                   )}
                   onClick={() => submit2FA()}
@@ -428,7 +461,7 @@ function LoginForm() {
                 <Button
                   className={cn(
                     "mt-6 w-full",
-                    authed &&
+                    authedVia === "password" &&
                       "border border-success-green/60 bg-success-green/15 text-success-green hover:bg-success-green/20"
                   )}
                   onClick={submitRecovery}
@@ -521,21 +554,21 @@ function LoginForm() {
               type="submit"
               className={cn(
                 "w-full",
-                authed &&
+                authedVia === "password" &&
                   "border border-success-green/60 bg-success-green/15 text-success-green hover:bg-success-green/20"
               )}
               disabled={loading || authed}
               onMouseEnter={() => playSfx("hover")}
               onClick={() => playSfx("select")}
             >
-              {authed ? (
+              {authedVia === "password" ? (
                 <>
                   <Check className="mr-2 h-4 w-4" />
                   Authenticated
                 </>
               ) : (
                 <>
-                  {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                  {!googleBusy && loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                   Authenticate
                 </>
               )}
@@ -557,18 +590,36 @@ function LoginForm() {
           {/* Google Sign-In */}
           <Button
             variant="outline"
-            className="w-full"
+            className={cn(
+              "w-full",
+              authedVia === "google" &&
+                "border border-success-green/60 bg-success-green/15 text-success-green hover:bg-success-green/20"
+            )}
             disabled={loading}
             onClick={handleGoogleSignIn}
             onMouseEnter={() => playSfx("hover")}
           >
-            <svg className="mr-2 h-4 w-4" viewBox="0 0 24 24">
-              <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
-              <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
-              <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
-              <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
-            </svg>
-            Sign in with Google
+            {authedVia === "google" ? (
+              <>
+                <Check className="mr-2 h-4 w-4" />
+                Authenticated
+              </>
+            ) : googleBusy ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Authenticating…
+              </>
+            ) : (
+              <>
+                <svg className="mr-2 h-4 w-4" viewBox="0 0 24 24">
+                  <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+                  <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+                  <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
+                  <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
+                </svg>
+                Sign in with Google
+              </>
+            )}
           </Button>
         </CardContent>
       </Card>
