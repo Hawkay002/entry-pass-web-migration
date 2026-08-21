@@ -34,6 +34,14 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { deleteLogs } from "@/app/actions/admin";
 import { exportLogsCSV, exportLogsXLSX, exportLogsPDF } from "@/lib/import-export";
 import type { ActivityLog } from "@/lib/types";
@@ -92,7 +100,7 @@ export function LogsTable({ initialLogs }: { initialLogs: ActivityLog[] }) {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [deleting, setDeleting] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
-  const [exporting, setExporting] = useState<string | null>(null);
+  const [exportOpen, setExportOpen] = useState(false);
   const [typeOpen, setTypeOpen] = useState(false);
   const typeRef = useRef<HTMLDivElement>(null);
 
@@ -106,19 +114,18 @@ export function LogsTable({ initialLogs }: { initialLogs: ActivityLog[] }) {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  async function handleExport(format: "csv" | "xlsx" | "pdf") {
-    setExporting(format);
+  async function handleExport(format: string, filename: string) {
+    const selectedLogs = logs.filter((l) => selected.has(l.id));
+    const name = filename || "activity_logs";
     try {
-      const selectedLogs = logs.filter((l) => selected.has(l.id));
-      const name = "activity_logs";
       if (format === "csv") exportLogsCSV(selectedLogs, name);
       else if (format === "xlsx") await exportLogsXLSX(selectedLogs, name);
-      else await exportLogsPDF(selectedLogs, name);
+      else if (format === "pdf") await exportLogsPDF(selectedLogs, name);
       toast.success(`Exported ${selectedLogs.length} log(s) as ${format.toUpperCase()}`);
+      setExportOpen(false);
     } catch (err) {
       toast.error("Export failed", { description: (err as Error).message });
     }
-    setExporting(null);
   }
 
   const filtered = useMemo(() => {
@@ -204,20 +211,13 @@ export function LogsTable({ initialLogs }: { initialLogs: ActivityLog[] }) {
               <MoreVertical className="h-4 w-4" />
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="min-w-[180px]">
-              {(["csv", "xlsx", "pdf"] as const).map((f) => (
-                <DropdownMenuItem
-                  key={f}
-                  disabled={selected.size === 0}
-                  onClick={() => handleExport(f)}
-                >
-                  {exporting === f ? (
-                    <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />
-                  ) : (
-                    <HugeiconsIcon icon={DatabaseExportIcon} size={14} className="mr-2" />
-                  )}
-                  Export {f.toUpperCase()}
-                </DropdownMenuItem>
-              ))}
+              <DropdownMenuItem
+                disabled={selected.size === 0}
+                onClick={() => setExportOpen(true)}
+              >
+                <HugeiconsIcon icon={DatabaseExportIcon} size={14} className="mr-2" />
+                Export
+              </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem
                 variant="destructive"
@@ -365,7 +365,83 @@ export function LogsTable({ initialLogs }: { initialLogs: ActivityLog[] }) {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Export modal (exports selected logs) */}
+      <ExportLogsModal
+        open={exportOpen}
+        onOpenChange={setExportOpen}
+        count={selected.size}
+        onExport={handleExport}
+      />
     </div>
+  );
+}
+
+function ExportLogsModal({
+  open,
+  onOpenChange,
+  count,
+  onExport,
+}: {
+  open: boolean;
+  onOpenChange: (o: boolean) => void;
+  count: number;
+  onExport: (format: string, filename: string) => Promise<void>;
+}) {
+  const [filename, setFilename] = useState("");
+  const [format, setFormat] = useState("csv");
+  const [exporting, setExporting] = useState(false);
+
+  async function handleDownload() {
+    setExporting(true);
+    await onExport(format, filename || "activity_logs");
+    setExporting(false);
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Export Logs</DialogTitle>
+          <DialogDescription>
+            Exporting {count} selected log(s).
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="export-name">File Name</Label>
+            <Input
+              id="export-name"
+              value={filename}
+              onChange={(e) => setFilename(e.target.value)}
+              placeholder="activity_logs"
+            />
+          </div>
+          <div className="space-y-2">
+            <Label>File Format</Label>
+            <Select value={format} onValueChange={(v) => setFormat(v ?? "csv")}>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="csv">CSV (.csv)</SelectItem>
+                <SelectItem value="xlsx">Excel (.xlsx)</SelectItem>
+                <SelectItem value="pdf">PDF (.pdf)</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="ghost" onClick={() => onOpenChange(false)}>
+            Cancel
+          </Button>
+          <Button onClick={handleDownload} disabled={exporting || count === 0}>
+            {exporting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            Download
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 
