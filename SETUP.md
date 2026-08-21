@@ -300,6 +300,10 @@ the code → you're in. Adds ~10 seconds per login.
 2. Enable **OTP** and enable **MFA** (defaults are fine)
 3. Log out, log back in: password → code arrives in Gmail → you're in.
 
+   The WEBSITE is not affected by this — it logs in with its own service
+   account (created by 2-SETUP), never the dashboard login, so the email
+   code is only ever asked of a human at the dashboard.
+
 ### If you get locked out (emergency unlock)
 
 **Forgot the password, email still works** → double-click
