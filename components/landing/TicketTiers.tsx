@@ -294,7 +294,7 @@ function TiltedTicket({
         ? `${window.location.origin}/ticket/${ticketId}`
         : ticketId;
     QRCode.toDataURL(url, {
-      width: 150,
+      width: 200,
       margin: 1,
       color: { dark: "#000000", light: "#ffffff" },
       errorCorrectionLevel: "H",
@@ -351,7 +351,6 @@ function TiltedTicket({
   }, []);
 
   const isClassic = tier.key === "Classic";
-  const isVVIP = tier.key === "Gold";
   const inkColor = isClassic ? "#ffffff" : TICKET_LAYOUT.inkColor;
 
   return (
@@ -385,11 +384,11 @@ function TiltedTicket({
         {/* QR code overlay — bottom-left of the stub */}
         {qrDataUrl && (
           <div
-            className="pointer-events-none absolute rounded-lg bg-white p-1"
+            className="pointer-events-none absolute rounded-lg bg-white p-1.5"
             style={{
               bottom: `${(30 / 741) * width}px`,
               left: `${(425 / 741) * width}px`,
-              width: `${(90 / 741) * width}px`,
+              width: `${(110 / 741) * width}px`,
             }}
           >
             {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -408,17 +407,11 @@ function TiltedTicket({
             style={{
               top: `${(355 / 741) * width}px`,
               left: `${(57 / 741) * width}px`,
-              fontSize: `${(22 / 741) * width}px`,
+              fontSize: `${showcaseLayout(tier.key).footerSize * width}px`,
               letterSpacing: `${TICKET_LAYOUT.footerTracking}em`,
               fontFamily: "Gotham Nights",
               color: inkColor,
               opacity: 0.85,
-              ...(isVVIP
-                ? {
-                    textShadow:
-                      "0 1px 0 rgba(0,0,0,0.4), 0 -1px 0 rgba(255,255,255,0.15)",
-                  }
-                : {}),
             }}
           >
             ID: {ticketId}

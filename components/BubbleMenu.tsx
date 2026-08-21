@@ -1,6 +1,6 @@
 "use client";
 
-import type { CSSProperties, ReactNode } from 'react';
+import type { CSSProperties, ReactNode, MouseEvent as ReactMouseEvent } from 'react';
 import { useState, useRef, useEffect } from 'react';
 import { gsap } from 'gsap';
 
@@ -25,6 +25,10 @@ export type BubbleMenuProps = {
   menuAriaLabel?: string;
   menuBg?: string;
   menuContentColor?: string;
+  /** Resting background of the logo pill + circular menu button (defaults to menuBg). */
+  bubbleBg?: string;
+  /** Resting color of the hamburger lines (defaults to menuContentColor). */
+  bubbleIconColor?: string;
   useFixedPosition?: boolean;
   items?: MenuItem[];
   animationEase?: string;
@@ -78,6 +82,8 @@ export default function BubbleMenu({
   menuAriaLabel = 'Toggle menu',
   menuBg = '#fff',
   menuContentColor = '#111',
+  bubbleBg = menuBg,
+  bubbleIconColor = menuContentColor,
   useFixedPosition = false,
   items,
   animationEase = 'back.out(1.5)',
@@ -101,6 +107,20 @@ export default function BubbleMenu({
     if (nextState) setShowOverlay(true);
     setIsMenuOpen(nextState);
     onMenuClick?.(nextState);
+  };
+
+  // Close the menu on every item click; in-page anchors scroll after the
+  // close animation finishes (overlay is full-screen, scrolling behind it
+  // would be invisible). Lenis drives the scroll when available.
+  const handleItemClick = (event: ReactMouseEvent<HTMLAnchorElement>, href: string) => {
+    if (isMenuOpen) handleToggle();
+    if (href.startsWith('#') && href.length > 1) {
+      event.preventDefault();
+      window.setTimeout(() => {
+        if (window.__lenis) window.__lenis.scrollTo(href, { offset: -80 });
+        else document.querySelector(href)?.scrollIntoView({ behavior: 'smooth' });
+      }, 320);
+    }
   };
 
   useEffect(() => {
@@ -181,7 +201,7 @@ export default function BubbleMenu({
   return (
     <>
       <nav className={containerClassName} style={style} aria-label="Main navigation">
-        <div className="bubble logo-bubble" aria-label="Logo" style={{ background: menuBg }}>
+        <div className="bubble logo-bubble" aria-label="Logo" style={{ background: isMenuOpen ? menuBg : bubbleBg }}>
           <span className="logo-content">
             {typeof logo === 'string' ? <img src={logo} alt="Logo" className="bubble-logo" /> : logo}
           </span>
@@ -193,10 +213,10 @@ export default function BubbleMenu({
           onClick={handleToggle}
           aria-label={menuAriaLabel}
           aria-pressed={isMenuOpen}
-          style={{ background: menuBg }}
+          style={{ background: isMenuOpen ? menuBg : bubbleBg }}
         >
-          <span className="menu-line" style={{ background: menuContentColor }} />
-          <span className="menu-line short" style={{ background: menuContentColor }} />
+          <span className="menu-line" style={{ background: isMenuOpen ? menuContentColor : bubbleIconColor }} />
+          <span className="menu-line short" style={{ background: isMenuOpen ? menuContentColor : bubbleIconColor }} />
         </button>
       </nav>
       {showOverlay && (
@@ -213,6 +233,7 @@ export default function BubbleMenu({
                   href={item.href}
                   aria-label={item.ariaLabel || item.label}
                   className="pill-link"
+                  onClick={(e) => handleItemClick(e, item.href)}
                   style={
                     {
                       '--item-rot': `${item.rotation ?? 0}deg`,

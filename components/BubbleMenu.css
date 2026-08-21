@@ -30,6 +30,7 @@
   align-items: center;
   justify-content: center;
   pointer-events: auto;
+  transition: background-color 0.3s ease;
 }
 
 .bubble-menu .logo-bubble,
@@ -95,7 +96,8 @@
   margin: 0 auto;
   transition:
     transform 0.3s ease,
-    opacity 0.3s ease;
+    opacity 0.3s ease,
+    background-color 0.3s ease;
   transform-origin: center;
 }
 

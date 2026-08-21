@@ -12,6 +12,7 @@ import { cn } from "@/lib/utils";
 
 export function Nav() {
   const [scrolled, setScrolled] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 24);
@@ -104,14 +105,22 @@ export function Nav() {
       </div>
 
       {/* Mobile — BubbleMenu (logo bubble + hamburger bubble, pills pop out) */}
-      <div className="md:hidden [&_.bubble-menu]:px-4 [&_.bubble]:bg-[#141414] [&_.menu-line]:bg-[#f4f2ee]">
+      <div className="md:hidden [&_.bubble-menu]:px-4">
         <BubbleMenu
           useFixedPosition
+          onMenuClick={setMenuOpen}
           menuBg="#141414"
           menuContentColor="#f4f2ee"
+          bubbleBg="#ffffff"
+          bubbleIconColor="#000000"
           className="pt-4"
           logo={
-            <span className="flex items-center gap-2 text-sm font-light tracking-tight text-[#f4f2ee]">
+            <span
+              className={cn(
+                "flex items-center gap-2 text-sm font-light tracking-tight transition-colors duration-300",
+                menuOpen ? "text-[#f4f2ee]" : "text-black"
+              )}
+            >
               <span className="h-1.5 w-1.5 rounded-full bg-success-green" />
               Ticketing<span className="font-semibold">System</span>.
             </span>

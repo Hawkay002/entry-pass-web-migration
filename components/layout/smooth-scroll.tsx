@@ -4,6 +4,14 @@
 "use client";
 
 import { useEffect } from "react";
+import type Lenis from "lenis";
+
+declare global {
+  interface Window {
+    /** Landing-page Lenis instance (set by SmoothScroll) — used for anchor scrolls. */
+    __lenis?: Lenis | null;
+  }
+}
 
 export function SmoothScroll() {
   useEffect(() => {
@@ -24,6 +32,7 @@ export function SmoothScroll() {
         touchMultiplier: 1.5,
       });
       lenis = l;
+      window.__lenis = l;
 
       const raf = (time: number) => {
         l.raf(time);
@@ -35,6 +44,7 @@ export function SmoothScroll() {
     return () => {
       cancelAnimationFrame(rafId);
       lenis?.destroy();
+      window.__lenis = null;
     };
   }, []);
 

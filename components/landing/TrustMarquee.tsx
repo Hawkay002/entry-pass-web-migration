@@ -32,9 +32,9 @@ export function TrustMarquee() {
           fontWeight={700}
           letterSpacing={3}
           uppercase
-          color="#f4f2ee"
+          color="#000000"
           ribbon
-          ribbonColor="rgba(82, 39, 255, 0.16)"
+          ribbonColor="#ffffff"
           ribbonWidth={78}
           pauseOnHover
         />

@@ -11,9 +11,9 @@ const nextConfig: NextConfig = {
     // the stray package-lock.json in the user's home directory.
     root: __dirname,
   },
-  // Allow dev origins for HMR (Cloudflare tunnels).
-  // Add your tunnel URL here when testing remotely, or leave empty for local dev.
-  allowedDevOrigins: [],
+  // Allow dev origins for HMR (Cloudflare tunnels, LAN phone testing).
+  // Add your tunnel URL here when testing remotely.
+  allowedDevOrigins: ["192.168.31.21", "192.168.31.21:3000"],
 };
 
 export default nextConfig;
