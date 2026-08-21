@@ -125,6 +125,25 @@ const TIERS: Tier[] = [
 
 const MAX_WIDTH = 600;
 
+/** Exact per-tier layout the REAL ticket uses (components/tickets/
+ *  ticket-card.tsx `layout`), so the showcase typography is pixel-identical:
+ *  name/footer repositioning, white ink + small faint watermark on Classic,
+ *  engraved text on VVIP. */
+function showcaseLayout(tierKey: TierKey) {
+  const isClassic = tierKey === "Classic";
+  const isVVIP = tierKey === "Gold";
+  return {
+    ...TICKET_LAYOUT,
+    nameTop: 130 / 741,
+    footerTop: 320 / 741,
+    footerSize: 26 / 741,
+    inkColor: isClassic ? "#ffffff" : TICKET_LAYOUT.inkColor,
+    watermarkColor: isClassic ? "#ffffff" : TICKET_LAYOUT.watermarkColor,
+    ...(isClassic ? { watermarkSize: 110 / 741, watermarkOpacity: 0.15 } : {}),
+    ...(isVVIP ? { engraved: true } : {}),
+  };
+}
+
 export function TicketTiers({ tickets = {}, event, venue }: TicketTiersProps) {
   const [active, setActive] = useState(0); // VVIP — the showpiece
   const [width, setWidth] = useState(MAX_WIDTH);
@@ -358,7 +377,7 @@ function TiltedTicket({
           stubText="ADMIT ONE"
           watermark={tier.label.toUpperCase()}
           width={width}
-          layout={TICKET_LAYOUT}
+          layout={showcaseLayout(tier.key)}
           texture={tier.texture}
           gradient={tier.gradient}
         />
