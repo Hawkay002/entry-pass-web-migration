@@ -3,13 +3,21 @@
 "use client";
 
 import { useMemo, useState, useRef, useEffect } from "react";
-import { Loader2, Search, Trash2, Filter } from "lucide-react";
+import { Loader2, Search, Trash2, Filter, ChevronDown, CheckSquare, MoreVertical } from "lucide-react";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { DatabaseExportIcon } from "@hugeicons/core-free-icons";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
+import { ButtonGroup } from "@/components/ui/button-group";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+} from "@/components/ui/dropdown-menu";
 import {
   Table,
   TableBody,
@@ -28,7 +36,7 @@ import {
 } from "@/components/ui/dialog";
 import { deleteLogs } from "@/app/actions/admin";
 import { exportLogsCSV, exportLogsXLSX, exportLogsPDF } from "@/lib/import-export";
-import type { ActivityLog, LogAction } from "@/lib/types";
+import type { ActivityLog } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 const ACTION_LABELS: Record<string, string> = {
@@ -85,9 +93,7 @@ export function LogsTable({ initialLogs }: { initialLogs: ActivityLog[] }) {
   const [deleting, setDeleting] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [exporting, setExporting] = useState<string | null>(null);
-  const [exportOpen, setExportOpen] = useState(false);
   const [typeOpen, setTypeOpen] = useState(false);
-  const exportRef = useRef<HTMLDivElement>(null);
   const typeRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -95,16 +101,12 @@ export function LogsTable({ initialLogs }: { initialLogs: ActivityLog[] }) {
       if (typeRef.current && !typeRef.current.contains(e.target as Node)) {
         setTypeOpen(false);
       }
-      if (exportRef.current && !exportRef.current.contains(e.target as Node)) {
-        setExportOpen(false);
-      }
     }
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
   async function handleExport(format: "csv" | "xlsx" | "pdf") {
-    setExportOpen(false);
     setExporting(format);
     try {
       const selectedLogs = logs.filter((l) => selected.has(l.id));
@@ -133,17 +135,6 @@ export function LogsTable({ initialLogs }: { initialLogs: ActivityLog[] }) {
     });
   }, [logs, search, actionFilter]);
 
-  const allVisibleSelected =
-    filtered.length > 0 && filtered.every((l) => selected.has(l.id));
-
-  function toggleSelectAll() {
-    setSelected((prev) => {
-      const next = new Set(prev);
-      if (allVisibleSelected) filtered.forEach((l) => next.delete(l.id));
-      else filtered.forEach((l) => next.add(l.id));
-      return next;
-    });
-  }
   function toggleRow(id: string) {
     setSelected((prev) => {
       const next = new Set(prev);
@@ -172,60 +163,76 @@ export function LogsTable({ initialLogs }: { initialLogs: ActivityLog[] }) {
     <div className="glass-panel space-y-4 p-6">
       <div className="flex items-start justify-between gap-1">
         <h2 className="shrink-0 text-lg font-semibold">Activity Logs</h2>
-        <div className="flex flex-wrap justify-end gap-1.5">
-          {selectionMode ? (
-            <>
-              {/* Export dropdown (exports selected logs only) */}
-              <div ref={exportRef} className="relative">
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  disabled={exporting !== null || selected.size === 0}
-                  onClick={() => setExportOpen((o) => !o)}
+        <div className="flex flex-wrap items-center justify-end gap-1.5">
+          {selectionMode && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-8 rounded-lg text-destructive hover:bg-destructive/10"
+              onClick={() => { setSelectionMode(false); setSelected(new Set()); }}
+            >
+              Cancel
+            </Button>
+          )}
+          <ButtonGroup>
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-8"
+              onClick={() => setSelectionMode(true)}
+            >
+              Select{selectionMode && selected.size > 0 ? ` (${selected.size})` : ""}
+            </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger
+                render={<Button variant="outline" size="sm" className="h-8 px-2" aria-label="Select options" />}
+              >
+                <ChevronDown className="h-3.5 w-3.5" />
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={() => { setSelectionMode(true); setSelected(new Set(filtered.map((l) => l.id))); }}>
+                  <CheckSquare className="mr-2 h-3.5 w-3.5" />
+                  Select All
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </ButtonGroup>
+          <DropdownMenu>
+            <DropdownMenuTrigger
+              className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-white/10 bg-white/5 text-muted-foreground transition-colors hover:bg-white/10 hover:text-white"
+            >
+              <MoreVertical className="h-4 w-4" />
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="min-w-[180px]">
+              {(["csv", "xlsx", "pdf"] as const).map((f) => (
+                <DropdownMenuItem
+                  key={f}
+                  disabled={selected.size === 0}
+                  onClick={() => handleExport(f)}
                 >
-                  {exporting ? (
-                    <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
+                  {exporting === f ? (
+                    <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />
                   ) : (
-                    <HugeiconsIcon icon={DatabaseExportIcon} size={16} className="mr-1.5" />
+                    <HugeiconsIcon icon={DatabaseExportIcon} size={14} className="mr-2" />
                   )}
-                  Export ({selected.size})
-                </Button>
-                {exportOpen && (
-                  <div className="absolute right-0 top-full z-20 mt-1 w-36 rounded-lg border border-white/10 bg-black py-1 shadow-2xl">
-                    {(["csv", "xlsx", "pdf"] as const).map((f) => (
-                      <button
-                        key={f}
-                        onClick={() => handleExport(f)}
-                        className="block w-full px-3 py-1.5 text-left text-sm text-muted-foreground hover:bg-white/5 hover:text-white"
-                      >
-                        {f.toUpperCase()} (.{f})
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
-              <Button
-                size="sm"
+                  Export {f.toUpperCase()}
+                </DropdownMenuItem>
+              ))}
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
                 variant="destructive"
                 disabled={selected.size === 0 || deleting}
                 onClick={() => setDeleteOpen(true)}
               >
                 {deleting ? (
-                  <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
+                  <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />
                 ) : (
-                  <Trash2 className="mr-1.5 h-4 w-4" />
+                  <Trash2 className="mr-2 h-3.5 w-3.5" />
                 )}
-                Delete
-              </Button>
-              <Button size="sm" variant="ghost" onClick={() => { setSelectionMode(false); setSelected(new Set()); }}>
-                Cancel
-              </Button>
-            </>
-          ) : (
-            <Button size="sm" variant="ghost" onClick={() => setSelectionMode(true)}>
-              Select
-            </Button>
-          )}
+                Delete{selectionMode ? ` (${selected.size})` : ""}
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </div>
 
@@ -276,18 +283,6 @@ export function LogsTable({ initialLogs }: { initialLogs: ActivityLog[] }) {
           )}
         </div>
       </div>
-
-      {selectionMode && (
-        <div className="flex items-center justify-between rounded-lg bg-white/5 p-3">
-          <div className="flex items-center gap-3">
-            <Checkbox checked={allVisibleSelected} onCheckedChange={toggleSelectAll} />
-            <span className="text-sm">Select All</span>
-          </div>
-          <span className="text-sm text-accent-secondary">
-            ({selected.size} selected)
-          </span>
-        </div>
-      )}
 
       <div className="overflow-x-auto scrollbar-thin">
         <Table>
