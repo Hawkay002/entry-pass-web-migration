@@ -85,6 +85,34 @@ export function ensureSfxUnlock() {
   window.addEventListener("keydown", unlock, { once: true, passive: true });
 }
 
+let pressWired = false;
+
+/** Global "press" cue on EVERY click — except on elements marked
+ *  `data-sfx-own` (or inside one), which carry their own click sound
+ *  (e.g. the login buttons playing "select") and must not double-fire.
+ *  Capture phase at document level so it fires before page handlers and
+ *  survives stopPropagation. */
+export function ensureGlobalPressSfx() {
+  if (pressWired || typeof document === "undefined") return;
+  pressWired = true;
+  document.addEventListener(
+    "click",
+    (e) => {
+      const target = e.target as HTMLElement | null;
+      if (!target || typeof target.closest !== "function") return;
+      if (target.closest("[data-sfx-own]")) return;
+      playSfx("press");
+    },
+    true
+  );
+}
+
+/** One-call SFX bootstrap for the whole app: gesture unlock + global press. */
+export function initSfx() {
+  ensureSfxUnlock();
+  ensureGlobalPressSfx();
+}
+
 /** Fire-and-forget one-shot cue. Never throws. */
 export function playSfx(cue: CueName) {
   try {

@@ -623,6 +623,7 @@ function LoginForm() {
             {error && <p className="text-sm text-destructive">{error}</p>}
             <Button
               type="submit"
+              data-sfx-own
               className={cn(
                 "w-full",
                 authedVia === "password" &&
@@ -661,6 +662,7 @@ function LoginForm() {
           {/* Google Sign-In */}
           <Button
             variant="outline"
+            data-sfx-own
             className={cn(
               "w-full",
               authedVia === "google" &&

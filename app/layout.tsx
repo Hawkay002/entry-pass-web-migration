@@ -3,6 +3,7 @@ import { Geist, Geist_Mono, Outfit } from "next/font/google";
 import { Toaster } from "sonner";
 import { RegisterSw } from "@/components/layout/register-sw";
 import ClickSparkWrapper from "@/components/click-spark-wrapper";
+import { SfxProvider } from "@/components/sfx-provider";
 import "flag-icons/css/flag-icons.min.css";
 import "./globals.css";
 
@@ -71,6 +72,7 @@ export default function RootLayout({
           {children}
         </ClickSparkWrapper>
         <RegisterSw />
+        <SfxProvider />
         <Toaster theme="dark" position="top-right" richColors />
       </body>
     </html>
