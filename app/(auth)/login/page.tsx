@@ -273,7 +273,12 @@ function LoginForm() {
       // the last-used account (prompt=none) and skips the chooser.
       url.searchParams.set("prompt", "select_account");
 
-      const popup = window.open(url.toString(), "google_oauth", "width=500,height=620,noopener");
+      // NO "noopener" here — it severs the window handle (window.open returns
+      // null) AND the opener link, which broke the handoff: main window fell
+      // back to the redirect flow while the popup ALSO opened, and the popup
+      // then ran the whole exchange itself. We need the handle to poll the
+      // popup and close it after the code arrives.
+      const popup = window.open(url.toString(), "google_oauth", "width=500,height=620");
       if (popup && !popup.closed) {
         // Popup is up — the busy state starts NOW (user is picking an
         // account), and the exchange will run in THIS document.
