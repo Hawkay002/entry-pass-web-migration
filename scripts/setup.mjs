@@ -92,7 +92,20 @@ async function superuserToken(email, password) {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ identity: email, password }),
   });
-  if (!r.ok) throw new Error(`Dashboard login failed: ${await r.text()}`);
+  if (!r.ok) {
+    const body = await r.json().catch(() => ({}));
+    if (body?.data?.mfaId) {
+      throw new Error(
+        "This database has OTP/MFA enabled on the dashboard login, so 2-SETUP\n" +
+        "cannot sign in automatically. 2-SETUP is for FRESH databases.\n" +
+        "If you really need to re-run it on this database:\n" +
+        "  1. Open http://127.0.0.1:8090/_/ and log in (password + email code)\n" +
+        "  2. Collections -> _superusers -> Edit -> Auth: turn OFF OTP and MFA\n" +
+        "  3. Run 2-SETUP again, then turn OTP/MFA back on afterwards."
+      );
+    }
+    throw new Error(`Dashboard login failed: ${await r.text()}`);
+  }
   const { token } = await r.json();
   return token;
 }
