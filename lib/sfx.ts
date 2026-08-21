@@ -18,15 +18,53 @@ import {
 } from "uisfx";
 
 let player: UISFXPlayer | null = null;
+let ctx: AudioContext | null = null;
 let unlockWired = false;
 let processingLoop: PlayingSFX | null = null;
+/** True once OUR context has reached the "running" state at least once. */
+let everRan = false;
 
-/** The app-wide player (organic personality). Created lazily, client-side. */
+/** The app-wide player (organic personality). We create the AudioContext
+ *  OURSELVES and hand it to uisfx — that lets us eagerly attempt resume()
+ *  at the right moments and inspect the state (blocked vs running). */
 export function sfx(): UISFXPlayer {
   if (!player) {
-    player = createUISFX({ pack: "organic", volume: 0.8 });
+    if (typeof window !== "undefined" && !ctx) {
+      const AC = window.AudioContext ?? (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+      if (AC) {
+        ctx = new AC({ latencyHint: "interactive" });
+        ctx.addEventListener("statechange", () => {
+          if (ctx?.state === "running") everRan = true;
+        });
+      }
+    }
+    player = createUISFX({ pack: "organic", volume: 0.8, ...(ctx ? { context: ctx } : {}) });
   }
   return player;
+}
+
+/** Try to resume the context. Safe to call anywhere; resolves when the
+ *  attempt settles. Outside a user gesture some browsers keep it suspended. */
+export async function resumeCtx(): Promise<boolean> {
+  sfx(); // ensure ctx exists
+  const c = ctx;
+  if (!c) return false;
+  const state = c.state as AudioContext["state"];
+  if (state === "running") return true;
+  try {
+    await c.resume();
+  } catch {}
+  return (c.state as AudioContext["state"]) === "running";
+}
+
+/** Diagnostic state (used for debugging audio-unlock issues). */
+export function sfxState(): { ctxState: string | null; everRan: boolean } {
+  return { ctxState: ctx ? ctx.state : null, everRan };
+}
+
+if (typeof window !== "undefined") {
+  // Console-accessible audio diagnostic: window.__sfxState()
+  (window as unknown as { __sfxState?: () => { ctxState: string | null; everRan: boolean } }).__sfxState = sfxState;
 }
 
 /** Wire one-time gesture listeners that unlock audio on ANY device.
@@ -35,7 +73,9 @@ export function sfx(): UISFXPlayer {
 export function ensureSfxUnlock() {
   if (unlockWired || typeof window === "undefined") return;
   unlockWired = true;
+  sfx(); // create the context eagerly so the gesture can start it
   const unlock = () => {
+    resumeCtx();
     sfx()
       .unlock()
       .catch(() => {});
@@ -62,6 +102,7 @@ export function playToastSfx() {
  *  carried over the navigation. No-op if already unlocked; silently
  *  still-blocked on browsers that demand a fresh gesture. */
 export function unlockSfx() {
+  resumeCtx();
   try {
     sfx().unlock().catch(() => {});
   } catch {}

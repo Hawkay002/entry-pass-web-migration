@@ -21,7 +21,7 @@ import { Suspense } from "react";
 import { Starfield } from "@/components/layout/starfield";
 import { Loader2, ShieldCheck, Eye, EyeOff, KeyRound, Check } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { ensureSfxUnlock, playSfx, playToastSfx, startProcessingSfx, stopProcessingSfx, unlockSfx } from "@/lib/sfx";
+import { ensureSfxUnlock, playSfx, playToastSfx, resumeCtx, startProcessingSfx, stopProcessingSfx, unlockSfx } from "@/lib/sfx";
 
 export default function LoginPage() {
   return (
@@ -91,89 +91,107 @@ function LoginForm() {
   }, [searchParams]);
 
   // OAuth callback: /api/oauth/callback redirected back here with
-  // ?oauth_code=&state=. Complete the exchange using the PKCE verifier
-  // stashed in sessionStorage before the redirect to Google.
+  // ?oauth_code=&state=. Two possible contexts:
+  //  a) POPUP return (window.opener set) — the opening login page is polling
+  //     this popup and runs the exchange itself (its document keeps the user
+  //     gesture, so the SFX play). This page just shows a standby message.
+  //  b) DIRECT return (full-page redirect flow, or popup blocked fallback) —
+  //     this document completes the exchange. On a fresh page load Chrome
+  //     keeps the AudioContext suspended without a gesture, so we try to
+  //     resume it first; some browsers stay silent — inherent, not a bug.
   useEffect(() => {
     const code = searchParams.get("oauth_code");
     const state = searchParams.get("state");
-    if (!code || oauthHandledRef.current) return;
+    if (!code) return;
+    if (typeof window !== "undefined" && window.opener && !window.opener.closed) {
+      // Case (a): the opener drives. Show the busy state (URL-initialized)
+      // and do nothing — the opener will close this popup.
+      setLoading(true);
+      setGoogleBusy(true);
+      return;
+    }
+    if (oauthHandledRef.current) return;
     oauthHandledRef.current = true;
     setLoading(true);
     setGoogleBusy(true);
-    // Fresh page load after the Google redirect — the audio unlock from the
-    // pre-Google click may not carry over the navigation, so try again here
-    // (no-op if already unlocked; silent where still blocked).
     unlockSfx();
-    startProcessingSfx();
+    void runOAuthExchange(code, state);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams]);
+
+  /** Complete the OAuth code exchange + all state/sfx handling. Shared by
+   *  the redirect-return effect and the popup flow (same document). */
+  async function runOAuthExchange(code: string, state: string | null) {
     // Guarantee the Authenticating state is perceptible even when the token
     // exchange is near-instant: keep the spinner at least 600ms total.
     const startedAt = Date.now();
     const holdSpinner = () =>
       new Promise((r) => setTimeout(r, Math.max(0, 600 - (Date.now() - startedAt))));
-    (async () => {
-      let success = false;
-      try {
-        const stored = JSON.parse(sessionStorage.getItem("pb_oauth") ?? "null") as
-          | { codeVerifier: string; state: string }
-          | null;
-        if (!stored || stored.state !== state) {
-          stopProcessingSfx();
-          playSfx("error");
-          setError("Sign-in session expired. Please try again.");
-          sessionStorage.removeItem("pb_oauth");
-          return;
-        }
-        sessionStorage.removeItem("pb_oauth");
-        const { res, data } = await postLogin({
-          oauthCode: code,
-          codeVerifier: stored.codeVerifier,
-          // The exact redirect_uri used at the authorize step — the server
-          // MUST send Google a byte-identical one at the token exchange.
-          redirectUri: window.location.origin + "/api/oauth/callback",
-        });
-        if (data.status === "2fa_required" && data.token) {
-          stopProcessingSfx();
-          playSfx("notification");
-          setPendingToken(data.token);
-          setPending2FA(true);
-          setOtpCode(["", "", "", "", "", ""]);
-          setError("");
-          setTimeout(() => otpRefs.current[0]?.focus(), 100);
-        } else if (res.ok) {
-          await holdSpinner();
-          stopProcessingSfx();
-          playSfx("complete");
-          // Green ✓ Authenticated state — held a full second so it is
-          // clearly seen and heard before the page navigates away.
-          setAuthedVia("google");
-          await new Promise((r) => setTimeout(r, 1000));
-          success = true;
-          // HARD navigation — full page load. The OAuth return lands on a
-          // service-worker-served page; client-side router navigation can
-          // resolve /tickets from stale router/page cache and bounce back.
-          // A hard load forces a fresh authenticated render.
-          window.location.replace("/tickets");
-          return; // page unloads — skip state updates below
-        } else {
-          stopProcessingSfx();
-          playSfx("error");
-          setError(data.error ?? "Google sign-in failed.");
-        }
-      } catch {
+    let success = false;
+    try {
+      // Settle the audio-resume attempt BEFORE scheduling the loop, so the
+      // processing cue isn't scheduled onto a still-pending context.
+      await resumeCtx();
+      startProcessingSfx();
+      const stored = JSON.parse(sessionStorage.getItem("pb_oauth") ?? "null") as
+        | { codeVerifier: string; state: string }
+        | null;
+      if (!stored || stored.state !== state) {
         stopProcessingSfx();
         playSfx("error");
-        setError("Network error during sign-in. Try again.");
-      } finally {
-        // Only stand the buttons back up when the exchange did NOT succeed —
-        // on success the ✓ state must persist through the navigation.
-        if (!success) {
-          setLoading(false);
-          setGoogleBusy(false);
-        }
+        setError("Sign-in session expired. Please try again.");
+        sessionStorage.removeItem("pb_oauth");
+        return;
       }
-    })();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [searchParams]);
+      sessionStorage.removeItem("pb_oauth");
+      const { res, data } = await postLogin({
+        oauthCode: code,
+        codeVerifier: stored.codeVerifier,
+        // The exact redirect_uri used at the authorize step — the server
+        // MUST send Google a byte-identical one at the token exchange.
+        redirectUri: window.location.origin + "/api/oauth/callback",
+      });
+      if (data.status === "2fa_required" && data.token) {
+        stopProcessingSfx();
+        playSfx("notification");
+        setPendingToken(data.token);
+        setPending2FA(true);
+        setOtpCode(["", "", "", "", "", ""]);
+        setError("");
+        setTimeout(() => otpRefs.current[0]?.focus(), 100);
+      } else if (res.ok) {
+        await holdSpinner();
+        stopProcessingSfx();
+        playSfx("complete");
+        // Green ✓ Authenticated state — held a full second so it is
+        // clearly seen and heard before the page navigates away.
+        setAuthedVia("google");
+        await new Promise((r) => setTimeout(r, 1000));
+        success = true;
+        // HARD navigation — full page load. The OAuth return lands on a
+        // service-worker-served page; client-side router navigation can
+        // resolve /tickets from stale router/page cache and bounce back.
+        // A hard load forces a fresh authenticated render.
+        window.location.replace("/tickets");
+        return; // page unloads — skip state updates below
+      } else {
+        stopProcessingSfx();
+        playSfx("error");
+        setError(data.error ?? "Google sign-in failed.");
+      }
+    } catch {
+      stopProcessingSfx();
+      playSfx("error");
+      setError("Network error during sign-in. Try again.");
+    } finally {
+      // Only stand the buttons back up when the exchange did NOT succeed —
+      // on success the ✓ state must persist through the navigation.
+      if (!success) {
+        setLoading(false);
+        setGoogleBusy(false);
+      }
+    }
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -223,13 +241,15 @@ function LoginForm() {
   function handleGoogleSignIn() {
     setError("");
     playSfx("select");
-    // NO busy/authenticating state here — the user is going to Google's
-    // account picker. "Authenticating…" begins only AFTER they pick an
-    // account and land back on /login?oauth_code=... (the return effect).
-    // Full-page redirect OAuth flow — no popup, so popup blockers can't break
-    // it. The redirect URI is OUR callback on the app's own origin (stable on
-    // Vercel), not PB's. PKCE verifier is stashed in sessionStorage; the
-    // ?oauth_code effect above completes the exchange after the return.
+    // POPUP flow (preferred): the login page NEVER navigates away, so its
+    // AudioContext (unlocked by this very click) keeps running — the
+    // processing/complete SFX play during the exchange. The popup is opened
+    // synchronously inside the click handler, which makes it gesture-legal
+    // (not popup-blocked). We poll the popup until it lands back on our
+    // origin with ?oauth_code=..., then run the exchange HERE.
+    // Fallback: popup blocked / blocked-by-browser → the old full-page
+    // redirect flow (sounds may be silent on the return page — browser
+    // autoplay policy, not fixable without a gesture).
     // 0.0.0.0 (how the LAN server may be opened) is normalized to localhost so
     // the OAuth return always lands on the Google-registered loopback origin.
     const originUrl = new URL(window.location.origin);
@@ -252,7 +272,53 @@ function LoginForm() {
       // Always show the account picker — without this, Google auto-selects
       // the last-used account (prompt=none) and skips the chooser.
       url.searchParams.set("prompt", "select_account");
-      window.location.href = url.toString();
+
+      const popup = window.open(url.toString(), "google_oauth", "width=500,height=620,noopener");
+      if (popup && !popup.closed) {
+        // Popup is up — the busy state starts NOW (user is picking an
+        // account), and the exchange will run in THIS document.
+        setLoading(true);
+        setGoogleBusy(true);
+        startProcessingSfx();
+        const poll = setInterval(() => {
+          let done = false;
+          let handedOff = false;
+          try {
+            if (popup.closed) {
+              done = true; // user closed the popup without signing in
+            } else {
+              const pu = popup.location;
+              if (pu && pu.origin === window.location.origin && pu.pathname === "/login") {
+                const params = new URLSearchParams(pu.search);
+                const code = params.get("oauth_code");
+                if (code) {
+                  done = true;
+                  handedOff = true;
+                  stopProcessingSfx(); // runOAuthExchange restarts its own loop
+                  popup.close();
+                  void runOAuthExchange(code, params.get("state"));
+                }
+              }
+            }
+          } catch {
+            // Cross-origin while on Google — keep polling.
+          }
+          if (done) {
+            clearInterval(poll);
+            if (!handedOff) {
+              // Abandoned (popup closed) — restore the buttons.
+              stopProcessingSfx();
+              setLoading(false);
+              setGoogleBusy(false);
+            }
+          }
+        }, 300);
+        // Safety: stop polling after 5 minutes.
+        setTimeout(() => clearInterval(poll), 300_000);
+      } else {
+        // Popup blocked — full-page redirect fallback.
+        window.location.href = url.toString();
+      }
     }).catch((err) => {
       playSfx("error");
       const msg = (err as { message?: string }).message ?? "";
