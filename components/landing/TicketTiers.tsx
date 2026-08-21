@@ -353,10 +353,12 @@ function TiltedTicket({
           name={name}
           presenter={`ENTRY PASS — ${tier.label.toUpperCase()}`}
           event={eventLine}
+          venue={""}
           dates={dates}
           stubText="ADMIT ONE"
           watermark={tier.label.toUpperCase()}
           width={width}
+          layout={TICKET_LAYOUT}
           texture={tier.texture}
           gradient={tier.gradient}
         />
