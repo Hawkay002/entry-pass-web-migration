@@ -19,8 +19,9 @@ import {
 } from "@/components/ui/card";
 import { Suspense } from "react";
 import { Starfield } from "@/components/layout/starfield";
-import { Loader2, ShieldCheck, Eye, EyeOff, KeyRound } from "lucide-react";
+import { Loader2, ShieldCheck, Eye, EyeOff, KeyRound, Check } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { ensureSfxUnlock, playSfx, playToastSfx, startProcessingSfx, stopProcessingSfx } from "@/lib/sfx";
 
 export default function LoginPage() {
   return (
@@ -37,7 +38,13 @@ function LoginForm() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [authed, setAuthed] = useState(false);
   const [showPw, setShowPw] = useState(false);
+
+  // Audio must be unlocked from a real user gesture (mobile requirement).
+  useEffect(() => {
+    ensureSfxUnlock();
+  }, []);
 
   // 2FA state.
   const [pending2FA, setPending2FA] = useState(false);
@@ -60,10 +67,12 @@ function LoginForm() {
 
   useEffect(() => {
     if (searchParams.get("reason") === "expired") {
+      playToastSfx();
       toast.info("Your session has expired — please sign in again.");
     }
     const oauthError = searchParams.get("oauth_error");
     if (oauthError) {
+      playSfx("error");
       setError("Google sign-in was cancelled or failed. Please try again.");
     }
   }, [searchParams]);
@@ -76,12 +85,15 @@ function LoginForm() {
     const state = searchParams.get("state");
     if (!code) return;
     setLoading(true);
+    startProcessingSfx();
     (async () => {
       try {
         const stored = JSON.parse(sessionStorage.getItem("pb_oauth") ?? "null") as
           | { codeVerifier: string; state: string }
           | null;
         if (!stored || stored.state !== state) {
+          stopProcessingSfx();
+          playSfx("error");
           setError("Sign-in session expired. Please try again.");
           sessionStorage.removeItem("pb_oauth");
           return;
@@ -95,12 +107,16 @@ function LoginForm() {
           redirectUri: window.location.origin + "/api/oauth/callback",
         });
         if (data.status === "2fa_required" && data.token) {
+          stopProcessingSfx();
+          playSfx("notification");
           setPendingToken(data.token);
           setPending2FA(true);
           setOtpCode(["", "", "", "", "", ""]);
           setError("");
           setTimeout(() => otpRefs.current[0]?.focus(), 100);
         } else if (res.ok) {
+          stopProcessingSfx();
+          playSfx("complete");
           // HARD navigation — full page load. The OAuth return lands on a
           // service-worker-served page; client-side router navigation can
           // resolve /tickets from stale router/page cache and bounce back.
@@ -108,9 +124,13 @@ function LoginForm() {
           window.location.replace("/tickets");
           return; // page unloads — skip state updates below
         } else {
+          stopProcessingSfx();
+          playSfx("error");
           setError(data.error ?? "Google sign-in failed.");
         }
       } catch {
+        stopProcessingSfx();
+        playSfx("error");
         setError("Network error during sign-in. Try again.");
       } finally {
         setLoading(false);
@@ -123,12 +143,15 @@ function LoginForm() {
     e.preventDefault();
     setError("");
     setLoading(true);
+    startProcessingSfx();
 
     try {
       const { res, data } = await postLogin({ email, password });
 
       if (data.status === "2fa_required" && data.token) {
         // Admin needs to enter a TOTP code. Store the pending PB token.
+        stopProcessingSfx();
+        playSfx("notification");
         setPendingToken(data.token);
         setPending2FA(true);
         setOtpCode(["", "", "", "", "", ""]);
@@ -138,13 +161,23 @@ function LoginForm() {
       }
 
       if (res.ok) {
+        // Authenticated — show the green-tick state + complete sfx briefly
+        // so the success lands perceptibly, then navigate.
+        stopProcessingSfx();
+        playSfx("complete");
+        setAuthed(true);
+        await new Promise((r) => setTimeout(r, 700));
         router.push("/tickets");
         router.refresh();
         return;
       }
 
+      stopProcessingSfx();
+      playSfx("error");
       setError(data.error ?? "Authentication failed.");
     } catch {
+      stopProcessingSfx();
+      playSfx("error");
       setError("Network error. Check your connection and try again.");
     } finally {
       setLoading(false);
@@ -154,14 +187,22 @@ function LoginForm() {
   function handleGoogleSignIn() {
     setError("");
     setLoading(true);
+    playSfx("select");
+    startProcessingSfx();
     // Full-page redirect OAuth flow — no popup, so popup blockers can't break
     // it. The redirect URI is OUR callback on the app's own origin (stable on
     // Vercel), not PB's. PKCE verifier is stashed in sessionStorage; the
     // ?oauth_code effect above completes the exchange after the return.
-    const redirectUri = window.location.origin + "/api/oauth/callback";
+    // 0.0.0.0 (how the LAN server may be opened) is normalized to localhost so
+    // the OAuth return always lands on the Google-registered loopback origin.
+    const originUrl = new URL(window.location.origin);
+    if (originUrl.hostname === "0.0.0.0") originUrl.hostname = "localhost";
+    const redirectUri = originUrl.origin + "/api/oauth/callback";
     pb().collection("users").listAuthMethods().then((res) => {
       const google = (res.oauth2?.providers || []).find((p) => p.name === "google");
       if (!google) {
+        stopProcessingSfx();
+        playSfx("error");
         setError("Google sign-in is not configured. Ask the admin to enable it.");
         setLoading(false);
         return;
@@ -178,6 +219,8 @@ function LoginForm() {
       url.searchParams.set("prompt", "select_account");
       window.location.href = url.toString();
     }).catch((err) => {
+      stopProcessingSfx();
+      playSfx("error");
       const msg = (err as { message?: string }).message ?? "";
       if (msg.includes("network") || msg.includes("fetch")) {
         setError("Network error. Check your connection and try again.");
@@ -232,15 +275,24 @@ function LoginForm() {
     if (code.length !== 6) return;
     setLoading(true);
     setError("");
+    startProcessingSfx();
     try {
       const { res, data } = await postLogin({ token: pendingToken, code: prefilledCode ?? code });
       if (res.ok) {
+        stopProcessingSfx();
+        playSfx("complete");
+        setAuthed(true);
+        await new Promise((r) => setTimeout(r, 700));
         router.push("/tickets");
         router.refresh();
       } else {
+        stopProcessingSfx();
+        playSfx("error");
         setError(data.error ?? "Invalid code.");
       }
     } catch {
+      stopProcessingSfx();
+      playSfx("error");
       setError("Network error. Try again.");
     } finally {
       setLoading(false);
@@ -251,15 +303,24 @@ function LoginForm() {
     if (!recoveryCodeInput.trim()) return;
     setLoading(true);
     setError("");
+    startProcessingSfx();
     try {
       const { res, data } = await postLogin({ token: pendingToken, recoveryCode: recoveryCodeInput.trim() });
       if (res.ok) {
+        stopProcessingSfx();
+        playSfx("complete");
+        setAuthed(true);
+        await new Promise((r) => setTimeout(r, 700));
         router.push("/tickets");
         router.refresh();
       } else {
+        stopProcessingSfx();
+        playSfx("error");
         setError(data.error ?? "Invalid recovery code.");
       }
     } catch {
+      stopProcessingSfx();
+      playSfx("error");
       setError("Network error. Try again.");
     } finally {
       setLoading(false);
@@ -322,9 +383,27 @@ function LoginForm() {
                   />
                 </div>
                 {error && <p className="mt-4 text-center text-sm text-destructive">{error}</p>}
-                <Button className="mt-6 w-full" onClick={() => submit2FA()} disabled={loading || otpCode.join("").length !== 6}>
-                  {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                  Verify
+                <Button
+                  className={cn(
+                    "mt-6 w-full",
+                    authed &&
+                      "border border-success-green/60 bg-success-green/15 text-success-green hover:bg-success-green/20"
+                  )}
+                  onClick={() => submit2FA()}
+                  disabled={loading || authed || otpCode.join("").length !== 6}
+                  onMouseEnter={() => playSfx("hover")}
+                >
+                  {authed ? (
+                    <>
+                      <Check className="mr-2 h-4 w-4" />
+                      Authenticated
+                    </>
+                  ) : (
+                    <>
+                      {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                      Verify
+                    </>
+                  )}
                 </Button>
                 <button
                   className="mt-3 w-full text-center text-xs text-muted-foreground hover:text-white"
@@ -346,9 +425,27 @@ function LoginForm() {
                   autoFocus
                 />
                 {error && <p className="mt-4 text-center text-sm text-destructive">{error}</p>}
-                <Button className="mt-6 w-full" onClick={submitRecovery} disabled={loading || !recoveryCodeInput.trim()}>
-                  {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                  Verify Recovery Code
+                <Button
+                  className={cn(
+                    "mt-6 w-full",
+                    authed &&
+                      "border border-success-green/60 bg-success-green/15 text-success-green hover:bg-success-green/20"
+                  )}
+                  onClick={submitRecovery}
+                  disabled={loading || authed || !recoveryCodeInput.trim()}
+                  onMouseEnter={() => playSfx("hover")}
+                >
+                  {authed ? (
+                    <>
+                      <Check className="mr-2 h-4 w-4" />
+                      Authenticated
+                    </>
+                  ) : (
+                    <>
+                      {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                      Verify Recovery Code
+                    </>
+                  )}
                 </Button>
                 <button
                   className="mt-3 w-full text-center text-xs text-muted-foreground hover:text-white"
@@ -420,9 +517,28 @@ function LoginForm() {
               </div>
             </div>
             {error && <p className="text-sm text-destructive">{error}</p>}
-            <Button type="submit" className="w-full" disabled={loading}>
-              {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Authenticate
+            <Button
+              type="submit"
+              className={cn(
+                "w-full",
+                authed &&
+                  "border border-success-green/60 bg-success-green/15 text-success-green hover:bg-success-green/20"
+              )}
+              disabled={loading || authed}
+              onMouseEnter={() => playSfx("hover")}
+              onClick={() => playSfx("select")}
+            >
+              {authed ? (
+                <>
+                  <Check className="mr-2 h-4 w-4" />
+                  Authenticated
+                </>
+              ) : (
+                <>
+                  {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                  Authenticate
+                </>
+              )}
             </Button>
           </form>
 
@@ -444,6 +560,7 @@ function LoginForm() {
             className="w-full"
             disabled={loading}
             onClick={handleGoogleSignIn}
+            onMouseEnter={() => playSfx("hover")}
           >
             <svg className="mr-2 h-4 w-4" viewBox="0 0 24 24">
               <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
