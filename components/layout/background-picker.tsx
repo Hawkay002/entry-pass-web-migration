@@ -120,10 +120,21 @@ function BackgroundPickerDialog({
         </div>
 
         <DialogFooter>
-          <Button variant="ghost" onClick={() => onOpenChange(false)}>
+          <Button
+            variant="ghost"
+            data-sfx-own=""
+            onMouseEnter={() => playSfx("hover")}
+            onClick={() => { playSfx("cancel"); onOpenChange(false); }}
+          >
             Cancel
           </Button>
-          <Button onClick={handleConfirm}>Confirm</Button>
+          <Button
+            data-sfx-own=""
+            onMouseEnter={() => playSfx("hover")}
+            onClick={() => { playSfx("select"); handleConfirm(); }}
+          >
+            Confirm
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
