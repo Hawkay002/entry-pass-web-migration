@@ -12,12 +12,15 @@ import { TRUST_ITEMS } from "./data";
 
 export function TrustMarquee() {
   return (
-    <div className="relative h-44 overflow-hidden md:h-48">
+    <div className="relative h-56 overflow-hidden md:h-48">
       {/* canvas is w-full (SVG 1200x520 aspect). Its centre sits at 50% of its
           own height; to align the wave line (canvas centre) with this box's
           centre: top 50% of box, minus 50% of the canvas. Left edge anchored
-          so the scaling canvas never leaks past the box (no horizontal scroll). */}
-      <div className="absolute left-1/2 top-1/2 w-full -translate-x-1/2 -translate-y-1/2">
+          so the scaling canvas never leaks past the box (no horizontal scroll).
+          Mobile gets a taller box + zoomed canvas: the SVG scales with width,
+          so on narrow screens the band itself renders small — scaling the
+          wrapper up (mobile only) thickens ribbon + text proportionally. */}
+      <div className="absolute left-1/2 top-1/2 w-full -translate-x-1/2 -translate-y-1/2 scale-[1.35] md:scale-100">
         <TextLoop
           text={TRUST_ITEMS.join("   ✦   ")}
           shape="wave"
