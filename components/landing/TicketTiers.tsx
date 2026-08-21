@@ -39,6 +39,10 @@ interface Tier {
   tagline: string;
   texture: typeof TICKET_TEXTURE;
   gradient: typeof TICKET_GRADIENT;
+  /** Showcase gate number shown on this tier's demo ticket. */
+  gate: string;
+  /** Stable demo ticket id (valid PB format; QR encodes /ticket/<id>). */
+  demoId: string;
 }
 
 const TIERS: Tier[] = [
@@ -48,6 +52,8 @@ const TIERS: Tier[] = [
     tagline: "The showpiece. A warm warp shader with the strongest motion in the set.",
     texture: TICKET_TEXTURE,
     gradient: TICKET_GRADIENT,
+    gate: "A1",
+    demoId: "vvipdemo00000001",
   },
   {
     key: "SVIP",
@@ -68,6 +74,8 @@ const TIERS: Tier[] = [
       colorMid: "#bf953f",
       colorDark: "#aa771c",
     },
+    gate: "B3",
+    demoId: "svipdemo00000002",
   },
   {
     key: "Diamond",
@@ -88,6 +96,8 @@ const TIERS: Tier[] = [
       colorMid: "#94a3b8",
       colorDark: "#475569",
     },
+    gate: "C2",
+    demoId: "vipdemo000000003",
   },
   {
     key: "Classic",
@@ -108,6 +118,8 @@ const TIERS: Tier[] = [
       colorMid: "#16213e",
       colorDark: "#0f0f1a",
     },
+    gate: "D4",
+    demoId: "classicdemo00004",
   },
 ];
 
@@ -118,15 +130,16 @@ export function TicketTiers({ tickets = {}, event, venue }: TicketTiersProps) {
   const [width, setWidth] = useState(MAX_WIDTH);
   const tier = TIERS[active];
 
-  // Real ticket for the active tier, or a clean demo fallback.
+  // Showcase identity is FIXED (not pulled from the guest list) — the landing
+  // always presents the same demo guest with a stable-looking id/QR per tier.
   const real = tickets[tier.key];
-  const name = real?.name ?? "Sample Guest";
-  const dates = real ? `${real.age} / ${real.gender}` : "— / —";
-  const eventLine = event
-    ? venue
+  void real;
+  const name = "Shovith Debnath";
+  const dates = "24 / Male · Gate " + tier.gate;
+  const eventLine =
+    event && venue
       ? `${event}  •  ${venue}`
-      : event
-    : "EntryPass Showcase";
+      : event || "Event Name  •  Event Venue";
 
   useEffect(() => {
     const measure = () =>
@@ -214,7 +227,7 @@ export function TicketTiers({ tickets = {}, event, venue }: TicketTiersProps) {
                 dates={dates}
                 eventLine={eventLine}
                 width={width}
-                ticketId={real?.id}
+                ticketId={tier.demoId}
               />
             </div>
           </div>
