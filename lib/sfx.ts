@@ -136,11 +136,13 @@ export function unlockSfx() {
   } catch {}
 }
 
-/** Start the shared processing loop (loading states). Stops any previous. */
+/** Start the shared processing loop (loading states). Stops any previous.
+ *  The processing cue's pack default is the quietest of all cues (a
+ *  background bed) — boosted here so it stays audible on phone speakers. */
 export function startProcessingSfx() {
   stopProcessingSfx();
   try {
-    processingLoop = sfx().play("processing");
+    processingLoop = sfx().play("processing", { volume: 0.3 });
   } catch {}
 }
 
