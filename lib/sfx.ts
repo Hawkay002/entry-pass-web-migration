@@ -30,9 +30,9 @@ let everRan = false;
 let volumeMult = 1;
 
 /** Global loudness boost applied on top of each cue's default volume.
- *  uisfx cue defaults are conservative (0.06–0.26); 2.2x reads as
+ *  uisfx cue defaults are conservative (0.06–0.26); 2.7x reads as
  *  "clearly audible" without clipping (values clamp at 1.0). */
-const CUE_BOOST = 2.2;
+const CUE_BOOST = 2.7;
 
 function detectMobile() {
   if (typeof window === "undefined") return false;
