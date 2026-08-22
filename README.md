@@ -91,13 +91,18 @@ Full plain-English walkthrough (including Google Sign-In and staff roles):
 Key design points:
 - **Auth**: email/password or Google → Pocketbase JWT in an httpOnly cookie
   (14-day). Role checks server-side; admins via `ADMIN_EMAILS` env var.
-- **Data access**: all writes go through server actions using PB's superuser
-  API (mirrors the original Firebase Admin-SDK pattern); collection API rules
-  remain as defense-in-depth.
+- **Data access**: all writes go through server actions authenticated as a
+  dedicated **service account** — a `users` record with `role=admin`, created
+  by `2-SETUP` (or `scripts/create-service-account.mjs` on existing installs).
+  Collection API rules are the real permission gate (verified by
+  `scripts/verify-service-account.mjs`), and the PB dashboard login
+  (`_superusers`) stays fully independent — which is what lets you protect
+  the dashboard with OTP+MFA email codes (SETUP.md Part 7) without ever
+  affecting the website.
 - **Realtime**: tiered polling (tickets 2.5s → settings 12s) — PB SSE delivers
   no events to clients that can't read a collection, and our auth token is
   httpOnly, so polling is the correct pattern here.
-- **Schema**: 17 committed migrations in [`pb_migrations/`](./pb_migrations) —
+- **Schema**: 20 committed migrations in [`pb_migrations/`](./pb_migrations) —
   a fresh install builds the exact database automatically.
 
 ## Repository layout

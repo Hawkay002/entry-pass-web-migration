@@ -118,6 +118,13 @@ Two things to understand:
 > for the free version. The `pnpm go:live` command fixes everything automatically,
 > and **the public staff link never changes.**
 
+> **Two separate logins, on purpose.** The website does NOT use your dashboard
+> login — it signs in with its own hidden "service account" that setup creates
+> for you automatically. That's why turning on the dashboard's email-code
+> protection (Part 7) never locks the website out. One rule to remember:
+> never delete the `service@entrypass.local` user you may notice in the
+> Pocketbase dashboard — the website needs it to reach its data.
+
 ---
 
 ## What you need (one time)
