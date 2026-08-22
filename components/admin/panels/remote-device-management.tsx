@@ -632,7 +632,7 @@ export function RemoteDeviceManagement() {
               data-sfx-own=""
               onMouseEnter={() => playSfx("hover")}
               onClick={() => {
-                playSfx("select");
+                playSfx("lock");
                 setLockConfigOpen(false);
                 setConfirmOpen(true);
               }}

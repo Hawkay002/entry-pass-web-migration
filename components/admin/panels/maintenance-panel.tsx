@@ -118,7 +118,7 @@ export function MaintenancePanel() {
           data-sfx-own=""
           className="border-amber-500 text-amber-500 hover:bg-amber-500/10"
           onMouseEnter={() => playSfx("hover")}
-          onClick={() => { playSfx("select"); setOpen(true); }}
+          onClick={() => { playSfx("lock"); setOpen(true); }}
         >
           <OctagonAlert className="mr-1.5 h-3.5 w-3.5" />
           Start Maintenance

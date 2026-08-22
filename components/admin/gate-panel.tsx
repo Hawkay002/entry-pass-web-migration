@@ -29,6 +29,7 @@ import {
   updateGate,
   deleteGate,
 } from "@/app/actions/gates";
+import { playSfx, playToastSfx, startProcessingSfx, stopProcessingSfx } from "@/lib/sfx";
 
 type ConfirmTarget =
   | { type: "category"; name: string }
@@ -56,12 +57,18 @@ export function GatePanel() {
   async function handleAddCategory() {
     if (!newCategory.trim()) return;
     setAddingCat(true);
+    startProcessingSfx();
     const res = await addGateCategory(newCategory);
     setAddingCat(false);
+    stopProcessingSfx();
     if (res.ok) {
+      playSfx("success");
+      playToastSfx();
       setNewCategory("");
       toast.success("Category added");
     } else {
+      playSfx("error");
+      playToastSfx();
       toast.error("Failed", { description: res.error });
     }
   }
@@ -70,16 +77,34 @@ export function GatePanel() {
     if (!confirmTarget) return;
     if (confirmTarget.type === "category") {
       setBusy(`cat-${confirmTarget.name}`);
+      startProcessingSfx();
       const res = await deleteGateCategory(confirmTarget.name);
       setBusy(null);
-      if (res.ok) toast.success(`Category "${confirmTarget.name}" deleted`);
-      else toast.error("Failed to delete category");
+      stopProcessingSfx();
+      if (res.ok) {
+        playSfx("delete");
+        playToastSfx();
+        toast.success(`Category "${confirmTarget.name}" deleted`);
+      } else {
+        playSfx("error");
+        playToastSfx();
+        toast.error("Failed to delete category");
+      }
     } else {
       setBusy(confirmTarget.id);
+      startProcessingSfx();
       const res = await deleteGate(confirmTarget.id);
       setBusy(null);
-      if (res.ok) toast.success(`Gate "${confirmTarget.name}" deleted`);
-      else toast.error("Failed");
+      stopProcessingSfx();
+      if (res.ok) {
+        playSfx("delete");
+        playToastSfx();
+        toast.success(`Gate "${confirmTarget.name}" deleted`);
+      } else {
+        playSfx("error");
+        playToastSfx();
+        toast.error("Failed");
+      }
     }
     setConfirmTarget(null);
   }
@@ -88,19 +113,26 @@ export function GatePanel() {
     const name = (newGate[cat] ?? "").trim();
     if (!name) return;
     setAddingGate(cat);
+    startProcessingSfx();
     const types = newGateTypes[cat] ?? [];
     const res = await createGate(name, cat, types);
     setAddingGate(null);
+    stopProcessingSfx();
     if (res.ok) {
+      playSfx("success");
+      playToastSfx();
       setNewGate((p) => ({ ...p, [cat]: "" }));
       setNewGateTypes((p) => ({ ...p, [cat]: [] }));
       toast.success("Gate added");
     } else {
+      playSfx("error");
+      playToastSfx();
       toast.error("Failed", { description: res.error });
     }
   }
 
   async function handleToggleGate(id: string, active: boolean) {
+    playSfx(active ? "toggle-on" : "toggle-off");
     setBusy(id);
     await updateGate(id, { active });
     setBusy(null);
@@ -109,6 +141,7 @@ export function GatePanel() {
   async function handleSaveEdit() {
     if (!editGate || !editGate.name.trim()) return;
     setSavingEdit(true);
+    startProcessingSfx();
     const isGuestCat =
       editGate.category.toLowerCase().includes("guest") ||
       editGate.category.toLowerCase().includes("entry");
@@ -117,10 +150,15 @@ export function GatePanel() {
       ...(isGuestCat ? { ticketTypes: editGate.ticketTypes } : {}),
     });
     setSavingEdit(false);
+    stopProcessingSfx();
     if (res.ok) {
+      playSfx("success");
+      playToastSfx();
       toast.success("Gate updated");
       setEditGate(null);
     } else {
+      playSfx("error");
+      playToastSfx();
       toast.error("Failed to update", { description: res.error });
     }
   }
@@ -143,7 +181,12 @@ export function GatePanel() {
           onKeyDown={(e) => e.key === "Enter" && handleAddCategory()}
           placeholder="e.g. Guest Entry, Staff, Security"
         />
-        <Button onClick={handleAddCategory} disabled={addingCat || !newCategory.trim()}>
+        <Button
+          data-sfx-own=""
+          onMouseEnter={() => { if (newCategory.trim() && !addingCat) playSfx("hover"); }}
+          onClick={() => { if (newCategory.trim() && !addingCat) { playSfx("add-to-cart"); handleAddCategory(); } }}
+          disabled={addingCat || !newCategory.trim()}
+        >
           {addingCat ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
           Add Category
         </Button>
@@ -167,11 +210,16 @@ export function GatePanel() {
                 <div
                   role="button"
                   tabIndex={0}
-                  onClick={() => setExpandedCats((prev) => {
-                    const next = new Set(prev);
-                    next.has(cat) ? next.delete(cat) : next.add(cat);
-                    return next;
-                  })}
+                  data-sfx-own=""
+                  onMouseEnter={() => playSfx("hover")}
+                  onClick={() => {
+                    playSfx(expandedCats.has(cat) ? "collapse" : "expand");
+                    setExpandedCats((prev) => {
+                      const next = new Set(prev);
+                      next.has(cat) ? next.delete(cat) : next.add(cat);
+                      return next;
+                    });
+                  }}
                   onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setExpandedCats((prev) => { const next = new Set(prev); next.has(cat) ? next.delete(cat) : next.add(cat); return next; }); } }}
                   className="flex w-full cursor-pointer items-center justify-between p-3 text-left"
                 >
@@ -183,7 +231,9 @@ export function GatePanel() {
                   </div>
                   <div className="flex items-center gap-2">
                     <button
-                      onClick={(e) => { e.stopPropagation(); setConfirmTarget({ type: "category", name: cat }); }}
+                      onClick={(e) => { e.stopPropagation(); playSfx("delete"); setConfirmTarget({ type: "category", name: cat }); }}
+                      onMouseEnter={() => playSfx("hover")}
+                      data-sfx-own=""
                       disabled={busy === `cat-${cat}`}
                       className="flex h-6 w-6 items-center justify-center rounded text-destructive transition-colors hover:bg-destructive/10"
                       title="Delete category + its gates"
@@ -214,7 +264,9 @@ export function GatePanel() {
                     />
                     <Button
                       variant="outline"
-                      onClick={() => handleAddGate(cat)}
+                      data-sfx-own=""
+                      onMouseEnter={() => { if ((newGate[cat] ?? "").trim() && addingGate !== cat) playSfx("hover"); }}
+                      onClick={() => { if ((newGate[cat] ?? "").trim() && addingGate !== cat) { playSfx("add-to-cart"); handleAddGate(cat); } }}
                       disabled={addingGate === cat || !(newGate[cat] ?? "").trim()}
                     >
                       {addingGate === cat ? (
@@ -235,7 +287,10 @@ export function GatePanel() {
                         <button
                           key={tt}
                           type="button"
+                          data-sfx-own=""
+                          onMouseEnter={() => playSfx("hover")}
                           onClick={() => {
+                            playSfx(selected ? "deselect" : "select");
                             setNewGateTypes((p) => {
                               const cur = p[cat] ?? [];
                               return {
@@ -288,14 +343,18 @@ export function GatePanel() {
                           onCheckedChange={(v) => handleToggleGate(gate.id, v)}
                         />
                         <button
-                          onClick={() => setEditGate({ id: gate.id, name: gate.name, category: cat, ticketTypes: gate.ticketTypes })}
+                          data-sfx-own=""
+                          onMouseEnter={() => playSfx("hover")}
+                          onClick={() => { playSfx("select"); setEditGate({ id: gate.id, name: gate.name, category: cat, ticketTypes: gate.ticketTypes }); }}
                           className="flex h-6 w-6 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-white/10 hover:text-white"
                           title="Rename gate"
                         >
                           <Pencil className="h-3 w-3" />
                         </button>
                         <button
-                          onClick={() => setConfirmTarget({ type: "gate", id: gate.id, name: gate.name })}
+                          data-sfx-own=""
+                          onMouseEnter={() => playSfx("hover")}
+                          onClick={() => { playSfx("delete"); setConfirmTarget({ type: "gate", id: gate.id, name: gate.name }); }}
                           disabled={busy === gate.id}
                           className="flex h-6 w-6 items-center justify-center rounded text-destructive transition-colors hover:bg-destructive/10"
                           title="Delete gate"
@@ -340,10 +399,20 @@ export function GatePanel() {
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
-            <Button variant="ghost" onClick={() => setConfirmTarget(null)}>
+            <Button
+              variant="ghost"
+              data-sfx-own=""
+              onMouseEnter={() => playSfx("hover")}
+              onClick={() => { playSfx("cancel"); setConfirmTarget(null); }}
+            >
               Cancel
             </Button>
-            <Button variant="destructive" onClick={confirmDelete}>
+            <Button
+              variant="destructive"
+              data-sfx-own=""
+              onMouseEnter={() => playSfx("hover")}
+              onClick={() => { playSfx("delete"); confirmDelete(); }}
+            >
               <Trash2 className="mr-2 h-4 w-4" />
               Delete
             </Button>
@@ -379,7 +448,10 @@ export function GatePanel() {
                       <button
                         key={tt}
                         type="button"
+                        data-sfx-own=""
+                        onMouseEnter={() => playSfx("hover")}
                         onClick={() => {
+                          playSfx(selected ? "deselect" : "select");
                           setEditGate((p) => {
                             if (!p) return p;
                             const cur = p.ticketTypes;
@@ -407,10 +479,20 @@ export function GatePanel() {
             )}
           </div>
           <DialogFooter>
-            <Button variant="ghost" onClick={() => setEditGate(null)}>
+            <Button
+              variant="ghost"
+              data-sfx-own=""
+              onMouseEnter={() => playSfx("hover")}
+              onClick={() => { playSfx("cancel"); setEditGate(null); }}
+            >
               Cancel
             </Button>
-            <Button onClick={handleSaveEdit} disabled={savingEdit || !editGate?.name.trim()}>
+            <Button
+              data-sfx-own=""
+              onMouseEnter={() => { if (editGate?.name.trim() && !savingEdit) playSfx("hover"); }}
+              onClick={() => { if (editGate?.name.trim() && !savingEdit) { playSfx("select"); handleSaveEdit(); } }}
+              disabled={savingEdit || !editGate?.name.trim()}
+            >
               {savingEdit && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               Save
             </Button>
