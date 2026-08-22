@@ -23,6 +23,7 @@ import {
 import { cn } from "@/lib/utils";
 import { useContacts } from "@/hooks/use-contacts";
 import { createContact, deleteContact, updateContact } from "@/app/actions/contacts";
+import { playSfx, playToastSfx, startProcessingSfx, stopProcessingSfx } from "@/lib/sfx";
 
 export function HelpTray({ isAdmin = false }: { isAdmin?: boolean }) {
   const [open, setOpen] = useState(false);
@@ -44,7 +45,9 @@ export function HelpTray({ isAdmin = false }: { isAdmin?: boolean }) {
     >
       {/* Handle */}
       <button
-        onClick={() => setOpen((o) => !o)}
+        data-sfx-own=""
+        onMouseEnter={() => playSfx("hover")}
+        onClick={() => { playSfx(open ? "close" : "open"); setOpen((o) => !o); }}
         className="absolute -left-10 top-1/2 flex h-20 w-10 -translate-y-1/2 flex-col items-center justify-center gap-1.5 rounded-l-xl border border-white/20 bg-[#0f0f0f] text-white shadow-[-5px_0_15px_rgba(0,0,0,0.3)] transition-colors hover:bg-[#1a1a1a]"
         aria-label="Quick Help"
       >
@@ -58,7 +61,9 @@ export function HelpTray({ isAdmin = false }: { isAdmin?: boolean }) {
           <h2 className="text-lg font-semibold">Quick Help Tray</h2>
           {isAdmin && (
             <button
-              onClick={() => setAddOpen(true)}
+              data-sfx-own=""
+              onMouseEnter={() => playSfx("hover")}
+              onClick={() => { playSfx("add-to-cart"); setAddOpen(true); }}
               className="flex h-7 w-7 items-center justify-center rounded-lg bg-accent-secondary/10 text-accent-secondary transition-colors hover:bg-accent-secondary/20"
               title="Add contact"
             >
@@ -80,7 +85,10 @@ export function HelpTray({ isAdmin = false }: { isAdmin?: boolean }) {
                 {isAdmin && (
                   <div className="absolute right-2 top-2 flex gap-2">
                     <button
+                      data-sfx-own=""
+                      onMouseEnter={() => playSfx("hover")}
                       onClick={() => {
+                        playSfx("select");
                         setEditId(c.id);
                         setEditForm({ role: c.role, name: c.name, phone: c.phone || "", whatsapp: c.whatsapp || "", description: c.description });
                         setEditOpen(true);
@@ -90,7 +98,9 @@ export function HelpTray({ isAdmin = false }: { isAdmin?: boolean }) {
                       <Pencil className="h-3 w-3" />
                     </button>
                     <button
-                      onClick={() => setDeleteConfirm({ id: c.id, name: c.name })}
+                      data-sfx-own=""
+                      onMouseEnter={() => playSfx("hover")}
+                      onClick={() => { playSfx("delete"); setDeleteConfirm({ id: c.id, name: c.name }); }}
                       className="flex h-6 w-6 items-center justify-center rounded-md border border-white/10 text-muted-foreground transition-colors hover:text-destructive hover:border-destructive/30"
                     >
                       <Trash2 className="h-3 w-3" />
@@ -106,6 +116,9 @@ export function HelpTray({ isAdmin = false }: { isAdmin?: boolean }) {
                       <a
                         href={`https://wa.me/${c.whatsapp}`}
                         target="_blank"
+                        data-sfx-own=""
+                        onMouseEnter={() => playSfx("hover")}
+                        onClick={() => playSfx("send")}
                         className="flex items-center gap-1 rounded-lg bg-[#25D366]/20 px-2 py-1 text-xs text-[#25D366]"
                       >
                         <HugeiconsIcon icon={WhatsappIcon} size={12} /> WhatsApp
@@ -114,6 +127,9 @@ export function HelpTray({ isAdmin = false }: { isAdmin?: boolean }) {
                     {c.phone && (
                       <a
                         href={`tel:${c.phone}`}
+                        data-sfx-own=""
+                        onMouseEnter={() => playSfx("hover")}
+                        onClick={() => playSfx("open")}
                         className="flex items-center gap-1 rounded-lg bg-accent-secondary/20 px-2 py-1 text-xs text-accent-secondary"
                       >
                         <Phone className="h-3 w-3" /> Call
@@ -160,17 +176,42 @@ export function HelpTray({ isAdmin = false }: { isAdmin?: boolean }) {
               </div>
             </div>
             <DialogFooter>
-              <Button variant="ghost" onClick={() => setAddOpen(false)}>Cancel</Button>
-              <Button onClick={async () => {
-                if (!form.role.trim() || !form.name.trim()) { toast.error("Role and name required"); return; }
-                const res = await createContact({
-                  role: form.role, name: form.name,
-                  phone: form.phone || undefined, whatsapp: form.whatsapp || undefined,
-                  description: form.description || "Contact for assistance.",
-                });
-                if (res.ok) { toast.success("Contact added"); setForm({ role: "", name: "", phone: "", whatsapp: "", description: "" }); setAddOpen(false); }
-                else toast.error("Failed", { description: res.error });
-              }}>Add</Button>
+              <Button
+                variant="ghost"
+                data-sfx-own=""
+                onMouseEnter={() => playSfx("hover")}
+                onClick={() => { playSfx("cancel"); setAddOpen(false); }}
+              >
+                Cancel
+              </Button>
+              <Button
+                data-sfx-own=""
+                onMouseEnter={() => playSfx("hover")}
+                onClick={async () => {
+                  if (!form.role.trim() || !form.name.trim()) { playSfx("error"); playToastSfx(); toast.error("Role and name required"); return; }
+                  playSfx("select");
+                  startProcessingSfx();
+                  const res = await createContact({
+                    role: form.role, name: form.name,
+                    phone: form.phone || undefined, whatsapp: form.whatsapp || undefined,
+                    description: form.description || "Contact for assistance.",
+                  });
+                  stopProcessingSfx();
+                  if (res.ok) {
+                    playSfx("success");
+                    playToastSfx();
+                    toast.success("Contact added");
+                    setForm({ role: "", name: "", phone: "", whatsapp: "", description: "" });
+                    setAddOpen(false);
+                  } else {
+                    playSfx("error");
+                    playToastSfx();
+                    toast.error("Failed", { description: res.error });
+                  }
+                }}
+              >
+                Add
+              </Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>
@@ -209,17 +250,41 @@ export function HelpTray({ isAdmin = false }: { isAdmin?: boolean }) {
               </div>
             </div>
             <DialogFooter>
-              <Button variant="ghost" onClick={() => setEditOpen(false)}>Cancel</Button>
-              <Button onClick={async () => {
-                if (!editForm.role.trim() || !editForm.name.trim()) { toast.error("Role and name required"); return; }
-                const res = await updateContact(editId!, {
-                  role: editForm.role, name: editForm.name,
-                  phone: editForm.phone || undefined, whatsapp: editForm.whatsapp || undefined,
-                  description: editForm.description || "Contact for assistance.",
-                });
-                if (res.ok) { toast.success("Contact updated"); setEditOpen(false); }
-                else toast.error("Failed", { description: res.error });
-              }}>Save Changes</Button>
+              <Button
+                variant="ghost"
+                data-sfx-own=""
+                onMouseEnter={() => playSfx("hover")}
+                onClick={() => { playSfx("cancel"); setEditOpen(false); }}
+              >
+                Cancel
+              </Button>
+              <Button
+                data-sfx-own=""
+                onMouseEnter={() => playSfx("hover")}
+                onClick={async () => {
+                  if (!editForm.role.trim() || !editForm.name.trim()) { playSfx("error"); playToastSfx(); toast.error("Role and name required"); return; }
+                  playSfx("select");
+                  startProcessingSfx();
+                  const res = await updateContact(editId!, {
+                    role: editForm.role, name: editForm.name,
+                    phone: editForm.phone || undefined, whatsapp: editForm.whatsapp || undefined,
+                    description: editForm.description || "Contact for assistance.",
+                  });
+                  stopProcessingSfx();
+                  if (res.ok) {
+                    playSfx("success");
+                    playToastSfx();
+                    toast.success("Contact updated");
+                    setEditOpen(false);
+                  } else {
+                    playSfx("error");
+                    playToastSfx();
+                    toast.error("Failed", { description: res.error });
+                  }
+                }}
+              >
+                Save Changes
+              </Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>
@@ -236,15 +301,37 @@ export function HelpTray({ isAdmin = false }: { isAdmin?: boolean }) {
               </DialogDescription>
             </DialogHeader>
             <DialogFooter>
-              <Button variant="ghost" onClick={() => setDeleteConfirm(null)}>Cancel</Button>
-              <Button variant="destructive" onClick={async () => {
-                if (deleteConfirm) {
-                  const res = await deleteContact(deleteConfirm.id);
-                  if (res.ok) toast.success("Contact removed");
-                  else toast.error("Failed");
-                }
-                setDeleteConfirm(null);
-              }}>
+              <Button
+                variant="ghost"
+                data-sfx-own=""
+                onMouseEnter={() => playSfx("hover")}
+                onClick={() => { playSfx("cancel"); setDeleteConfirm(null); }}
+              >
+                Cancel
+              </Button>
+              <Button
+                variant="destructive"
+                data-sfx-own=""
+                onMouseEnter={() => playSfx("hover")}
+                onClick={async () => {
+                  if (deleteConfirm) {
+                    playSfx("delete");
+                    startProcessingSfx();
+                    const res = await deleteContact(deleteConfirm.id);
+                    stopProcessingSfx();
+                    if (res.ok) {
+                      playSfx("success");
+                      playToastSfx();
+                      toast.success("Contact removed");
+                    } else {
+                      playSfx("error");
+                      playToastSfx();
+                      toast.error("Failed");
+                    }
+                  }
+                  setDeleteConfirm(null);
+                }}
+              >
                 <Trash2 className="mr-2 h-4 w-4" />
                 Remove
               </Button>
@@ -262,9 +349,13 @@ export function ContactManagementPanel() {
 
   async function handleAdd() {
     if (!form.role.trim() || !form.name.trim()) {
+      playSfx("error");
+      playToastSfx();
       toast.error("Role and name are required");
       return;
     }
+    playSfx("select");
+    startProcessingSfx();
     const res = await createContact({
       role: form.role,
       name: form.name,
@@ -272,26 +363,47 @@ export function ContactManagementPanel() {
       whatsapp: form.whatsapp || undefined,
       description: form.description || "Contact for assistance.",
     });
+    stopProcessingSfx();
     if (res.ok) {
+      playSfx("success");
+      playToastSfx();
       toast.success("Contact added");
       setForm({ role: "", name: "", phone: "", whatsapp: "", description: "" });
       setOpen(false);
     } else {
+      playSfx("error");
+      playToastSfx();
       toast.error("Add failed", { description: res.error });
     }
   }
 
   async function handleDelete(id: string) {
+    playSfx("delete");
+    startProcessingSfx();
     const res = await deleteContact(id);
-    if (res.ok) toast.success("Contact removed");
-    else toast.error("Delete failed");
+    stopProcessingSfx();
+    if (res.ok) {
+      playSfx("success");
+      playToastSfx();
+      toast.success("Contact removed");
+    } else {
+      playSfx("error");
+      playToastSfx();
+      toast.error("Delete failed");
+    }
   }
 
   return (
     <div className="border-t border-white/5 pt-8">
       <div className="mb-3 flex items-center justify-between">
         <h3 className="text-lg font-semibold">Help Contacts</h3>
-        <Button size="sm" variant="ghost" onClick={() => setOpen(true)}>
+        <Button
+          size="sm"
+          variant="ghost"
+          data-sfx-own=""
+          onMouseEnter={() => playSfx("hover")}
+          onClick={() => { playSfx("add-to-cart"); setOpen(true); }}
+        >
           <UserPlus className="mr-1.5 h-4 w-4" /> Add Contact
         </Button>
       </div>
@@ -312,7 +424,9 @@ export function ContactManagementPanel() {
                 <span className="ml-2 text-muted-foreground">{c.phone || c.whatsapp || "—"}</span>
               </div>
               <button
-                onClick={() => handleDelete(c.id)}
+                data-sfx-own=""
+                onMouseEnter={() => playSfx("hover")}
+                onClick={() => { playSfx("delete"); handleDelete(c.id); }}
                 className="text-muted-foreground hover:text-destructive"
               >
                 <X className="h-3.5 w-3.5" />
@@ -353,8 +467,21 @@ export function ContactManagementPanel() {
             </div>
           </div>
           <DialogFooter>
-            <Button variant="ghost" onClick={() => setOpen(false)}>Cancel</Button>
-            <Button onClick={handleAdd}>Add</Button>
+            <Button
+              variant="ghost"
+              data-sfx-own=""
+              onMouseEnter={() => playSfx("hover")}
+              onClick={() => { playSfx("cancel"); setOpen(false); }}
+            >
+              Cancel
+            </Button>
+            <Button
+              data-sfx-own=""
+              onMouseEnter={() => playSfx("hover")}
+              onClick={() => { playSfx("add-to-cart"); handleAdd(); }}
+            >
+              Add
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
