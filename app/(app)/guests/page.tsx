@@ -472,7 +472,12 @@ export default function GuestsPage() {
                     <TableCell>
                       <Checkbox
                         checked={selected.has(t.id)}
-                        onCheckedChange={() => toggleRow(t.id)}
+                        onCheckedChange={() => {
+                          // check/uncheck cues fire for INDIVIDUAL row
+                          // selection only (bulk Select All stays silent).
+                          playSfx(selected.has(t.id) ? "uncheck" : "check");
+                          toggleRow(t.id);
+                        }}
                       />
                     </TableCell>
                   )}
@@ -590,11 +595,22 @@ export default function GuestsPage() {
           )}
           <DialogFooter>
             {!deleting && (
-              <Button variant="ghost" onClick={() => setDeleteOpen(false)}>
+              <Button
+                variant="ghost"
+                data-sfx-own=""
+                onMouseEnter={() => playSfx("hover")}
+                onClick={() => { playSfx("cancel"); setDeleteOpen(false); }}
+              >
                 Cancel
               </Button>
             )}
-            <Button variant="destructive" onClick={confirmDelete} disabled={deleting}>
+            <Button
+              variant="destructive"
+              data-sfx-own=""
+              onMouseEnter={() => { if (!deleting) playSfx("hover"); }}
+              onClick={() => { if (deleting) return; playSfx("delete"); confirmDelete(); }}
+              disabled={deleting}
+            >
               {deleting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               Delete
             </Button>

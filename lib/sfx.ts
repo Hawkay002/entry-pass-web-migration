@@ -153,3 +153,22 @@ export function stopProcessingSfx() {
   } catch {}
   processingLoop = null;
 }
+
+let scanningLoop: PlayingSFX | null = null;
+
+/** Start the shared scanning loop (camera feed active). Boosted like the
+ *  processing loop so it reads on phone speakers. Stops any previous. */
+export function startScanningSfx() {
+  stopScanningSfx();
+  try {
+    scanningLoop = sfx().play("scanning", { volume: 0.25 });
+  } catch {}
+}
+
+/** Stop the shared scanning loop. Never throws. */
+export function stopScanningSfx() {
+  try {
+    scanningLoop?.stop();
+  } catch {}
+  scanningLoop = null;
+}

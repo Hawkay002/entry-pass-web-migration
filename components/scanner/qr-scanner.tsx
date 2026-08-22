@@ -10,6 +10,7 @@ import jsQR from "jsqr";
 import { Camera, CameraOff, CheckCircle2, XCircle, AlertTriangle, SwitchCamera } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { playSfx, startScanningSfx, stopScanningSfx } from "@/lib/sfx";
 
 export type ScanOutcome =
   | { kind: "idle" }
@@ -135,10 +136,10 @@ export function QrScanner({
       const result = await onCodeRef.current(ticketId);
       setOutcome(result);
       if (result.kind === "granted") {
-        playSuccess();
+        playSfx("success");
         vibrate(100);
       } else if (result.kind !== "idle" && result.kind !== "searching") {
-        playError();
+        playSfx("error");
         if (result.kind === "invalid") vibrate([100, 50, 100, 50, 100]);
         else vibrate([100, 50, 100]);
       }
@@ -173,6 +174,7 @@ export function QrScanner({
     }
     setActive(true);
     setOutcome({ kind: "searching" });
+    startScanningSfx();
     ctx.rafId = requestAnimationFrame(() => frameLoop(ctx));
   }, [facingMode]);
 
@@ -183,9 +185,13 @@ export function QrScanner({
     ctx.stream?.getTracks().forEach((t) => t.stop());
     ctx.stream = null;
     if (videoRef.current) videoRef.current.srcObject = null;
+    stopScanningSfx();
     setActive(false);
     setOutcome({ kind: "idle" });
   }, []);
+
+  // Never leave the scanning loop running after unmount.
+  useEffect(() => () => stopScanningSfx(), []);
 
   // Flip between front/back camera. Only shown when the device actually has
   // more than one video input (checked once on mount).
@@ -248,7 +254,9 @@ export function QrScanner({
         {canFlip && active && (
           <button
             type="button"
-            onClick={switchCamera}
+            data-sfx-own=""
+            onMouseEnter={() => playSfx("hover")}
+            onClick={() => { playSfx("seek"); switchCamera(); }}
             title="Switch camera"
             className="absolute bottom-2 right-2 flex h-9 w-9 items-center justify-center rounded-full bg-black/60 text-white backdrop-blur transition-colors hover:bg-black/80"
           >
@@ -260,7 +268,9 @@ export function QrScanner({
       {showControls && (
         <>
           <Button
-            onClick={active ? stopScan : startScan}
+            data-sfx-own=""
+            onMouseEnter={() => playSfx("hover")}
+            onClick={() => { playSfx("select"); active ? stopScan() : startScan(); }}
             className="mx-auto mt-4"
             variant={active ? "destructive" : "default"}
           >
@@ -368,13 +378,4 @@ function ScanResult({ outcome }: { outcome: ScanOutcome }) {
       {outcome.kind === "error" && <p>{outcome.message}</p>}
     </div>
   );
-}
-
-function playSuccess() {
-  const audio = new Audio("/success.mp3");
-  audio.play().catch(() => {});
-}
-function playError() {
-  const audio = new Audio("/error.mp3");
-  audio.play().catch(() => {});
 }

@@ -25,6 +25,7 @@ import {
   clearPendingScans,
   getPendingScans,
 } from "@/lib/offline-db";
+import { playSfx } from "@/lib/sfx";
 
 // Refresh the offline cache every 15 minutes. The cache is a fallback for
 // offline scanning — when online, each scan validates against the server
@@ -205,8 +206,11 @@ export default function ScannerPage() {
           )}
         </div>
         <button
+          data-sfx-own=""
+          onMouseEnter={() => playSfx("hover")}
           onClick={() => {
             const next = !haptics;
+            playSfx(next ? "notification" : "error");
             setHaptics(next);
             if (typeof window !== "undefined") {
               localStorage.setItem("scannerHaptics", String(next));
