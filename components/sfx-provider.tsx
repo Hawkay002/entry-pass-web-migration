@@ -6,11 +6,12 @@
 "use client";
 
 import { useEffect } from "react";
-import { initSfx } from "@/lib/sfx";
+import { initSfx, applyPersistedSfxPreference } from "@/lib/sfx";
 
 export function SfxProvider() {
   useEffect(() => {
     initSfx();
+    applyPersistedSfxPreference();
   }, []);
   return null;
 }

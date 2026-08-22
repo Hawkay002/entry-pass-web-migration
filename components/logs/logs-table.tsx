@@ -42,7 +42,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { deleteLogs } from "@/app/actions/admin";
+import { deleteLogs, fetchActivityLogs } from "@/app/actions/admin";
 import { exportLogsCSV, exportLogsXLSX, exportLogsPDF } from "@/lib/import-export";
 import { playSfx, playToastSfx, startProcessingSfx, stopProcessingSfx } from "@/lib/sfx";
 import type { ActivityLog } from "@/lib/types";
@@ -94,7 +94,7 @@ const ACTION_FILTERS = [
 ] as const;
 
 export function LogsTable({ initialLogs }: { initialLogs: ActivityLog[] }) {
-  const [logs] = useState(initialLogs);
+  const [logs, setLogs] = useState(initialLogs);
   const [search, setSearch] = useState("");
   const [actionFilter, setActionFilter] = useState<string>("all");
   const [selectionMode, setSelectionMode] = useState(false);
@@ -168,8 +168,10 @@ export function LogsTable({ initialLogs }: { initialLogs: ActivityLog[] }) {
       toast.success(`Deleted ${res.count} log(s)`);
       setSelected(new Set());
       setSelectionMode(false);
-      // Refresh server data.
-      window.location.reload();
+      // Soft-refresh: re-fetch through the server action (keeps scroll
+      // position + filters) instead of window.location.reload().
+      const fresh = await fetchActivityLogs();
+      if (fresh.ok) setLogs(fresh.logs);
     } else {
       stopProcessingSfx();
       playSfx("error");

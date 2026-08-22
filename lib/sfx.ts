@@ -197,3 +197,33 @@ export function stopScanningSfx() {
   } catch {}
   scanningLoop = null;
 }
+
+const SFX_ENABLED_KEY = "sfxEnabled";
+
+/** User-facing sound on/off (persisted). Defaults ON. */
+export function isSfxEnabled(): boolean {
+  if (typeof window === "undefined") return true;
+  return localStorage.getItem(SFX_ENABLED_KEY) !== "off";
+}
+
+/** Toggle the player's enabled state and persist it. Returns the new state. */
+export function setSfxEnabled(enabled: boolean): boolean {
+  try {
+    sfx().setEnabled(enabled);
+    if (!enabled) {
+      stopProcessingSfx();
+      stopScanningSfx();
+    }
+    if (typeof window !== "undefined") {
+      localStorage.setItem(SFX_ENABLED_KEY, enabled ? "on" : "off");
+    }
+  } catch {}
+  return enabled;
+}
+
+/** Apply the persisted preference to the player (call once on mount). */
+export function applyPersistedSfxPreference() {
+  try {
+    sfx().setEnabled(isSfxEnabled());
+  } catch {}
+}

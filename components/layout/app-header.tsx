@@ -5,12 +5,15 @@
 "use client";
 
 import { useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
 import { Bell, LogOut, MessageCircle } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { BackgroundPickerButton } from "./background-picker";
 import { AppNav } from "./app-nav";
-import { playSfx } from "@/lib/sfx";
+import { Volume2 } from "@/components/animate-ui/icons/volume-2";
+import { VolumeOff } from "@/components/animate-ui/icons/volume-off";
+import { playSfx, isSfxEnabled, setSfxEnabled } from "@/lib/sfx";
 import type { TabName } from "@/lib/types";
 
 export function AppHeader({
@@ -31,6 +34,37 @@ export function AppHeader({
   hideActions?: boolean;
 }) {
   const router = useRouter();
+  const [sfxOn, setSfxOn] = useState(true);
+
+  // Seed from the persisted preference (client only — avoids hydration flip).
+  useEffect(() => {
+    setSfxOn(isSfxEnabled());
+  }, []);
+
+  function toggleSfx() {
+    const next = setSfxEnabled(!sfxOn);
+    setSfxOn(next);
+    // The cue for the new state plays AFTER enabling (unmute) or right
+    // before muting (the last sound you hear).
+    playSfx(next ? "toggle-on" : "toggle-off");
+  }
+
+  const sfxToggle = (
+    <button
+      onClick={toggleSfx}
+      data-sfx-own=""
+      onMouseEnter={() => playSfx("hover")}
+      className="flex h-9 w-9 items-center justify-center rounded-full transition-colors hover:bg-white/5"
+      title={sfxOn ? "Sound on — click to mute" : "Sound off — click to enable"}
+      style={{ color: sfxOn ? "var(--color-accent-secondary)" : "rgb(255 255 255 / 0.5)" }}
+    >
+      {sfxOn ? (
+        <Volume2 key="on" size={18} animate />
+      ) : (
+        <VolumeOff key="off" size={18} animate />
+      )}
+    </button>
+  );
 
   async function handleSignOut() {
     await fetch("/api/logout", { method: "POST" });
@@ -97,6 +131,7 @@ export function AppHeader({
             Ticketing<span className="font-semibold">System</span>.
           </h1>
           <div className="flex w-16 shrink-0 items-center justify-end gap-1">
+            {!hideActions && sfxToggle}
             {!hideActions && bell}
             {!hideActions && chat}
           </div>
@@ -129,6 +164,7 @@ export function AppHeader({
           Ticketing<span className="font-semibold">System</span>.
         </h1>
         <div className="flex items-center gap-2">
+          {!hideActions && sfxToggle}
           {!hideActions && bell}
           {!hideActions && chat}
           {accountInline}
