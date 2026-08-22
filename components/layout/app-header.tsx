@@ -54,14 +54,14 @@ export function AppHeader({
       onClick={toggleSfx}
       data-sfx-own=""
       onMouseEnter={() => playSfx("hover")}
-      className="flex h-9 w-9 items-center justify-center rounded-full transition-colors hover:bg-white/5"
+      className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg transition-colors hover:bg-white/10"
       title={sfxOn ? "Sound on — click to mute" : "Sound off — click to enable"}
       style={{ color: sfxOn ? "var(--color-accent-secondary)" : "rgb(255 255 255 / 0.5)" }}
     >
       {sfxOn ? (
-        <Volume2 key="on" size={18} animate className="flex size-[18px] items-center justify-center" />
+        <Volume2 key="on" size={16} animate className="flex size-4 items-center justify-center" />
       ) : (
-        <VolumeOff key="off" size={18} animate className="flex size-[18px] items-center justify-center" />
+        <VolumeOff key="off" size={16} animate className="flex size-4 items-center justify-center" />
       )}
     </button>
   );
@@ -116,6 +116,7 @@ export function AppHeader({
     <span className="mx-2 hidden items-center gap-2 text-sm text-muted-foreground sm:flex">
       {sfxToggle}
       <BackgroundPickerButton />
+      <span className="h-5 w-px bg-white/10" />
       <span className="h-2 w-2 rounded-full bg-success-green" />
       <span className="font-semibold text-accent-secondary">{userEmail}</span>
     </span>
