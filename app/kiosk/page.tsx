@@ -22,6 +22,7 @@ import {
   getKioskPendingScans,
   getKioskPendingCount,
 } from "@/lib/kiosk-db";
+import { playSfx, startProcessingSfx, stopProcessingSfx } from "@/lib/sfx";
 
 const SESSION_KEY = "kiosk_pin";
 const SESSION_KIOSK_KEY = "kiosk_id";
@@ -215,9 +216,11 @@ function PinGate({ onUnlock, kioskId }: { onUnlock: (pin: string) => void; kiosk
   function press(d: string) {
     setError("");
     if (d === "del") {
+      playSfx("delete", 2); // extra-hot: kiosk hall is loud
       setEntry((e) => e.slice(0, -1));
       return;
     }
+    playSfx("typing", 2); // extra-hot
     setEntry((e) => (e.length >= 6 ? e : e + d));
   }
 
@@ -225,6 +228,7 @@ function PinGate({ onUnlock, kioskId }: { onUnlock: (pin: string) => void; kiosk
     if (entry.length < 4) return;
     setChecking(true);
     setError("");
+    startProcessingSfx();
     try {
       // Verify the PIN against the server before unlocking.
       const res = await fetch("/api/kiosk-checkin", {
@@ -236,16 +240,25 @@ function PinGate({ onUnlock, kioskId }: { onUnlock: (pin: string) => void; kiosk
         // Check if kiosk doesn't exist vs wrong PIN.
         const data = await res.json().catch(() => ({}));
         if (data.error?.includes("not found")) {
+          stopProcessingSfx();
           setNotFound(true);
         } else {
+          stopProcessingSfx();
+          playSfx("error");
           setError("Incorrect PIN or kiosk not enabled.");
         }
       } else if (res.ok) {
+        stopProcessingSfx();
+        playSfx("success");
         onUnlock(entry);
       } else {
+        stopProcessingSfx();
+        playSfx("error");
         setError("Unable to reach the server. Check your connection.");
       }
     } catch {
+      stopProcessingSfx();
+      playSfx("error");
       setError("Network error. Check your connection.");
     }
     setChecking(false);
@@ -289,23 +302,26 @@ function PinGate({ onUnlock, kioskId }: { onUnlock: (pin: string) => void; kiosk
         </div>
         <p className="mb-6 text-sm text-white/60">Enter the event PIN to begin</p>
 
-        {/* PIN display + show/hide toggle */}
-        <div className="mb-6 flex items-center gap-3">
-          <div className="flex items-center justify-center gap-2">
-            {Array.from({ length: 6 }).map((_, i) => (
-              <span
-                key={i}
-                className={cn(
-                  "flex h-10 w-8 items-center justify-center rounded-lg border text-lg transition-colors",
-                  i < entry.length ? "border-emerald-400/40 bg-emerald-400/10 text-emerald-400" : "border-white/15 bg-white/5"
-                )}
-              >
-                {i < entry.length ? (showPin ? entry[i] : "●") : ""}
-              </span>
-            ))}
-          </div>
+        {/* PIN display — centered alone so it aligns with the numpad grid */}
+        <div className="mb-4 flex items-center justify-center gap-2">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <span
+              key={i}
+              className={cn(
+                "flex h-10 w-8 items-center justify-center rounded-lg border text-lg transition-colors",
+                i < entry.length ? "border-emerald-400/40 bg-emerald-400/10 text-emerald-400" : "border-white/15 bg-white/5"
+              )}
+            >
+              {i < entry.length ? (showPin ? entry[i] : "●") : ""}
+            </span>
+          ))}
+        </div>
+        {/* Show/hide toggle — separate row so the boxes stay centered */}
+        <div className="mb-6 flex w-full justify-end">
           <button
-            onClick={() => setShowPin((s) => !s)}
+            onClick={() => { playSfx("select"); setShowPin((s) => !s); }}
+            data-sfx-own=""
+            onMouseEnter={() => playSfx("hover")}
             className="flex h-8 w-8 items-center justify-center rounded-lg text-white/50 transition-colors hover:bg-white/10 hover:text-white"
             title={showPin ? "Hide PIN" : "Show PIN"}
           >

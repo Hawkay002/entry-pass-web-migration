@@ -136,12 +136,13 @@ export function initSfx() {
 }
 
 /** Fire-and-forget one-shot cue. Never throws. Each cue's default volume
- *  is boosted by CUE_BOOST (clamped at 1.0) so everything reads louder. */
-export function playSfx(cue: CueName) {
+ *  is boosted by CUE_BOOST (clamped at 1.0) so everything reads louder.
+ *  Pass `boost` for extra-hot cues (e.g. kiosk typing in a loud hall). */
+export function playSfx(cue: CueName, boost = 1) {
   try {
     let vol = 1;
     try {
-      vol = Math.min(1, getCue(cue).defaultVolume * CUE_BOOST);
+      vol = Math.min(1, getCue(cue).defaultVolume * CUE_BOOST * boost);
     } catch {}
     sfx().play(cue, { volume: vol });
   } catch {}
