@@ -115,6 +115,7 @@ export function AppHeader({
   const accountInline = (
     <span className="mx-2 hidden items-center gap-2 text-sm text-muted-foreground sm:flex">
       {sfxToggle}
+      <span className="h-5 w-px bg-white/10" />
       <BackgroundPickerButton />
       <span className="h-5 w-px bg-white/10" />
       <span className="h-2 w-2 rounded-full bg-success-green" />
@@ -141,6 +142,7 @@ export function AppHeader({
         <div className="flex justify-center">
           <div className="glass-pill inline-flex items-center gap-2 rounded-lg px-3 py-1 text-sm">
             {sfxToggle}
+            <span className="h-5 w-px bg-white/10" />
             <BackgroundPickerButton />
             <span className="h-5 w-px bg-white/10" />
             <span className="h-2 w-2 rounded-full bg-success-green" />
