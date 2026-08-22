@@ -6,6 +6,7 @@
 import { useState } from "react";
 import { ChevronDown } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { playSfx } from "@/lib/sfx";
 
 interface CollapsibleSectionProps {
   icon: React.ReactNode;
@@ -32,7 +33,12 @@ export function CollapsibleSection({
     <div className={className}>
       <button
         type="button"
-        onClick={() => setOpen((o) => !o)}
+        data-sfx-own=""
+        onMouseEnter={() => playSfx("hover")}
+        onClick={() => {
+          playSfx(open ? "collapse" : "expand");
+          setOpen((o) => !o);
+        }}
         aria-expanded={open}
         className="flex w-full items-center gap-3 px-6 py-4 text-left transition-colors hover:bg-white/[0.02]"
       >

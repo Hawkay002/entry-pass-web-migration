@@ -16,6 +16,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
+import { playSfx, playToastSfx, startProcessingSfx, stopProcessingSfx } from "@/lib/sfx";
 
 export function TwoFactorPanel() {
   const [status, setStatus] = useState<"loading" | "disabled" | "enabled">("loading");
@@ -63,6 +64,7 @@ export function TwoFactorPanel() {
   async function confirmSetup() {
     if (verifyCode.length !== 6) return;
     setBusy(true);
+    startProcessingSfx();
     try {
       const res = await fetch("/api/2fa-setup", {
         method: "POST",
@@ -71,13 +73,21 @@ export function TwoFactorPanel() {
       });
       const data = await res.json();
       if (data.ok) {
+        stopProcessingSfx();
+        playSfx("success");
         setRecoveryCodes(data.recoveryCodes);
         setShowRecovery(true);
         setStatus("enabled");
       } else {
+        stopProcessingSfx();
+        playSfx("error");
+        playToastSfx();
         toast.error(data.error ?? "Invalid code");
       }
     } catch {
+      stopProcessingSfx();
+      playSfx("error");
+      playToastSfx();
       toast.error("Failed to enable 2FA");
     }
     setBusy(false);
@@ -86,6 +96,7 @@ export function TwoFactorPanel() {
   async function confirmDisable() {
     if (disableCode.length !== 6) return;
     setBusy(true);
+    startProcessingSfx();
     try {
       const res = await fetch("/api/2fa-setup", {
         method: "DELETE",
@@ -94,14 +105,23 @@ export function TwoFactorPanel() {
       });
       const data = await res.json();
       if (data.ok) {
+        stopProcessingSfx();
+        playSfx("success");
+        playToastSfx();
         setStatus("disabled");
         setDisableOpen(false);
         setDisableCode("");
         toast.success("2FA disabled");
       } else {
+        stopProcessingSfx();
+        playSfx("error");
+        playToastSfx();
         toast.error(data.error ?? "Invalid code");
       }
     } catch {
+      stopProcessingSfx();
+      playSfx("error");
+      playToastSfx();
       toast.error("Failed to disable");
     }
     setBusy(false);
@@ -132,13 +152,28 @@ export function TwoFactorPanel() {
               Require a 6-digit code from Google Authenticator on every admin login.
             </p>
             {status === "disabled" && (
-              <Button size="sm" variant="outline" onClick={startSetup} disabled={busy} className="shrink-0">
+              <Button
+                size="sm"
+                variant="outline"
+                data-sfx-own=""
+                onMouseEnter={() => { if (!busy) playSfx("hover"); }}
+                onClick={() => { if (!busy) { playSfx("select"); startSetup(); } }}
+                disabled={busy}
+                className="shrink-0"
+              >
                 {busy ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : null}
                 Enable 2FA
               </Button>
             )}
             {status === "enabled" && (
-              <Button size="sm" variant="outline" className="shrink-0 text-destructive hover:bg-destructive/10" onClick={() => setDisableOpen(true)}>
+              <Button
+                size="sm"
+                variant="outline"
+                data-sfx-own=""
+                onMouseEnter={() => playSfx("hover")}
+                onClick={() => { playSfx("delete"); setDisableOpen(true); }}
+                className="shrink-0 text-destructive hover:bg-destructive/10"
+              >
                 Disable 2FA
               </Button>
             )}
@@ -223,8 +258,20 @@ export function TwoFactorPanel() {
                 </div>
               </div>
               <DialogFooter>
-                <Button variant="ghost" onClick={() => setSetupOpen(false)}>Cancel</Button>
-                <Button onClick={confirmSetup} disabled={busy || verifyCode.length !== 6}>
+                <Button
+                  variant="ghost"
+                  data-sfx-own=""
+                  onMouseEnter={() => playSfx("hover")}
+                  onClick={() => { playSfx("cancel"); setSetupOpen(false); }}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  data-sfx-own=""
+                  onMouseEnter={() => { if (verifyCode.length === 6 && !busy) playSfx("hover"); }}
+                  onClick={() => { if (verifyCode.length === 6 && !busy) { playSfx("select"); confirmSetup(); } }}
+                  disabled={busy || verifyCode.length !== 6}
+                >
                   {busy && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                   Verify &amp; Enable
                 </Button>
@@ -246,7 +293,10 @@ export function TwoFactorPanel() {
               <DialogFooter>
                 <Button
                   variant="outline"
+                  data-sfx-own=""
+                  onMouseEnter={() => playSfx("hover")}
                   onClick={() => {
+                    playSfx("copy");
                     const text = `EntryPass — 2FA Recovery Codes\n\n${recoveryCodes.map((c, i) => `${i + 1}. ${c}`).join("\n")}\n\nEach code can be used once. Store securely.`;
                     const blob = new Blob([text], { type: "text/plain" });
                     const a = document.createElement("a");
@@ -259,7 +309,11 @@ export function TwoFactorPanel() {
                   <Download className="mr-2 h-4 w-4" />
                   Download .txt
                 </Button>
-                <Button onClick={() => { setSetupOpen(false); setShowRecovery(false); }}>
+                <Button
+                  data-sfx-own=""
+                  onMouseEnter={() => playSfx("hover")}
+                  onClick={() => { playSfx("success"); setSetupOpen(false); setShowRecovery(false); }}
+                >
                   I&apos;ve saved them
                 </Button>
               </DialogFooter>
@@ -319,8 +373,21 @@ export function TwoFactorPanel() {
             />
           </div>
           <DialogFooter>
-            <Button variant="ghost" onClick={() => setDisableOpen(false)}>Cancel</Button>
-            <Button variant="destructive" onClick={confirmDisable} disabled={busy || disableCode.length !== 6}>
+            <Button
+              variant="ghost"
+              data-sfx-own=""
+              onMouseEnter={() => playSfx("hover")}
+              onClick={() => { playSfx("cancel"); setDisableOpen(false); }}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              data-sfx-own=""
+              onMouseEnter={() => { if (disableCode.length === 6 && !busy) playSfx("hover"); }}
+              onClick={() => { if (disableCode.length === 6 && !busy) { playSfx("delete"); confirmDisable(); } }}
+              disabled={busy || disableCode.length !== 6}
+            >
               {busy && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               Disable
             </Button>

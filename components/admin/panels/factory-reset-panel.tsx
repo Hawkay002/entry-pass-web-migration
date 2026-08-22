@@ -17,6 +17,7 @@ import {
 } from "@/components/ui/dialog";
 import { factoryReset } from "@/app/actions/admin";
 import { CollapsibleSection } from "@/components/admin/collapsible-section";
+import { playSfx, playToastSfx, startProcessingSfx, stopProcessingSfx } from "@/lib/sfx";
 
 export function FactoryResetPanel() {
   const [confirmText, setConfirmText] = useState("");
@@ -25,12 +26,21 @@ export function FactoryResetPanel() {
 
   async function handleReset() {
     setResetting(true);
+    startProcessingSfx();
     const res = await factoryReset();
     setResetting(false);
+    stopProcessingSfx();
     setConfirmOpen(false);
     setConfirmText("");
-    if (res.ok) toast.success("Database reset complete");
-    else toast.error("Reset failed", { description: res.error });
+    if (res.ok) {
+      playSfx("delete");
+      playToastSfx();
+      toast.success("Database reset complete");
+    } else {
+      playSfx("error");
+      playToastSfx();
+      toast.error("Reset failed", { description: res.error });
+    }
   }
 
   return (
@@ -45,7 +55,13 @@ export function FactoryResetPanel() {
             Factory reset permanently deletes all tickets, settings, roles, gates, kiosks,
             logs, and locks. An immutable audit record is preserved. This cannot be undone.
           </p>
-          <Button variant="destructive" onClick={() => setConfirmOpen(true)} disabled={resetting}>
+          <Button
+            variant="destructive"
+            data-sfx-own=""
+            disabled={resetting}
+            onMouseEnter={() => { if (!resetting) playSfx("hover"); }}
+            onClick={() => { if (!resetting) { playSfx("delete"); setConfirmOpen(true); } }}
+          >
             <Trash2 className="mr-1.5 h-3.5 w-3.5" />
             Reset Database
           </Button>
@@ -66,11 +82,20 @@ export function FactoryResetPanel() {
               className="border-destructive/30"
             />
             <DialogFooter>
-              <Button variant="ghost" onClick={() => { setConfirmOpen(false); setConfirmText(""); }}>Cancel</Button>
+              <Button
+                variant="ghost"
+                data-sfx-own=""
+                onMouseEnter={() => playSfx("hover")}
+                onClick={() => { playSfx("cancel"); setConfirmOpen(false); setConfirmText(""); }}
+              >
+                Cancel
+              </Button>
               <Button
                 variant="destructive"
-                onClick={handleReset}
+                data-sfx-own=""
+                onClick={() => { if (confirmText === "RESET" && !resetting) { playSfx("delete"); handleReset(); } }}
                 disabled={resetting || confirmText !== "RESET"}
+                onMouseEnter={() => { if (confirmText === "RESET" && !resetting) playSfx("hover"); }}
               >
                 {resetting ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <Trash2 className="mr-1.5 h-3.5 w-3.5" />}
                 Reset Everything

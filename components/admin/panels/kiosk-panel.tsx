@@ -33,6 +33,7 @@ import { useKiosks, type KioskListItem } from "@/hooks/use-kiosks";
 import { useSettings } from "@/hooks/use-settings";
 import { useGatesMode } from "@/hooks/use-gates";
 import { CollapsibleSection } from "@/components/admin/collapsible-section";
+import { playSfx, playToastSfx, startProcessingSfx, stopProcessingSfx } from "@/lib/sfx";
 
 export function KioskPanel() {
   const { kiosks, loading } = useKiosks();
@@ -57,13 +58,20 @@ export function KioskPanel() {
   async function handleAdd() {
     if (!newName.trim() || newPin.length < 4) return;
     setBusy(true);
+    startProcessingSfx();
     const res = await createKiosk(newName, newPin, kioskMultiGate ? newGate : null);
     setBusy(false);
     if (res.ok) {
+      stopProcessingSfx();
+      playSfx("success");
+      playToastSfx();
       toast.success("Kiosk created");
       setNewName(""); setNewPin(""); setNewGate(null);
       setAddOpen(false);
     } else {
+      stopProcessingSfx();
+      playSfx("error");
+      playToastSfx();
       toast.error("Failed", { description: res.error });
     }
   }
@@ -71,26 +79,40 @@ export function KioskPanel() {
   async function handleEditSave() {
     if (!editKiosk || !editName.trim()) return;
     setBusy(true);
+    startProcessingSfx();
     const patch: { name?: string; pin?: string; gateId?: string | null } = { name: editName };
     if (editPin.length >= 4) patch.pin = editPin;
     if (kioskMultiGate) patch.gateId = editGate;
     const res = await updateKiosk(editKiosk.id, patch);
     setBusy(false);
     if (res.ok) {
+      stopProcessingSfx();
+      playSfx("success");
+      playToastSfx();
       toast.success("Kiosk updated");
       setEditKiosk(null);
     } else {
+      stopProcessingSfx();
+      playSfx("error");
+      playToastSfx();
       toast.error("Failed", { description: res.error });
     }
   }
 
   async function handleDelete(id: string, name: string) {
     setBusy(true);
+    startProcessingSfx();
     const res = await deleteKiosk(id);
     setBusy(false);
     if (res.ok) {
+      stopProcessingSfx();
+      playSfx("delete");
+      playToastSfx();
       toast.success(`Kiosk "${name}" deleted`);
     } else {
+      stopProcessingSfx();
+      playSfx("error");
+      playToastSfx();
       toast.error("Failed");
     }
   }
@@ -113,7 +135,13 @@ export function KioskPanel() {
         <p className="text-xs text-muted-foreground flex-1 pr-3">
           Create kiosks for different gates. Each gets its own PIN + URL. Open <code className="rounded bg-white/10 px-1 py-0.5">/kiosk?id=…</code> on each tablet.
         </p>
-        <Button size="sm" variant="outline" onClick={() => setAddOpen(true)}>
+        <Button
+          size="sm"
+          variant="outline"
+          data-sfx-own=""
+          onMouseEnter={() => playSfx("hover")}
+          onClick={() => { playSfx("add-to-cart"); setAddOpen(true); }}
+        >
           <Plus className="mr-1.5 h-3.5 w-3.5" /> Add Kiosk
         </Button>
       </div>
@@ -143,6 +171,9 @@ export function KioskPanel() {
                   href={`/kiosk?id=${k.id}`}
                   target="_blank"
                   rel="noopener noreferrer"
+                  data-sfx-own=""
+                  onMouseEnter={() => playSfx("hover")}
+                  onClick={() => playSfx("open")}
                   className="flex h-6 w-6 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-white/10 hover:text-white"
                   title="Open kiosk"
                 >
@@ -150,6 +181,9 @@ export function KioskPanel() {
                 </a>
                 <DropdownMenu>
                   <DropdownMenuTrigger
+                    data-sfx-own=""
+                    onMouseEnter={() => playSfx("hover")}
+                    onClick={() => playSfx("select")}
                     className="flex h-6 w-6 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-white/10 hover:text-white"
                     title="More"
                   >
@@ -157,23 +191,35 @@ export function KioskPanel() {
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end">
                     <DropdownMenuItem
+                      data-sfx-own=""
+                      onMouseEnter={() => playSfx("hover")}
                       onClick={() => {
+                        playSfx("copy");
                         const link = `${window.location.origin}/kiosk?id=${k.id}`;
                         navigator.clipboard.writeText(link).then(() => {
+                          playToastSfx();
                           toast.success("Kiosk link copied to clipboard");
                         }).catch(() => {
+                          playSfx("error");
+                          playToastSfx();
                           toast.error("Failed to copy link");
                         });
                       }}
                     >
                       <Copy className="mr-2 h-3.5 w-3.5" /> Copy Link
                     </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => { setEditKiosk(k); setEditName(k.name); setEditPin(""); setEditGate(k.gateId); }}>
+                    <DropdownMenuItem
+                      data-sfx-own=""
+                      onMouseEnter={() => playSfx("hover")}
+                      onClick={() => { playSfx("select"); setEditKiosk(k); setEditName(k.name); setEditPin(""); setEditGate(k.gateId); }}
+                    >
                       <Pencil className="mr-2 h-3.5 w-3.5" /> Edit
                     </DropdownMenuItem>
                     <DropdownMenuItem
                       variant="destructive"
-                      onClick={() => setDeleteKioskConfirm({ id: k.id, name: k.name })}
+                      data-sfx-own=""
+                      onMouseEnter={() => playSfx("hover")}
+                      onClick={() => { playSfx("delete"); setDeleteKioskConfirm({ id: k.id, name: k.name }); }}
                     >
                       <Trash2 className="mr-2 h-3.5 w-3.5" /> Delete
                     </DropdownMenuItem>
@@ -198,7 +244,13 @@ export function KioskPanel() {
               <Label className="text-xs">PIN (4-6 digits)</Label>
               <div className="relative">
                 <Input type={showNewPin ? "text" : "password"} inputMode="numeric" value={newPin} onChange={(e) => setNewPin(e.target.value.replace(/\D/g, "").slice(0, 6))} placeholder="••••" className="h-8 pr-9 text-sm" />
-                <button type="button" onClick={() => setShowNewPin((s) => !s)} className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-white">
+                <button
+                  type="button"
+                  data-sfx-own=""
+                  onMouseEnter={() => playSfx("hover")}
+                  onClick={() => { playSfx("select"); setShowNewPin((s) => !s); }}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-white"
+                >
                   {showNewPin ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
                 </button>
               </div>
@@ -221,8 +273,20 @@ export function KioskPanel() {
             )}
           </div>
           <DialogFooter>
-            <Button variant="ghost" onClick={() => setAddOpen(false)}>Cancel</Button>
-            <Button onClick={handleAdd} disabled={busy || !newName.trim() || newPin.length < 4}>
+            <Button
+              variant="ghost"
+              data-sfx-own=""
+              onMouseEnter={() => playSfx("hover")}
+              onClick={() => { playSfx("cancel"); setAddOpen(false); }}
+            >
+              Cancel
+            </Button>
+            <Button
+              data-sfx-own=""
+              onMouseEnter={() => { if (newName.trim() && newPin.length >= 4 && !busy) playSfx("hover"); }}
+              onClick={() => { if (newName.trim() && newPin.length >= 4 && !busy) { playSfx("select"); handleAdd(); } }}
+              disabled={busy || !newName.trim() || newPin.length < 4}
+            >
               {busy && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               Create
             </Button>
@@ -243,7 +307,13 @@ export function KioskPanel() {
               <Label className="text-xs">New PIN (leave blank to keep current)</Label>
               <div className="relative">
                 <Input type={showEditPin ? "text" : "password"} inputMode="numeric" value={editPin} onChange={(e) => setEditPin(e.target.value.replace(/\D/g, "").slice(0, 6))} placeholder="Unchanged" className="h-8 pr-9 text-sm" />
-                <button type="button" onClick={() => setShowEditPin((s) => !s)} className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-white">
+                <button
+                  type="button"
+                  data-sfx-own=""
+                  onMouseEnter={() => playSfx("hover")}
+                  onClick={() => { playSfx("select"); setShowEditPin((s) => !s); }}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-white"
+                >
                   {showEditPin ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
                 </button>
               </div>
@@ -266,8 +336,20 @@ export function KioskPanel() {
             )}
           </div>
           <DialogFooter>
-            <Button variant="ghost" onClick={() => setEditKiosk(null)}>Cancel</Button>
-            <Button onClick={handleEditSave} disabled={busy || !editName.trim()}>
+            <Button
+              variant="ghost"
+              data-sfx-own=""
+              onMouseEnter={() => playSfx("hover")}
+              onClick={() => { playSfx("cancel"); setEditKiosk(null); }}
+            >
+              Cancel
+            </Button>
+            <Button
+              data-sfx-own=""
+              onMouseEnter={() => { if (editName.trim() && !busy) playSfx("hover"); }}
+              onClick={() => { if (editName.trim() && !busy) { playSfx("select"); handleEditSave(); } }}
+              disabled={busy || !editName.trim()}
+            >
               {busy && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               Save
             </Button>
@@ -286,11 +368,21 @@ export function KioskPanel() {
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
-            <Button variant="ghost" onClick={() => setDeleteKioskConfirm(null)}>Cancel</Button>
+            <Button
+              variant="ghost"
+              data-sfx-own=""
+              onMouseEnter={() => playSfx("hover")}
+              onClick={() => { playSfx("cancel"); setDeleteKioskConfirm(null); }}
+            >
+              Cancel
+            </Button>
             <Button
               variant="destructive"
+              data-sfx-own=""
+              onMouseEnter={() => playSfx("hover")}
               onClick={async () => {
                 if (deleteKioskConfirm) {
+                  playSfx("delete");
                   await handleDelete(deleteKioskConfirm.id, deleteKioskConfirm.name);
                   setDeleteKioskConfirm(null);
                 }

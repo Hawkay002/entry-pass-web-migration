@@ -40,6 +40,7 @@ import { useLockDashboard } from "@/hooks/use-lock-dashboard";
 import { CollapsibleSection } from "@/components/admin/collapsible-section";
 import type { LockReasonType, StaffRole, TabName } from "@/lib/types";
 import { cn } from "@/lib/utils";
+import { playSfx, playToastSfx, startProcessingSfx, stopProcessingSfx } from "@/lib/sfx";
 
 const LOCKABLE_TABS: { value: TabName; label: string }[] = [
   { value: "create", label: "Issue Ticket Tab" },
@@ -286,7 +287,9 @@ export function RemoteDeviceManagement() {
           {roles.map((role) => (
             <button
               key={role.id}
-              onClick={() => openRole(role)}
+              data-sfx-own=""
+              onMouseEnter={() => playSfx("hover")}
+              onClick={() => { playSfx("open"); openRole(role); }}
               className={cn(
                 "rounded-xl border p-4 text-left transition-colors",
                 activeRole?.id === role.id
@@ -332,7 +335,9 @@ export function RemoteDeviceManagement() {
                   {(["all", "free", "locked"] as const).map((f) => (
                     <button
                       key={f}
-                      onClick={() => setLockFilter(f)}
+                      data-sfx-own=""
+                      onMouseEnter={() => playSfx("hover")}
+                      onClick={() => { playSfx("select"); setLockFilter(f); }}
                       className={cn(
                         "rounded-lg px-3 py-1.5 text-xs font-medium capitalize transition-colors",
                         lockFilter === f
@@ -364,7 +369,9 @@ export function RemoteDeviceManagement() {
                     <label className="flex cursor-pointer items-center gap-2 text-sm text-muted-foreground">
                       <Checkbox
                         checked={allSelected}
+                        data-sfx-own=""
                         onCheckedChange={() => {
+                          playSfx(allSelected ? "uncheck" : "check");
                           setSelectedStaff((prev) => {
                             const next = new Set(prev);
                             if (allSelected) {
@@ -381,17 +388,22 @@ export function RemoteDeviceManagement() {
                     {selectedStaff.size > 0 && (
                       <DropdownMenu>
                         <DropdownMenuTrigger
+                          data-sfx-own=""
+                          onMouseEnter={() => playSfx("hover")}
+                          onClick={() => playSfx("select")}
                           className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-white/10 bg-white/5 text-muted-foreground transition-colors hover:bg-white/10 hover:text-white"
                         >
                           <MoreVertical className="h-3.5 w-3.5" />
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
-                          <DropdownMenuItem onClick={() => openEditBatch()}>
+                          <DropdownMenuItem data-sfx-own="" onMouseEnter={() => playSfx("hover")} onClick={() => { playSfx("select"); openEditBatch(); }}>
                             <Pencil className="mr-2 h-3.5 w-3.5" /> Edit
                           </DropdownMenuItem>
                           <DropdownMenuItem
                             variant="destructive"
-                            onClick={() => setDeleteConfirmOpen(true)}
+                            data-sfx-own=""
+                            onMouseEnter={() => playSfx("hover")}
+                            onClick={() => { playSfx("delete"); setDeleteConfirmOpen(true); }}
                           >
                             <Trash2 className="mr-2 h-3.5 w-3.5" /> Delete
                           </DropdownMenuItem>
@@ -426,7 +438,9 @@ export function RemoteDeviceManagement() {
                   return (
                     <button
                       key={s.email}
-                      onClick={() => toggleStaff(s.email)}
+                      data-sfx-own=""
+                      onMouseEnter={() => playSfx("hover")}
+                      onClick={() => { playSfx(sel ? "deselect" : "select"); toggleStaff(s.email); }}
                       className={cn(
                         "grid w-full grid-cols-[1fr_1fr_auto] items-center gap-2 rounded-lg px-3 py-2 text-left text-sm transition-colors",
                         sel
@@ -461,7 +475,9 @@ export function RemoteDeviceManagement() {
                   </p>
                   <Button
                     size="sm"
-                    onClick={() => setLockConfigOpen(true)}
+                    data-sfx-own=""
+                    onMouseEnter={() => playSfx("hover")}
+                    onClick={() => { playSfx("forward"); setLockConfigOpen(true); }}
                   >
                     Next
                   </Button>
@@ -483,10 +499,22 @@ export function RemoteDeviceManagement() {
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
-            <Button variant="ghost" onClick={() => setConfirmOpen(false)} disabled={locking}>
+            <Button
+              variant="ghost"
+              data-sfx-own=""
+              disabled={locking}
+              onMouseEnter={() => playSfx("hover")}
+              onClick={() => { playSfx("cancel"); setConfirmOpen(false); }}
+            >
               Cancel
             </Button>
-            <Button variant="destructive" onClick={confirmLock} disabled={locking}>
+            <Button
+              variant="destructive"
+              data-sfx-own=""
+              disabled={locking}
+              onMouseEnter={() => { if (!locking) playSfx("hover"); }}
+              onClick={() => { if (!locking) { playSfx("lock"); confirmLock(); } }}
+            >
               {locking && <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />}
               Sync &amp; Lock
             </Button>
@@ -526,7 +554,8 @@ export function RemoteDeviceManagement() {
                     >
                       <Checkbox
                         checked={lockedTabs.has(tab.value)}
-                        onCheckedChange={() => toggleTab(tab.value)}
+                        data-sfx-own=""
+                        onCheckedChange={() => { playSfx(lockedTabs.has(tab.value) ? "uncheck" : "check"); toggleTab(tab.value); }}
                       />
                       <span>{tab.label}</span>
                       {lockedByAll && (
@@ -570,14 +599,23 @@ export function RemoteDeviceManagement() {
           </div>
 
           <DialogFooter>
-            <Button variant="ghost" onClick={() => setLockConfigOpen(false)}>
+            <Button
+              variant="ghost"
+              data-sfx-own=""
+              onMouseEnter={() => playSfx("hover")}
+              onClick={() => { playSfx("back"); setLockConfigOpen(false); }}
+            >
               Back
             </Button>
             <Button
               variant="outline"
+              data-sfx-own=""
               className="border-success-green text-success-green hover:bg-success-green/10"
               disabled={unlocking}
+              onMouseEnter={() => { if (!unlocking) playSfx("hover"); }}
               onClick={() => {
+                if (unlocking) return;
+                playSfx("unlock");
                 setLockConfigOpen(false);
                 unlockSelected();
               }}
@@ -591,7 +629,10 @@ export function RemoteDeviceManagement() {
             </Button>
             <Button
               variant="destructive"
+              data-sfx-own=""
+              onMouseEnter={() => playSfx("hover")}
               onClick={() => {
+                playSfx("select");
                 setLockConfigOpen(false);
                 setConfirmOpen(true);
               }}
@@ -655,8 +696,20 @@ export function RemoteDeviceManagement() {
             ))}
           </div>
           <DialogFooter>
-            <Button variant="ghost" onClick={() => { setEditBatchOpen(false); setEditBatch([]); }}>Cancel</Button>
-            <Button onClick={handleSaveEditBatch} disabled={editSaving}>
+            <Button
+              variant="ghost"
+              data-sfx-own=""
+              onMouseEnter={() => playSfx("hover")}
+              onClick={() => { playSfx("cancel"); setEditBatchOpen(false); setEditBatch([]); }}
+            >
+              Cancel
+            </Button>
+            <Button
+              data-sfx-own=""
+              onMouseEnter={() => { if (!editSaving) playSfx("hover"); }}
+              onClick={() => { if (!editSaving) { playSfx("select"); handleSaveEditBatch(); } }}
+              disabled={editSaving}
+            >
               {editSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               Save All Changes
             </Button>
@@ -676,8 +729,21 @@ export function RemoteDeviceManagement() {
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
-            <Button variant="ghost" onClick={() => setDeleteConfirmOpen(false)}>Cancel</Button>
-            <Button variant="destructive" onClick={handleDeleteBatch} disabled={deleting}>
+            <Button
+              variant="ghost"
+              data-sfx-own=""
+              onMouseEnter={() => playSfx("hover")}
+              onClick={() => { playSfx("cancel"); setDeleteConfirmOpen(false); }}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              data-sfx-own=""
+              disabled={deleting}
+              onMouseEnter={() => { if (!deleting) playSfx("hover"); }}
+              onClick={() => { if (!deleting) { playSfx("delete"); handleDeleteBatch(); } }}
+            >
               {deleting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Trash2 className="mr-2 h-4 w-4" />}
               Remove & Revoke
             </Button>

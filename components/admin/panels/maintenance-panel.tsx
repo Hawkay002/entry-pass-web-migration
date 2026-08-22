@@ -20,6 +20,7 @@ import { applyRemoteLocks, unlockStaff } from "@/app/actions/admin";
 import { useRoles } from "@/hooks/use-roles";
 import { useLockDashboard } from "@/hooks/use-lock-dashboard";
 import { CollapsibleSection } from "@/components/admin/collapsible-section";
+import { playSfx, playToastSfx, startProcessingSfx, stopProcessingSfx } from "@/lib/sfx";
 
 export function MaintenancePanel() {
   const { roles } = useRoles();
@@ -31,6 +32,7 @@ export function MaintenancePanel() {
 
   async function startMaintenance() {
     setApplying(true);
+    startProcessingSfx();
     const h = Number(hrs) || 0;
     const m = Number(mins) || 0;
     let duration = "Unknown";
@@ -55,12 +57,16 @@ export function MaintenancePanel() {
     }
 
     setApplying(false);
+    stopProcessingSfx();
+    playSfx("lock");
+    playToastSfx();
     setOpen(false);
     toast.success(`Maintenance mode activated for all staff (${roles.reduce((n, r) => n + r.staff.length, 0)} total)`);
   }
 
   async function endMaintenance() {
     setApplying(true);
+    startProcessingSfx();
     // Unlock ALL staff across ALL roles
     for (const role of roles) {
       for (const staff of role.staff) {
@@ -68,6 +74,9 @@ export function MaintenancePanel() {
       }
     }
     setApplying(false);
+    stopProcessingSfx();
+    playSfx("unlock");
+    playToastSfx();
     toast.success("Maintenance mode ended — all staff unlocked");
   }
 
@@ -106,17 +115,21 @@ export function MaintenancePanel() {
       <div className="flex gap-2">
         <Button
           variant="outline"
+          data-sfx-own=""
           className="border-amber-500 text-amber-500 hover:bg-amber-500/10"
-          onClick={() => setOpen(true)}
+          onMouseEnter={() => playSfx("hover")}
+          onClick={() => { playSfx("select"); setOpen(true); }}
         >
           <OctagonAlert className="mr-1.5 h-3.5 w-3.5" />
           Start Maintenance
         </Button>
         <Button
           variant="outline"
+          data-sfx-own=""
           className="border-success-green text-success-green hover:bg-success-green/10"
           disabled={applying}
-          onClick={endMaintenance}
+          onMouseEnter={() => { if (!applying) playSfx("hover"); }}
+          onClick={() => { if (!applying) { playSfx("unlock"); endMaintenance(); } }}
         >
           {applying ? (
             <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
@@ -145,12 +158,21 @@ export function MaintenancePanel() {
             </div>
           </div>
           <DialogFooter>
-            <Button variant="ghost" onClick={() => setOpen(false)}>Cancel</Button>
+            <Button
+              variant="ghost"
+              data-sfx-own=""
+              onMouseEnter={() => playSfx("hover")}
+              onClick={() => { playSfx("cancel"); setOpen(false); }}
+            >
+              Cancel
+            </Button>
             <Button
               variant="outline"
+              data-sfx-own=""
               className="border-amber-500 text-amber-500 hover:bg-amber-500/10"
               disabled={applying}
-              onClick={startMaintenance}
+              onMouseEnter={() => { if (!applying) playSfx("hover"); }}
+              onClick={() => { if (!applying) { playSfx("lock"); startMaintenance(); } }}
             >
               {applying && <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />}
               <OctagonAlert className="mr-1.5 h-3.5 w-3.5" />

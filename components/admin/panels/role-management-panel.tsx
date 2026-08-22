@@ -39,6 +39,7 @@ import { useSettings } from "@/hooks/use-settings";
 import { useGatesMode } from "@/hooks/use-gates";
 import { CollapsibleSection } from "@/components/admin/collapsible-section";
 import { cn } from "@/lib/utils";
+import { playSfx, playToastSfx, startProcessingSfx, stopProcessingSfx } from "@/lib/sfx";
 
 export function RoleManagementPanel() {
   const { roles, loading } = useRoles();
@@ -65,12 +66,18 @@ export function RoleManagementPanel() {
   async function handleCreateRole() {
     if (!newRoleName.trim()) return;
     setCreating(true);
+    startProcessingSfx();
     const res = await createRole(newRoleName);
     setCreating(false);
+    stopProcessingSfx();
     if (res.ok) {
+      playSfx("success");
+      playToastSfx();
       toast.success(`Role "${newRoleName}" created`);
       setNewRoleName("");
     } else {
+      playSfx("error");
+      playToastSfx();
       toast.error("Create failed", { description: res.error });
     }
   }
@@ -78,22 +85,37 @@ export function RoleManagementPanel() {
   async function handleAddStaff() {
     if (!addStaffOpen || !staffName.trim() || !staffEmail.trim()) return;
     setAddingStaff(true);
+    startProcessingSfx();
     const res = await addStaffToRole(addStaffOpen, staffName, staffEmail, multiGate ? staffGateId : null);
     setAddingStaff(false);
+    stopProcessingSfx();
     if (res.ok) {
+      playSfx("success");
+      playToastSfx();
       toast.success("Staff member added");
       setStaffName("");
       setStaffEmail("");
       setStaffGateId(null);
     } else {
+      playSfx("error");
+      playToastSfx();
       toast.error("Add failed", { description: res.error });
     }
   }
 
   async function handleDeleteRole(roleId: string) {
+    startProcessingSfx();
     const res = await deleteRole(roleId);
-    if (res.ok) toast.success(`Role "${roleId}" deleted`);
-    else toast.error("Delete failed", { description: res.error });
+    stopProcessingSfx();
+    if (res.ok) {
+      playSfx("delete");
+      playToastSfx();
+      toast.success(`Role "${roleId}" deleted`);
+    } else {
+      playSfx("error");
+      playToastSfx();
+      toast.error("Delete failed", { description: res.error });
+    }
   }
 
   async function handleBulkFile(e: React.ChangeEvent<HTMLInputElement>) {
@@ -151,14 +173,20 @@ export function RoleManagementPanel() {
   async function handleBulkAdd() {
     if (!addStaffOpen || bulkParsed.length === 0) return;
     setBulkAdding(true);
+    startProcessingSfx();
     const res = await bulkAddStaffToRole(addStaffOpen, bulkParsed);
     setBulkAdding(false);
+    stopProcessingSfx();
     if (res.ok) {
+      playSfx("success");
+      playToastSfx();
       toast.success(`Added ${res.added} staff member(s)`, {
         description: res.skipped > 0 ? `${res.skipped} duplicate(s) skipped` : undefined,
       });
       setBulkParsed([]);
     } else {
+      playSfx("error");
+      playToastSfx();
       toast.error("Bulk add failed", { description: res.error });
     }
   }
@@ -191,7 +219,12 @@ export function RoleManagementPanel() {
           onChange={(e) => setNewRoleName(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && handleCreateRole()}
         />
-        <Button onClick={handleCreateRole} disabled={creating || !newRoleName.trim()}>
+        <Button
+          data-sfx-own=""
+          onMouseEnter={() => { if (newRoleName.trim() && !creating) playSfx("hover"); }}
+          onClick={() => { if (newRoleName.trim() && !creating) { playSfx("add-to-cart"); handleCreateRole(); } }}
+          disabled={creating || !newRoleName.trim()}
+        >
           {creating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
         </Button>
       </div>
@@ -206,11 +239,16 @@ export function RoleManagementPanel() {
           {roles.map((role) => (
             <div key={role.id} className="rounded-xl border border-white/10 bg-white/5">
               <button
-                onClick={() => setExpandedRoles((prev) => {
-                  const next = new Set(prev);
-                  next.has(role.id) ? next.delete(role.id) : next.add(role.id);
-                  return next;
-                })}
+                data-sfx-own=""
+                onMouseEnter={() => playSfx("hover")}
+                onClick={() => {
+                  playSfx(expandedRoles.has(role.id) ? "collapse" : "expand");
+                  setExpandedRoles((prev) => {
+                    const next = new Set(prev);
+                    next.has(role.id) ? next.delete(role.id) : next.add(role.id);
+                    return next;
+                  });
+                }}
                 className="flex w-full items-center justify-between p-4 text-left"
               >
                 <h4 className="text-sm font-semibold">{role.name} ({role.staff.length})</h4>
@@ -224,7 +262,10 @@ export function RoleManagementPanel() {
                       <Button
                         size="sm"
                         variant="outline"
+                        data-sfx-own=""
+                        onMouseEnter={() => playSfx("hover")}
                         onClick={() => {
+                          playSfx("add-to-cart");
                           setAddStaffOpen(role.id);
                           setStaffName("");
                           setStaffEmail("");
@@ -234,6 +275,9 @@ export function RoleManagementPanel() {
                       </Button>
                       <DropdownMenu>
                         <DropdownMenuTrigger
+                          data-sfx-own=""
+                          onMouseEnter={() => playSfx("hover")}
+                          onClick={() => playSfx("select")}
                           className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-white/10 bg-white/5 text-muted-foreground transition-colors hover:bg-white/10 hover:text-white"
                         >
                           <MoreVertical className="h-3.5 w-3.5" />
@@ -241,7 +285,9 @@ export function RoleManagementPanel() {
                       <DropdownMenuContent align="end">
                         <DropdownMenuItem
                           variant="destructive"
-                          onClick={() => setDeleteRoleConfirm(role.id)}
+                          data-sfx-own=""
+                          onMouseEnter={() => playSfx("hover")}
+                          onClick={() => { playSfx("delete"); setDeleteRoleConfirm(role.id); }}
                         >
                           <Trash2 className="mr-2 h-3.5 w-3.5" /> Delete Role
                         </DropdownMenuItem>
@@ -330,7 +376,13 @@ export function RoleManagementPanel() {
               onChange={handleBulkFile}
               className="absolute h-0 w-0 opacity-0"
             />
-            <Button variant="outline" className="w-full" onClick={() => bulkFileRef.current?.click()}>
+            <Button
+              variant="outline"
+              data-sfx-own=""
+              className="w-full"
+              onMouseEnter={() => playSfx("hover")}
+              onClick={() => { playSfx("select"); bulkFileRef.current?.click(); }}
+            >
               <Upload className="mr-1.5 h-3.5 w-3.5" /> Upload File (CSV/JSON/XLSX)
             </Button>
 
@@ -352,14 +404,31 @@ export function RoleManagementPanel() {
             )}
           </div>
           <DialogFooter className="sticky bottom-0 border-t border-white/8 bg-[rgb(10,10,10)] px-6 py-4">
-            <Button variant="ghost" onClick={() => { setAddStaffOpen(null); setBulkParsed([]); }}>Cancel</Button>
+            <Button
+              variant="ghost"
+              data-sfx-own=""
+              onMouseEnter={() => playSfx("hover")}
+              onClick={() => { playSfx("cancel"); setAddStaffOpen(null); setBulkParsed([]); }}
+            >
+              Cancel
+            </Button>
             {bulkParsed.length > 0 ? (
-              <Button onClick={handleBulkAdd} disabled={bulkAdding}>
+              <Button
+                data-sfx-own=""
+                onMouseEnter={() => { if (!bulkAdding) playSfx("hover"); }}
+                onClick={() => { if (!bulkAdding) { playSfx("add-to-cart"); handleBulkAdd(); } }}
+                disabled={bulkAdding}
+              >
                 {bulkAdding && <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />}
                 Add {bulkParsed.length} Staff
               </Button>
             ) : (
-              <Button onClick={handleAddStaff} disabled={addingStaff || !staffName.trim() || !staffEmail.trim()}>
+              <Button
+                data-sfx-own=""
+                onMouseEnter={() => { if (staffName.trim() && staffEmail.trim() && !addingStaff) playSfx("hover"); }}
+                onClick={() => { if (staffName.trim() && staffEmail.trim() && !addingStaff) { playSfx("add-to-cart"); handleAddStaff(); } }}
+                disabled={addingStaff || !staffName.trim() || !staffEmail.trim()}
+              >
                 {addingStaff && <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />}
                 Add
               </Button>
@@ -381,13 +450,23 @@ export function RoleManagementPanel() {
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
-            <Button variant="ghost" onClick={() => setDeleteRoleConfirm(null)}>
+            <Button
+              variant="ghost"
+              data-sfx-own=""
+              onMouseEnter={() => playSfx("hover")}
+              onClick={() => { playSfx("cancel"); setDeleteRoleConfirm(null); }}
+            >
               Cancel
             </Button>
             <Button
               variant="destructive"
+              data-sfx-own=""
+              onMouseEnter={() => playSfx("hover")}
               onClick={async () => {
-                if (deleteRoleConfirm) await handleDeleteRole(deleteRoleConfirm);
+                if (deleteRoleConfirm) {
+                  playSfx("delete");
+                  await handleDeleteRole(deleteRoleConfirm);
+                }
                 setDeleteRoleConfirm(null);
               }}
             >

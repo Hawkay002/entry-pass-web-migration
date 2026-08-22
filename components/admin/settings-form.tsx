@@ -26,6 +26,7 @@ import {
 import { useSettings } from "@/hooks/use-settings";
 import { saveSettings, clearSettings } from "@/app/actions/admin";
 import { TIMEZONES, DEFAULT_TZ, getTzLabel } from "@/lib/timezones";
+import { playSfx, playToastSfx, startProcessingSfx, stopProcessingSfx } from "@/lib/sfx";
 import { Switch } from "@/components/ui/switch";
 import { GatePanel } from "@/components/admin/gate-panel";
 import {
@@ -170,6 +171,7 @@ export function SettingsForm({ isAdmin = false }: { isAdmin?: boolean }) {
 
   async function handleSave() {
     setSaving(true);
+    startProcessingSfx();
     // Append the selected timezone offset to the deadline so the server
     // (running in UTC on Vercel) interprets it correctly.
     let offsetStr: string;
@@ -183,10 +185,16 @@ export function SettingsForm({ isAdmin = false }: { isAdmin?: boolean }) {
     const res = await saveSettings({ name, place, deadline: deadlineWithTz, timezone: tz, multiGate });
     setSaving(false);
     if (res.ok) {
+      stopProcessingSfx();
+      playSfx("success");
+      playToastSfx();
       toast.success("Configuration saved");
       setSavedMultiGate(multiGate);
       setEdited(false);
     } else {
+      stopProcessingSfx();
+      playSfx("error");
+      playToastSfx();
       toast.error("Save failed", { description: res.error });
     }
   }
@@ -199,7 +207,16 @@ export function SettingsForm({ isAdmin = false }: { isAdmin?: boolean }) {
       <CardContent className="space-y-4">
         {/* Event Details — collapsible form */}
         <details className="group">
-          <summary className="flex cursor-pointer list-none items-center justify-between rounded-lg bg-white/5 px-4 py-3 text-sm font-semibold tracking-tight transition-colors hover:bg-white/10">
+          <summary
+            data-sfx-own=""
+            onMouseEnter={() => playSfx("hover")}
+            onClick={(e) => {
+              // Native <details>: `open` still holds the PRE-toggle state here.
+              const isOpen = (e.currentTarget.closest("details") as HTMLDetailsElement | null)?.open;
+              playSfx(isOpen ? "collapse" : "expand");
+            }}
+            className="flex cursor-pointer list-none items-center justify-between rounded-lg bg-white/5 px-4 py-3 text-sm font-semibold tracking-tight transition-colors hover:bg-white/10"
+          >
             <span>Event Details</span>
             <ChevronDown className="h-4 w-4 text-muted-foreground transition-transform group-open:rotate-180" />
           </summary>
@@ -243,6 +260,9 @@ export function SettingsForm({ isAdmin = false }: { isAdmin?: boolean }) {
                 render={
                   <Button
                     variant="outline"
+                    data-sfx-own=""
+                    onMouseEnter={() => playSfx("hover")}
+                    onClick={() => playSfx("select")}
                     className="h-8 w-full justify-start text-left font-normal"
                   >
                     <CalendarIcon className="mr-1.5 hidden h-3.5 w-3.5 sm:block" />
@@ -258,7 +278,23 @@ export function SettingsForm({ isAdmin = false }: { isAdmin?: boolean }) {
                   </Button>
                 }
               />
-              <PopoverContent className="w-auto p-0" align="start">
+              <PopoverContent
+                className="w-auto p-0"
+                align="start"
+                // Delegated SFX for the calendar internals (nav chevrons, day
+                // buttons, AM/PM): elements already carrying data-sfx-own
+                // (month/year Selects) are skipped — they have their own cues.
+                onMouseOverCapture={(e) => {
+                  const t = e.target as HTMLElement;
+                  if (t.closest("[data-sfx-own]") || !t.closest("button")) return;
+                  playSfx("hover");
+                }}
+                onClickCapture={(e) => {
+                  const t = e.target as HTMLElement;
+                  if (t.closest("[data-sfx-own]") || !t.closest("button")) return;
+                  playSfx("select");
+                }}
+              >
                 <Calendar
                   mode="single"
                   selected={selectedDate}
@@ -321,8 +357,11 @@ export function SettingsForm({ isAdmin = false }: { isAdmin?: boolean }) {
                       type="button"
                       variant="outline"
                       size="sm"
+                      data-sfx-own=""
                       className="h-8 w-[42px] px-0 text-xs font-semibold"
+                      onMouseEnter={() => playSfx("hover")}
                       onClick={() => {
+                        playSfx("toggle-on");
                         const [hh, mm] = selectedTime.split(":");
                         const h24 = Number(hh);
                         const newH24 = h24 < 12 ? h24 + 12 : h24 - 12;
@@ -335,9 +374,13 @@ export function SettingsForm({ isAdmin = false }: { isAdmin?: boolean }) {
                     <Button
                       type="button"
                       size="sm"
+                      data-sfx-own=""
                       className="ml-2 hidden h-8 sm:inline-flex"
                       disabled={!selectedDate}
+                      onMouseEnter={() => { if (selectedDate) playSfx("hover"); }}
                       onClick={() => {
+                        if (!selectedDate) return;
+                        playSfx("select");
                         setDeadline(mergeDateTime(selectedDate, selectedTime));
                         setEdited(true);
                         setCalOpen(false);
@@ -352,8 +395,12 @@ export function SettingsForm({ isAdmin = false }: { isAdmin?: boolean }) {
                   <Button
                     type="button"
                     size="sm"
+                    data-sfx-own=""
                     disabled={!selectedDate}
+                    onMouseEnter={() => { if (selectedDate) playSfx("hover"); }}
                     onClick={() => {
+                      if (!selectedDate) return;
+                      playSfx("select");
                       setDeadline(mergeDateTime(selectedDate, selectedTime));
                       setEdited(true);
                       setCalOpen(false);
@@ -400,12 +447,17 @@ export function SettingsForm({ isAdmin = false }: { isAdmin?: boolean }) {
           <Switch
             id="multiGate"
             checked={multiGate}
-            onCheckedChange={(v) => { setMultiGate(v); setEdited(true); }}
+            onCheckedChange={(v) => { playSfx(v ? "toggle-on" : "toggle-off"); setMultiGate(v); setEdited(true); }}
           />
         </div>
         )}
 
-        <Button onClick={handleSave} disabled={saving || (!edited && !loading)}>
+        <Button
+          data-sfx-own=""
+          onMouseEnter={() => { if (!saving && (edited || loading)) playSfx("hover"); }}
+          onClick={() => { if (!saving && (edited || loading)) { playSfx("select"); handleSave(); } }}
+          disabled={saving || (!edited && !loading)}
+        >
           {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
           Save Configuration
         </Button>
@@ -419,7 +471,9 @@ export function SettingsForm({ isAdmin = false }: { isAdmin?: boolean }) {
           {/* Clear button */}
           {(settings.name || settings.place || settings.deadline) && (
             <button
-              onClick={() => setClearOpen(true)}
+              data-sfx-own=""
+              onMouseEnter={() => playSfx("hover")}
+              onClick={() => { playSfx("delete"); setClearOpen(true); }}
               className="absolute right-3 top-3 flex h-7 w-7 items-center justify-center rounded-lg text-destructive transition-colors hover:bg-destructive/10"
               title="Clear all settings"
             >
@@ -513,10 +567,20 @@ export function SettingsForm({ isAdmin = false }: { isAdmin?: boolean }) {
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
-            <Button variant="ghost" onClick={() => setClearOpen(false)}>
+            <Button
+              variant="ghost"
+              data-sfx-own=""
+              onMouseEnter={() => playSfx("hover")}
+              onClick={() => { playSfx("cancel"); setClearOpen(false); }}
+            >
               Cancel
             </Button>
-            <Button variant="destructive" onClick={handleClear}>
+            <Button
+              variant="destructive"
+              data-sfx-own=""
+              onMouseEnter={() => playSfx("hover")}
+              onClick={() => { playSfx("delete"); handleClear(); }}
+            >
               <Trash2 className="mr-2 h-4 w-4" />
               Clear All
             </Button>
