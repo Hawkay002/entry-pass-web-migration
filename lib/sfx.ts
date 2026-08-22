@@ -21,8 +21,17 @@ let player: UISFXPlayer | null = null;
 let ctx: AudioContext | null = null;
 let unlockWired = false;
 let processingLoop: PlayingSFX | null = null;
+let scanningLoop: PlayingSFX | null = null;
 /** True once OUR context has reached the "running" state at least once. */
 let everRan = false;
+/** Coarse-pointer (phone/tablet) devices get a volume boost — small
+ *  speakers lose a lot of the quiet synthesized cues. */
+let volumeMult = 1;
+
+function detectMobile() {
+  if (typeof window === "undefined") return false;
+  return window.matchMedia("(pointer: coarse)").matches;
+}
 
 /** The app-wide player (organic personality). We create the AudioContext
  *  OURSELVES and hand it to uisfx — that lets us eagerly attempt resume()
@@ -38,7 +47,14 @@ export function sfx(): UISFXPlayer {
         });
       }
     }
-    player = createUISFX({ pack: "organic", volume: 0.8, ...(ctx ? { context: ctx } : {}) });
+    if (typeof window !== "undefined" && volumeMult === 1 && detectMobile()) {
+      volumeMult = 1.5;
+    }
+    player = createUISFX({
+      pack: "organic",
+      volume: Math.min(1, 0.8 * volumeMult),
+      ...(ctx ? { context: ctx } : {}),
+    });
   }
   return player;
 }
@@ -142,7 +158,7 @@ export function unlockSfx() {
 export function startProcessingSfx() {
   stopProcessingSfx();
   try {
-    processingLoop = sfx().play("processing", { volume: 0.3 });
+    processingLoop = sfx().play("processing", { volume: Math.min(1, 0.3 * volumeMult) });
   } catch {}
 }
 
@@ -154,14 +170,12 @@ export function stopProcessingSfx() {
   processingLoop = null;
 }
 
-let scanningLoop: PlayingSFX | null = null;
-
 /** Start the shared scanning loop (camera feed active). Boosted like the
  *  processing loop so it reads on phone speakers. Stops any previous. */
 export function startScanningSfx() {
   stopScanningSfx();
   try {
-    scanningLoop = sfx().play("scanning", { volume: 0.25 });
+    scanningLoop = sfx().play("scanning", { volume: Math.min(1, 0.25 * volumeMult) });
   } catch {}
 }
 
