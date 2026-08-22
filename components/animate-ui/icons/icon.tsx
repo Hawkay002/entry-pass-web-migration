@@ -141,8 +141,12 @@ function AnimateIcon({
   persistOnAnimateEnd = false,
   delay = 0,
   children,
+  render,
   ...props
 }: AnimateIconProps) {
+  // Newer registry call-sites pass the icon element via render= instead of
+  // children=; without this it lands in ...props and stringifies onto the DOM.
+  if (!children && render !== undefined) children = render;
   const controls = useAnimation();
 
   const [localAnimate, setLocalAnimate] = React.useState<boolean>(() => {

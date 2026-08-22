@@ -59,9 +59,9 @@ export function AppHeader({
       style={{ color: sfxOn ? "var(--color-accent-secondary)" : "rgb(255 255 255 / 0.5)" }}
     >
       {sfxOn ? (
-        <Volume2 key="on" size={18} animate />
+        <Volume2 key="on" size={18} animate className="flex size-[18px] items-center justify-center" />
       ) : (
-        <VolumeOff key="off" size={18} animate />
+        <VolumeOff key="off" size={18} animate className="flex size-[18px] items-center justify-center" />
       )}
     </button>
   );
