@@ -471,7 +471,7 @@ function ExportLogsModal({
               <SelectTrigger>
                 <SelectValue />
               </SelectTrigger>
-              <SelectContent>
+              <SelectContent side="bottom" alignItemWithTrigger={false}>
                 <SelectItem value="csv">CSV (.csv)</SelectItem>
                 <SelectItem value="xlsx">Excel (.xlsx)</SelectItem>
                 <SelectItem value="pdf">PDF (.pdf)</SelectItem>
