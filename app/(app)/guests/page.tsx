@@ -54,6 +54,7 @@ import { TICKET_TYPE_LABELS } from "@/lib/types";
 import type { TicketStatus } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { ImportExportButtons } from "@/components/guests/import-export";
+import { playSfx, playToastSfx } from "@/lib/sfx";
 
 
 const STATUS_STYLES: Record<TicketStatus, string> = {
@@ -229,29 +230,36 @@ export default function GuestsPage() {
             <Button
               variant="outline"
               size="sm"
+              data-sfx-own=""
+              onMouseEnter={() => playSfx("hover")}
+              onClick={() => { playSfx("cancel"); exitSelectionMode(); }}
               className="h-8 rounded-lg text-destructive hover:bg-destructive/10"
-              onClick={exitSelectionMode}
             >
               Cancel
             </Button>
           )}
           <ButtonGroup>
-              <Button
-                variant="outline"
-                size="sm"
-                className="h-8"
-                onClick={enterSelectionMode}
-              >
-                Select{selectionMode && selected.size > 0 ? ` (${selected.size})` : ""}
-              </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              data-sfx-own=""
+              onMouseEnter={() => playSfx("hover")}
+              onClick={() => { playSfx("select"); enterSelectionMode(); }}
+              className="h-8"
+            >
+              Select{selectionMode && selected.size > 0 ? ` (${selected.size})` : ""}
+            </Button>
             <DropdownMenu>
               <DropdownMenuTrigger
+                data-sfx-own=""
+                onMouseEnter={() => playSfx("hover")}
+                onClick={() => playSfx("select")}
                 render={<Button variant="outline" size="sm" className="h-8 px-2" aria-label="Select options" />}
               >
                 <ChevronDown className="h-3.5 w-3.5" />
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
-                <DropdownMenuItem onClick={() => { enterSelectionMode(); setSelected(new Set(filtered.map((t) => t.id))); }}>
+                <DropdownMenuItem data-sfx-own="" onMouseEnter={() => playSfx("hover")} onClick={() => { playSfx("select"); enterSelectionMode(); setSelected(new Set(filtered.map((t) => t.id))); }}>
                   <CheckSquare className="mr-2 h-3.5 w-3.5" />
                   Select All
                 </DropdownMenuItem>
@@ -260,20 +268,25 @@ export default function GuestsPage() {
           </ButtonGroup>
           <DropdownMenu>
             <DropdownMenuTrigger
+              data-sfx-own=""
+              onMouseEnter={() => playSfx("hover")}
+              onClick={() => playSfx("select")}
               className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-white/10 bg-white/5 text-muted-foreground transition-colors hover:bg-white/10 hover:text-white"
             >
               <MoreVertical className="h-4 w-4" />
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="min-w-[180px]">
-              <DropdownMenuItem onClick={() => setManageOpen(true)}>
+              <DropdownMenuItem data-sfx-own="" onMouseEnter={() => playSfx("hover")} onClick={() => { playSfx("select"); setManageOpen(true); }}>
                 <HugeiconsIcon icon={FileManagementIcon} size={14} className="mr-2" />
                 Manage
               </DropdownMenuItem>
               <DropdownMenuSeparator />
               {isAdmin && (
                 <DropdownMenuItem
+                  data-sfx-own=""
+                  onMouseEnter={() => playSfx("hover")}
                   disabled={!hasComingSoon || absentMarking}
-                  onClick={() => triggerAutoAbsent(true)}
+                  onClick={() => { if (!hasComingSoon || absentMarking) return; playSfx("select"); triggerAutoAbsent(true); }}
                 >
                   {absentMarking ? (
                     <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />
@@ -285,8 +298,10 @@ export default function GuestsPage() {
               )}
               <DropdownMenuItem
                 variant="destructive"
+                data-sfx-own=""
+                onMouseEnter={() => playSfx("hover")}
                 disabled={selected.size === 0}
-                onClick={() => setDeleteOpen(true)}
+                onClick={() => { if (selected.size === 0) return; playSfx("delete"); setDeleteOpen(true); }}
               >
                 <Trash2 className="mr-2 h-3.5 w-3.5" />
                 Delete{selectionMode ? ` (${selected.size})` : ""}
@@ -319,7 +334,9 @@ export default function GuestsPage() {
         </div>
         <div ref={filterRef} className="relative shrink-0">
           <button
-            onClick={() => setFilterOpen((o) => !o)}
+            data-sfx-own=""
+            onMouseEnter={() => playSfx("hover")}
+            onClick={() => { playSfx("select"); setFilterOpen((o) => !o); }}
             className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-input bg-input/60 px-3 text-sm font-medium whitespace-nowrap transition-colors hover:bg-input/80"
           >
             <Filter className="h-4 w-4" /> Filter / Sort
@@ -598,10 +615,20 @@ export default function GuestsPage() {
             placeholder="Full name"
           />
           <DialogFooter>
-            <Button variant="ghost" onClick={() => setEditName(null)}>
+            <Button
+              variant="ghost"
+              data-sfx-own=""
+              onMouseEnter={() => playSfx("hover")}
+              onClick={() => { playSfx("cancel"); setEditName(null); }}
+            >
               Cancel
             </Button>
-            <Button onClick={handleSaveName} disabled={savingName || !editName?.name.trim()}>
+            <Button
+              data-sfx-own=""
+              onMouseEnter={() => playSfx("hover")}
+              onClick={() => { playSfx("select"); handleSaveName(); }}
+              disabled={savingName || !editName?.name.trim()}
+            >
               {savingName && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               Save
             </Button>
@@ -619,7 +646,9 @@ function FilterSection({ label }: { label: string }) {
 function FilterItem({ label, active, onClick }: { label: string; active: boolean; onClick: () => void }) {
   return (
     <button
-      onClick={onClick}
+      data-sfx-own=""
+      onMouseEnter={() => playSfx("hover")}
+      onClick={() => { playSfx("select"); onClick(); }}
       className={cn(
         "block w-full rounded-md px-2 py-1.5 text-left text-sm transition-colors hover:bg-white/10",
         active && "bg-white/10 font-medium text-accent-secondary"

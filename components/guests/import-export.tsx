@@ -31,6 +31,7 @@ import {
 } from "@/components/ui/dialog";
 import { parseImportFile, exportTickets } from "@/lib/import-export";
 import { importTickets } from "@/app/actions/import";
+import { playSfx, playToastSfx, startProcessingSfx, stopProcessingSfx } from "@/lib/sfx";
 import type { ParsedTicket } from "@/lib/import-export";
 import type { Ticket as TicketType } from "@/lib/types";
 
@@ -79,7 +80,10 @@ export function ImportExportButtons({
           </DialogHeader>
           <div className="flex gap-3 py-2">
             <button
+              data-sfx-own=""
+              onMouseEnter={() => playSfx("hover")}
               onClick={() => {
+                playSfx("select");
                 setManageOpen(false);
                 setImportOpen(true);
               }}
@@ -89,7 +93,11 @@ export function ImportExportButtons({
               <span className="text-sm font-medium">Import Guests</span>
             </button>
             <button
+              data-sfx-own=""
+              onMouseEnter={() => { if (selectedTickets.length > 0) playSfx("hover"); }}
               onClick={() => {
+                if (selectedTickets.length === 0) return;
+                playSfx("select");
                 setManageOpen(false);
                 setExportOpen(true);
               }}
@@ -159,9 +167,13 @@ function ImportModal({
       return;
     }
     setImporting(true);
+    startProcessingSfx();
     try {
       const res = await importTickets(parsed, existingPhones);
       if (res.ok) {
+        stopProcessingSfx();
+        playSfx("success");
+        playToastSfx();
         toast.success(
           `Imported ${res.imported} guests (${res.duplicates} duplicates skipped)`
         );
@@ -170,9 +182,15 @@ function ImportModal({
         setFileName("");
         if (fileRef.current) fileRef.current.value = "";
       } else {
+        stopProcessingSfx();
+        playSfx("error");
+        playToastSfx();
         toast.error("Import failed", { description: res.error });
       }
     } catch (err) {
+      stopProcessingSfx();
+      playSfx("error");
+      playToastSfx();
       toast.error("Import failed", { description: (err as Error).message });
     }
     setImporting(false);
@@ -198,8 +216,10 @@ function ImportModal({
           />
           <Button
             variant="outline"
+            data-sfx-own=""
             className="w-full"
-            onClick={() => fileRef.current?.click()}
+            onMouseEnter={() => playSfx("hover")}
+            onClick={() => { playSfx("select"); fileRef.current?.click(); }}
           >
             <HugeiconsIcon icon={DatabaseImportIcon} size={16} className="mr-2" /> Browse Files
           </Button>
@@ -210,11 +230,18 @@ function ImportModal({
           )}
         </div>
         <DialogFooter>
-          <Button variant="ghost" onClick={() => onOpenChange(false)}>
+          <Button
+            variant="ghost"
+            data-sfx-own=""
+            onMouseEnter={() => playSfx("hover")}
+            onClick={() => { playSfx("cancel"); onOpenChange(false); }}
+          >
             Cancel
           </Button>
           <Button
-            onClick={handleImport}
+            data-sfx-own=""
+            onMouseEnter={() => { if (parsed.length > 0 && !importing) playSfx("hover"); }}
+            onClick={() => { if (parsed.length === 0 || importing) return; playSfx("select"); handleImport(); }}
             disabled={parsed.length === 0 || importing}
           >
             {importing && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
@@ -244,9 +271,13 @@ function ExportModal({
     const name = filename || "guest_list";
     try {
       await exportTickets(tickets, name, format);
+      playSfx("success");
+      playToastSfx();
       toast.success(`Exported ${tickets.length} records as ${format.toUpperCase()}`);
       onOpenChange(false);
     } catch (err) {
+      playSfx("error");
+      playToastSfx();
       toast.error("Export failed", { description: (err as Error).message });
     }
     setExporting(false);
@@ -289,10 +320,20 @@ function ExportModal({
           </div>
         </div>
         <DialogFooter>
-          <Button variant="ghost" onClick={() => onOpenChange(false)}>
+          <Button
+            variant="ghost"
+            data-sfx-own=""
+            onMouseEnter={() => playSfx("hover")}
+            onClick={() => { playSfx("cancel"); onOpenChange(false); }}
+          >
             Cancel
           </Button>
-          <Button onClick={handleExport} disabled={exporting}>
+          <Button
+            data-sfx-own=""
+            onMouseEnter={() => { if (!exporting) playSfx("hover"); }}
+            onClick={() => { if (exporting) return; playSfx("select"); handleExport(); }}
+            disabled={exporting}
+          >
             {exporting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
             Download
           </Button>
