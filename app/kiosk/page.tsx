@@ -222,7 +222,7 @@ function PinGate({ onUnlock, kioskId }: { onUnlock: (pin: string) => void; kiosk
     }
     // typing is the quietest cue in the pack (0.065) AND ~45ms long —
     // needs a big boost to read over kiosk-hall noise.
-    playSfx("typing", 4);
+    playSfx("typing", 6);
     setEntry((e) => (e.length >= 6 ? e : e + d));
   }
 
@@ -304,8 +304,11 @@ function PinGate({ onUnlock, kioskId }: { onUnlock: (pin: string) => void; kiosk
         </div>
         <p className="mb-6 text-sm text-white/60">Enter the event PIN to begin</p>
 
-        {/* PIN display + show/hide toggle beside it */}
+        {/* PIN display + show/hide toggle. A left spacer mirrors the toggle's
+            width so the boxes stay dead-center over the numpad while the
+            toggle sits at the end of the row. */}
         <div className="mb-6 flex items-center justify-center gap-3">
+          <span className="h-8 w-8 shrink-0" aria-hidden />
           <div className="flex items-center justify-center gap-2">
             {Array.from({ length: 6 }).map((_, i) => (
               <span
