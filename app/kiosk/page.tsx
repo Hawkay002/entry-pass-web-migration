@@ -220,7 +220,9 @@ function PinGate({ onUnlock, kioskId }: { onUnlock: (pin: string) => void; kiosk
       setEntry((e) => e.slice(0, -1));
       return;
     }
-    playSfx("typing", 2); // extra-hot
+    // typing is the quietest cue in the pack (0.065) AND ~45ms long —
+    // needs a big boost to read over kiosk-hall noise.
+    playSfx("typing", 4);
     setEntry((e) => (e.length >= 6 ? e : e + d));
   }
 
@@ -302,27 +304,26 @@ function PinGate({ onUnlock, kioskId }: { onUnlock: (pin: string) => void; kiosk
         </div>
         <p className="mb-6 text-sm text-white/60">Enter the event PIN to begin</p>
 
-        {/* PIN display — centered alone so it aligns with the numpad grid */}
-        <div className="mb-4 flex items-center justify-center gap-2">
-          {Array.from({ length: 6 }).map((_, i) => (
-            <span
-              key={i}
-              className={cn(
-                "flex h-10 w-8 items-center justify-center rounded-lg border text-lg transition-colors",
-                i < entry.length ? "border-emerald-400/40 bg-emerald-400/10 text-emerald-400" : "border-white/15 bg-white/5"
-              )}
-            >
-              {i < entry.length ? (showPin ? entry[i] : "●") : ""}
-            </span>
-          ))}
-        </div>
-        {/* Show/hide toggle — separate row so the boxes stay centered */}
-        <div className="mb-6 flex w-full justify-end">
+        {/* PIN display + show/hide toggle beside it */}
+        <div className="mb-6 flex items-center justify-center gap-3">
+          <div className="flex items-center justify-center gap-2">
+            {Array.from({ length: 6 }).map((_, i) => (
+              <span
+                key={i}
+                className={cn(
+                  "flex h-10 w-8 items-center justify-center rounded-lg border text-lg transition-colors",
+                  i < entry.length ? "border-emerald-400/40 bg-emerald-400/10 text-emerald-400" : "border-white/15 bg-white/5"
+                )}
+              >
+                {i < entry.length ? (showPin ? entry[i] : "●") : ""}
+              </span>
+            ))}
+          </div>
           <button
             onClick={() => { playSfx("select"); setShowPin((s) => !s); }}
             data-sfx-own=""
             onMouseEnter={() => playSfx("hover")}
-            className="flex h-8 w-8 items-center justify-center rounded-lg text-white/50 transition-colors hover:bg-white/10 hover:text-white"
+            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-white/50 transition-colors hover:bg-white/10 hover:text-white"
             title={showPin ? "Hide PIN" : "Show PIN"}
           >
             {showPin ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
@@ -371,6 +372,7 @@ function KeypadButton({
     <button
       onClick={onClick}
       disabled={disabled}
+      data-sfx-own=""
       className={cn(
         "flex h-16 w-16 items-center justify-center rounded-2xl text-2xl font-medium transition-all active:scale-95 disabled:opacity-40 md:h-[4.5rem] md:w-[4.5rem]",
         variant === "default" && "bg-white/10 hover:bg-white/20",
