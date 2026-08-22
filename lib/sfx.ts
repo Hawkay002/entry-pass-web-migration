@@ -12,6 +12,7 @@
 
 import {
   createUISFX,
+  getCue,
   type CueName,
   type PlayingSFX,
   type UISFXPlayer,
@@ -24,9 +25,14 @@ let processingLoop: PlayingSFX | null = null;
 let scanningLoop: PlayingSFX | null = null;
 /** True once OUR context has reached the "running" state at least once. */
 let everRan = false;
-/** Coarse-pointer (phone/tablet) devices get a volume boost — small
+/** Coarse-pointer (phone/tablet) devices get an extra boost — small
  *  speakers lose a lot of the quiet synthesized cues. */
 let volumeMult = 1;
+
+/** Global loudness boost applied on top of each cue's default volume.
+ *  uisfx cue defaults are conservative (0.06–0.26); 2.2x reads as
+ *  "clearly audible" without clipping (values clamp at 1.0). */
+const CUE_BOOST = 2.2;
 
 function detectMobile() {
   if (typeof window === "undefined") return false;
@@ -52,7 +58,7 @@ export function sfx(): UISFXPlayer {
     }
     player = createUISFX({
       pack: "organic",
-      volume: Math.min(1, 0.8 * volumeMult),
+      volume: Math.min(1, 1.0 * volumeMult),
       ...(ctx ? { context: ctx } : {}),
     });
   }
@@ -129,10 +135,15 @@ export function initSfx() {
   ensureGlobalPressSfx();
 }
 
-/** Fire-and-forget one-shot cue. Never throws. */
+/** Fire-and-forget one-shot cue. Never throws. Each cue's default volume
+ *  is boosted by CUE_BOOST (clamped at 1.0) so everything reads louder. */
 export function playSfx(cue: CueName) {
   try {
-    sfx().play(cue);
+    let vol = 1;
+    try {
+      vol = Math.min(1, getCue(cue).defaultVolume * CUE_BOOST);
+    } catch {}
+    sfx().play(cue, { volume: vol });
   } catch {}
 }
 
@@ -158,7 +169,7 @@ export function unlockSfx() {
 export function startProcessingSfx() {
   stopProcessingSfx();
   try {
-    processingLoop = sfx().play("processing", { volume: Math.min(1, 0.3 * volumeMult) });
+    processingLoop = sfx().play("processing", { volume: Math.min(1, 0.5 * volumeMult) });
   } catch {}
 }
 
@@ -175,7 +186,7 @@ export function stopProcessingSfx() {
 export function startScanningSfx() {
   stopScanningSfx();
   try {
-    scanningLoop = sfx().play("scanning", { volume: Math.min(1, 0.25 * volumeMult) });
+    scanningLoop = sfx().play("scanning", { volume: Math.min(1, 0.45 * volumeMult) });
   } catch {}
 }
 
