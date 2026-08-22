@@ -44,6 +44,7 @@ import {
 } from "@/components/ui/select";
 import { deleteLogs } from "@/app/actions/admin";
 import { exportLogsCSV, exportLogsXLSX, exportLogsPDF } from "@/lib/import-export";
+import { playSfx, playToastSfx, startProcessingSfx, stopProcessingSfx } from "@/lib/sfx";
 import type { ActivityLog } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -121,9 +122,13 @@ export function LogsTable({ initialLogs }: { initialLogs: ActivityLog[] }) {
       if (format === "csv") exportLogsCSV(selectedLogs, name);
       else if (format === "xlsx") await exportLogsXLSX(selectedLogs, name);
       else if (format === "pdf") await exportLogsPDF(selectedLogs, name);
+      playSfx("success");
+      playToastSfx();
       toast.success(`Exported ${selectedLogs.length} log(s) as ${format.toUpperCase()}`);
       setExportOpen(false);
     } catch (err) {
+      playSfx("error");
+      playToastSfx();
       toast.error("Export failed", { description: (err as Error).message });
     }
   }
@@ -153,15 +158,22 @@ export function LogsTable({ initialLogs }: { initialLogs: ActivityLog[] }) {
   async function confirmDelete() {
     const ids = [...selected];
     setDeleting(true);
+    startProcessingSfx();
     const res = await deleteLogs(ids);
     setDeleting(false);
     if (res.ok) {
+      stopProcessingSfx();
+      playSfx("delete");
+      playToastSfx();
       toast.success(`Deleted ${res.count} log(s)`);
       setSelected(new Set());
       setSelectionMode(false);
       // Refresh server data.
       window.location.reload();
     } else {
+      stopProcessingSfx();
+      playSfx("error");
+      playToastSfx();
       toast.error("Delete failed", { description: res.error });
     }
   }
@@ -175,8 +187,10 @@ export function LogsTable({ initialLogs }: { initialLogs: ActivityLog[] }) {
             <Button
               variant="outline"
               size="sm"
+              data-sfx-own=""
+              onMouseEnter={() => playSfx("hover")}
+              onClick={() => { playSfx("cancel"); setSelectionMode(false); setSelected(new Set()); }}
               className="h-8 rounded-lg text-destructive hover:bg-destructive/10"
-              onClick={() => { setSelectionMode(false); setSelected(new Set()); }}
             >
               Cancel
             </Button>
@@ -185,19 +199,24 @@ export function LogsTable({ initialLogs }: { initialLogs: ActivityLog[] }) {
             <Button
               variant="outline"
               size="sm"
+              data-sfx-own=""
+              onMouseEnter={() => playSfx("hover")}
+              onClick={() => { playSfx("select"); setSelectionMode(true); }}
               className="h-8"
-              onClick={() => setSelectionMode(true)}
             >
               Select{selectionMode && selected.size > 0 ? ` (${selected.size})` : ""}
             </Button>
             <DropdownMenu>
               <DropdownMenuTrigger
+                data-sfx-own=""
+                onMouseEnter={() => playSfx("hover")}
+                onClick={() => playSfx("select")}
                 render={<Button variant="outline" size="sm" className="h-8 px-2" aria-label="Select options" />}
               >
                 <ChevronDown className="h-3.5 w-3.5" />
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
-                <DropdownMenuItem onClick={() => { setSelectionMode(true); setSelected(new Set(filtered.map((l) => l.id))); }}>
+                <DropdownMenuItem data-sfx-own="" onMouseEnter={() => playSfx("hover")} onClick={() => { playSfx("select"); setSelectionMode(true); setSelected(new Set(filtered.map((l) => l.id))); }}>
                   <CheckSquare className="mr-2 h-3.5 w-3.5" />
                   Select All
                 </DropdownMenuItem>
@@ -206,14 +225,19 @@ export function LogsTable({ initialLogs }: { initialLogs: ActivityLog[] }) {
           </ButtonGroup>
           <DropdownMenu>
             <DropdownMenuTrigger
+              data-sfx-own=""
+              onMouseEnter={() => playSfx("hover")}
+              onClick={() => playSfx("select")}
               className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-white/10 bg-white/5 text-muted-foreground transition-colors hover:bg-white/10 hover:text-white"
             >
               <MoreVertical className="h-4 w-4" />
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="min-w-[180px]">
               <DropdownMenuItem
+                data-sfx-own=""
                 disabled={selected.size === 0}
-                onClick={() => setExportOpen(true)}
+                onMouseEnter={() => { if (selected.size > 0) playSfx("hover"); }}
+                onClick={() => { if (selected.size > 0) { playSfx("select"); setExportOpen(true); } }}
               >
                 <HugeiconsIcon icon={DatabaseExportIcon} size={14} className="mr-2" />
                 Export
@@ -221,8 +245,10 @@ export function LogsTable({ initialLogs }: { initialLogs: ActivityLog[] }) {
               <DropdownMenuSeparator />
               <DropdownMenuItem
                 variant="destructive"
+                data-sfx-own=""
                 disabled={selected.size === 0 || deleting}
-                onClick={() => setDeleteOpen(true)}
+                onMouseEnter={() => { if (selected.size > 0 && !deleting) playSfx("hover"); }}
+                onClick={() => { if (selected.size > 0 && !deleting) { playSfx("delete"); setDeleteOpen(true); } }}
               >
                 {deleting ? (
                   <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />
@@ -248,7 +274,9 @@ export function LogsTable({ initialLogs }: { initialLogs: ActivityLog[] }) {
         </div>
         <div ref={typeRef} className="relative shrink-0">
           <button
-            onClick={() => setTypeOpen((o) => !o)}
+            data-sfx-own=""
+            onMouseEnter={() => playSfx("hover")}
+            onClick={() => { playSfx("select"); setTypeOpen((o) => !o); }}
             className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-input bg-input/60 px-4 text-sm font-medium whitespace-nowrap transition-colors hover:bg-input/80"
           >
             <Filter className="h-4 w-4" />
@@ -258,7 +286,9 @@ export function LogsTable({ initialLogs }: { initialLogs: ActivityLog[] }) {
             <div className="absolute right-0 top-full z-50 mt-1 max-h-[50vh] w-56 overflow-y-auto rounded-lg border border-white/10 bg-[#0f0f0f] p-1 shadow-2xl scrollbar-thin">
               <FilterSection label="Filter by Action" />
               <button
-                onClick={() => { setActionFilter("all"); }}
+                data-sfx-own=""
+                onMouseEnter={() => playSfx("hover")}
+                onClick={() => { playSfx("select"); setActionFilter("all"); }}
                 className={cn(
                   "block w-full rounded-md px-2 py-1.5 text-left text-sm transition-colors hover:bg-white/10",
                   actionFilter === "all" && "bg-white/10 font-medium text-accent-secondary"
@@ -270,7 +300,9 @@ export function LogsTable({ initialLogs }: { initialLogs: ActivityLog[] }) {
               {ACTION_FILTERS.map((a) => (
                 <button
                   key={a}
-                  onClick={() => setActionFilter(a)}
+                  data-sfx-own=""
+                  onMouseEnter={() => playSfx("hover")}
+                  onClick={() => { playSfx("select"); setActionFilter(a); }}
                   className={cn(
                     "block w-full rounded-md px-2 py-1.5 text-left text-sm transition-colors hover:bg-white/10",
                     actionFilter === a && "bg-white/10 font-medium text-accent-secondary"
@@ -309,7 +341,12 @@ export function LogsTable({ initialLogs }: { initialLogs: ActivityLog[] }) {
                     <TableCell>
                       <Checkbox
                         checked={selected.has(l.id)}
-                        onCheckedChange={() => toggleRow(l.id)}
+                        data-sfx-own=""
+                        onCheckedChange={() => {
+                          // check/uncheck cues for INDIVIDUAL rows only.
+                          playSfx(selected.has(l.id) ? "uncheck" : "check");
+                          toggleRow(l.id);
+                        }}
                       />
                     </TableCell>
                   )}
@@ -354,11 +391,22 @@ export function LogsTable({ initialLogs }: { initialLogs: ActivityLog[] }) {
           )}
           <DialogFooter>
             {!deleting && (
-              <Button variant="ghost" onClick={() => setDeleteOpen(false)}>
+              <Button
+                variant="ghost"
+                data-sfx-own=""
+                onMouseEnter={() => playSfx("hover")}
+                onClick={() => { playSfx("cancel"); setDeleteOpen(false); }}
+              >
                 Cancel
               </Button>
             )}
-            <Button variant="destructive" onClick={confirmDelete} disabled={deleting}>
+            <Button
+              variant="destructive"
+              data-sfx-own=""
+              disabled={deleting}
+              onMouseEnter={() => { if (!deleting) playSfx("hover"); }}
+              onClick={() => { if (!deleting) { playSfx("delete"); confirmDelete(); } }}
+            >
               {deleting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               Delete
             </Button>
@@ -432,10 +480,20 @@ function ExportLogsModal({
           </div>
         </div>
         <DialogFooter>
-          <Button variant="ghost" onClick={() => onOpenChange(false)}>
+          <Button
+            variant="ghost"
+            data-sfx-own=""
+            onMouseEnter={() => playSfx("hover")}
+            onClick={() => { playSfx("cancel"); onOpenChange(false); }}
+          >
             Cancel
           </Button>
-          <Button onClick={handleDownload} disabled={exporting || count === 0}>
+          <Button
+            data-sfx-own=""
+            disabled={exporting || count === 0}
+            onMouseEnter={() => { if (!exporting && count > 0) playSfx("hover"); }}
+            onClick={() => { if (!exporting && count > 0) { playSfx("select"); handleDownload(); } }}
+          >
             {exporting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
             Download
           </Button>
