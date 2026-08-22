@@ -114,6 +114,7 @@ export function AppHeader({
 
   const accountInline = (
     <span className="mx-2 hidden items-center gap-2 text-sm text-muted-foreground sm:flex">
+      {sfxToggle}
       <BackgroundPickerButton />
       <span className="h-2 w-2 rounded-full bg-success-green" />
       <span className="font-semibold text-accent-secondary">{userEmail}</span>
@@ -131,7 +132,6 @@ export function AppHeader({
             Ticketing<span className="font-semibold">System</span>.
           </h1>
           <div className="flex w-16 shrink-0 items-center justify-end gap-1">
-            {!hideActions && sfxToggle}
             {!hideActions && bell}
             {!hideActions && chat}
           </div>
@@ -139,6 +139,7 @@ export function AppHeader({
         {/* Account + signout wrapper, centered */}
         <div className="flex justify-center">
           <div className="glass-pill inline-flex items-center gap-2 rounded-lg px-3 py-1 text-sm">
+            {sfxToggle}
             <BackgroundPickerButton />
             <span className="h-5 w-px bg-white/10" />
             <span className="h-2 w-2 rounded-full bg-success-green" />
@@ -164,7 +165,6 @@ export function AppHeader({
           Ticketing<span className="font-semibold">System</span>.
         </h1>
         <div className="flex items-center gap-2">
-          {!hideActions && sfxToggle}
           {!hideActions && bell}
           {!hideActions && chat}
           {accountInline}
